@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dropfall</title>
+    <link rel="stylesheet" href="/src/style.css">
+  </head>
+  <body>
+    <div id="menu" class="screen">
+      <div class="title-container">
+        <h1 class="retro-title">DROPFALL</h1>
+        <h2 class="retro-subtitle">CYBER ARENA</h2>
+      </div>
+      
+      <div class="controls-display">
+        <div class="control-box p1-controls">
+          <h3>PLAYER 1</h3>
+          <p>Move: W A S D</p>
+          <p>Boost: SHIFT</p>
+        </div>
+        <div class="control-box p2-controls">
+          <h3>PLAYER 2</h3>
+          <p>Move: ARROWS</p>
+          <p>Boost: SHIFT</p>
+        </div>
+      </div>
+
+      <button id="start-btn" class="retro-btn">INSERT COIN TO START</button>      <button id="settings-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">SETTINGS</button>
+    </div>
+
+    <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100;">
+      <h2 class="retro-subtitle" style="margin-bottom: 2rem;">SETTINGS</h2>
+      
+      <div style="display: flex; gap: 4rem; align-items: flex-start; width: 90%; max-width: 1200px;">
+        <!-- Sliders Column -->
+        <div style="flex: 1;">
+          <h3 class="retro-subtitle" style="margin-bottom: 1rem; font-size: 1.5rem;">GAMEPLAY</h3>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <label for="theme-select">Theme</label>
+              <select id="theme-select" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 5px; font-family: 'Courier New', Courier, monospace;">
+                <option value="default">Default (Cyber)</option>
+                <option value="beach">Beach</option>
+                <option value="cracked_stone">Cracked Stone</option>
+              </select>
+              <span></span>
+            </div>
+            <div class="setting-item">
+              <label for="sphere-size">Sphere Size</label>
+              <input type="range" id="sphere-size" min="0.5" max="5.0" step="0.1" value="2.0">
+              <span id="sphere-size-val">2.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="sphere-weight">Sphere Weight</label>
+              <input type="range" id="sphere-weight" min="10" max="500" step="10" value="200">
+              <span id="sphere-weight-val">200</span>
+            </div>
+            <div class="setting-item">
+              <label for="sphere-accel">Sphere Acceleration</label>
+              <input type="range" id="sphere-accel" min="500" max="3000" step="100" value="2000">
+              <span id="sphere-accel-val">2000</span>
+            </div>
+            <div class="setting-item">
+              <label for="collision-bounce">Collision Bounce</label>
+              <input type="range" id="collision-bounce" min="0.1" max="1.5" step="0.1" value="0.9">
+              <span id="collision-bounce-val">0.9</span>
+            </div>
+            <div class="setting-item">
+              <label for="arena-size">Arena Size</label>
+              <input type="range" id="arena-size" min="2" max="8" step="1" value="4">
+              <span id="arena-size-val">4</span>
+            </div>
+            <div class="setting-item">
+              <label for="destruction-rate">Destruction Rate (s)</label>
+              <input type="range" id="destruction-rate" min="0.5" max="10.0" step="0.5" value="3.0">
+              <span id="destruction-rate-val">3.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="ice-rate">Ice Rate (s)</label>
+              <input type="range" id="ice-rate" min="0.5" max="10.0" step="0.5" value="2.0">
+              <span id="ice-rate-val">2.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="music-volume">Music Volume</label>
+              <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.6">
+              <span id="music-volume-val">0.6</span>
+            </div>
+            <div class="setting-item">
+              <label for="sfx-volume">SFX Volume</label>
+              <input type="range" id="sfx-volume" min="0" max="1" step="0.05" value="0.8">
+              <span id="sfx-volume-val">0.8</span>
+            </div>
+            <div class="setting-item">
+              <label for="particle-amount">Particle Amount</label>
+              <input type="range" id="particle-amount" min="0" max="5" step="0.1" value="1.0">
+              <span id="particle-amount-val">1.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="bloom-level">Bloom Level</label>
+              <input type="range" id="bloom-level" min="0" max="5" step="0.1" value="2.0">
+              <span id="bloom-level-val">2.0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Controls Column -->
+        <div style="flex: 1;">
+          <h3 class="retro-subtitle" style="margin-bottom: 1rem; font-size: 1.5rem;">CONTROLS</h3>
+          <div class="settings-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="setting-item">
+              <label>Player 1 Up</label>
+              <button id="btn-p1-up" class="control-btn">KeyW</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 2 Up</label>
+              <button id="btn-p2-up" class="control-btn">ArrowUp</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 1 Down</label>
+              <button id="btn-p1-down" class="control-btn">KeyS</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 2 Down</label>
+              <button id="btn-p2-down" class="control-btn">ArrowDown</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 1 Left</label>
+              <button id="btn-p1-left" class="control-btn">KeyA</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 2 Left</label>
+              <button id="btn-p2-left" class="control-btn">ArrowLeft</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 1 Right</label>
+              <button id="btn-p1-right" class="control-btn">KeyD</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 2 Right</label>
+              <button id="btn-p2-right" class="control-btn">ArrowRight</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 1 Boost</label>
+              <button id="btn-p1-boost" class="control-btn">ShiftLeft</button>
+            </div>
+            <div class="setting-item">
+              <label>Player 2 Boost</label>
+              <button id="btn-p2-boost" class="control-btn">ShiftRight</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 20px; margin-top: 2rem;">
+        <button id="reset-settings-btn" class="retro-btn" style="font-size: 1.5rem; border-color: #ff00ff; color: #ff00ff; box-shadow: 0 0 20px #ff00ff, inset 0 0 10px #ff00ff; text-shadow: 0 0 10px #ff00ff;">RESET TO DEFAULT</button>
+        <button id="close-settings-btn" class="retro-btn" style="font-size: 1.5rem;">BACK</button>
+      </div>
+    </div>
+
+    <div id="hud" class="screen hidden">
+      <div class="player-stats p1">
+        <div class="name">Player 1 (Red)</div>
+        <div class="boost-bar-container">
+          <div id="p1-boost" class="boost-bar"></div>
+        </div>
+      </div>
+      <div id="score-display" class="score-display">
+        <span id="p1-score" class="p1-score-text">0</span> - <span id="p2-score" class="p2-score-text">0</span>
+      </div>
+      <div class="player-stats p2">
+        <div class="name">Player 2 (Blue)</div>
+        <div class="boost-bar-container">
+          <div id="p2-boost" class="boost-bar"></div>
+        </div>
+      </div>
+      <div id="effects" class="effects-container"></div>
+      <div id="countdown-display" class="score-display hidden" style="top: 50%; transform: translate(-50%, -50%); font-size: 8rem; z-index: 50; pointer-events: none;">3</div>
+      <div id="hud-controls" style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; pointer-events: auto;">
+        <button id="hud-restart-btn" class="retro-btn" style="padding: 0.5rem 1rem; font-size: 1rem; pointer-events: auto;">Restart</button>
+        <button id="hud-menu-btn" class="retro-btn" style="padding: 0.5rem 1rem; font-size: 1rem; pointer-events: auto;">Menu</button>
+      </div>
+    </div>
+
+    <div id="game-over" class="screen hidden">
+      <h1 id="winner-text">Player X Wins!</h1>
+      <button id="restart-btn" class="retro-btn">Play Again</button>
+      <button id="menu-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">Return to Menu</button>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
