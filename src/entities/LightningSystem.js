@@ -29,19 +29,18 @@ export class LightningSystem {
         const particleAmount = useGameStore.getState().settings.particleAmount ?? 1.0;
         if (particleAmount === 0) return;
 
-        let numStrikes = intensity * particleAmount * 2; // More strikes
+        // PERFORMANCE: Reduce number of strikes significantly
+        let numStrikes = Math.min(2, Math.ceil(intensity * particleAmount));
         if (numStrikes < 1) {
             if (Math.random() > numStrikes) return;
             numStrikes = 1;
-        } else {
-            numStrikes = Math.floor(numStrikes);
         }
         
         for (let s = 0; s < numStrikes; s++) {
             this.createStrike(position, intensity, true);
             
-            // Create smaller branches (more forks)
-            const numBranches = 2 + Math.floor(Math.random() * 3);
+            // PERFORMANCE: Fewer branches
+            const numBranches = 1 + Math.floor(Math.random() * 2);
             for (let b = 0; b < numBranches; b++) {
                 this.createStrike(position, intensity * 0.5, false);
             }
@@ -55,14 +54,15 @@ export class LightningSystem {
         const startSpread = isMain ? 20 : 40;
         let currentPoint = new THREE.Vector3(
             targetPosition.x + (Math.random() - 0.5) * startSpread * intensity,
-            100 + (Math.random() * 50), // Start high up
+            100 + (Math.random() * 50),
             targetPosition.z + (Math.random() - 0.5) * startSpread * intensity
         );
         
         const startY = currentPoint.y;
         points.push(currentPoint.clone());
         
-        const segments = isMain ? 15 + Math.floor(intensity * 3) : 8 + Math.floor(intensity * 2);
+        // PERFORMANCE: Fewer segments for faster geometry creation
+        const segments = isMain ? 8 + Math.floor(intensity * 2) : 5 + Math.floor(intensity);
         
         for (let i = 0; i < segments; i++) {
             const progress = (i + 1) / segments;
@@ -86,38 +86,36 @@ export class LightningSystem {
         // Ensure it hits the target
         points.push(targetPosition.clone());
 
-        const curve = new THREE.CatmullRomCurve3(points, false, 'catmullrom', 0);
-        const coreGeo = new THREE.TubeGeometry(curve, points.length * 2, 0.1, 4, false); // Even thinner core
-        const glowGeo = new THREE.TubeGeometry(curve, points.length * 2, 0.4, 4, false); // Even thinner glow
+        // PERFORMANCE: Use LineSegments instead of TubeGeometry
+        const coreGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const glowGeo = new THREE.BufferGeometry().setFromPoints(points);
         
-        // Create core mesh
-        const coreLine = new THREE.Mesh(coreGeo, new THREE.MeshBasicMaterial({
+        // Create core line
+        const coreLine = new THREE.Line(coreGeo, new THREE.LineBasicMaterial({
             color: 0xffffff,
             transparent: true,
             opacity: 1.0,
+            linewidth: 2,
             blending: THREE.AdditiveBlending
         }));
-        // Multiply color by a large factor to force bloom
-        coreLine.material.color.multiplyScalar(5.0);
         scene.add(coreLine);
         
-        // Create glow mesh
+        // Create glow line
         const colors = [0x00ffff, 0xff00ff, 0x88ccff];
-        const glowLine = new THREE.Mesh(glowGeo, new THREE.MeshBasicMaterial({
+        const glowLine = new THREE.Line(glowGeo, new THREE.LineBasicMaterial({
             color: colors[Math.floor(Math.random() * colors.length)],
             transparent: true,
-            opacity: 0.8, // Increased opacity
+            opacity: 0.6,
+            linewidth: 4,
             blending: THREE.AdditiveBlending
         }));
-        // Multiply color by a large factor to force bloom
-        glowLine.material.color.multiplyScalar(3.0);
         scene.add(glowLine);
         
         this.strikes.push({
             coreMesh: coreLine,
             glowMesh: glowLine,
-            life: 0.2 + (intensity * 0.15), // Lasts longer if more intense
-            maxLife: 0.2 + (intensity * 0.15)
+            life: 0.15 + (intensity * 0.1),
+            maxLife: 0.15 + (intensity * 0.1)
         });
     }
 

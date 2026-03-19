@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { scene } from '../renderer.js';
 import { useGameStore } from '../store.js';
 
+function isMobileDevice() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/.test(userAgent) 
+        || window.innerWidth < 768;
+}
+
 const particleVertexShader = `
     attribute float size;
     attribute vec3 customColor;
@@ -41,7 +47,15 @@ const particleFragmentShader = `
 
 export class ParticleSystem {
     constructor(maxParticles = 5000) {
-        this.maxParticles = maxParticles;
+        const isMobile = isMobileDevice();
+        
+        // Reduce particle count on mobile
+        if (isMobile) {
+            this.maxParticles = Math.min(maxParticles, 1000);
+        } else {
+            this.maxParticles = maxParticles;
+        }
+        
         this.particleCount = 0;
         this.particles = [];
 

@@ -4,6 +4,12 @@ export let world;
 
 let initialized = false;
 
+function isMobileDevice() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    return /android|webos|iphone|ipad|ipot|blackberry|iemobile|opera mini/.test(userAgent) 
+        || window.innerWidth < 768;
+}
+
 export async function initPhysics() {
     if (window.__RAPIER_INITIALIZED__) {
         world = window.__RAPIER_WORLD__;
@@ -15,13 +21,22 @@ export async function initPhysics() {
     // Custom gravity for Dropfall
     const gravity = { x: 0.0, y: -20.0, z: 0.0 };
     world = new RAPIER.World(gravity);
+    
+    // Optimize physics on mobile
+    if (isMobileDevice()) {
+        // Reduce constraints iterations for mobile
+        world.maxIslandSize = 32;
+        world.constraintSolverIterations = 2;
+    }
+    
     window.__RAPIER_WORLD__ = world;
 
     return world;
 }
 
 let accumulator = 0;
-const timeStep = 1 / 60;
+const isMobile = isMobileDevice();
+const timeStep = isMobile ? 1 / 30 : 1 / 60; // Lower timestep on mobile
 
 export function updatePhysics(delta) {
     if (world) {
