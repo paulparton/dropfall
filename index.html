@@ -5,9 +5,66 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dropfall</title>
     <link rel="stylesheet" href="/src/style.css">
+    <style>
+      #menu, #game-over, #settings-panel { z-index: 50 !important; }
+      .screen { z-index: 40 !important; }
+    </style>
   </head>
   <body>
-    <div id="menu" class="screen">
+    <!-- Game canvas container -->
+    <div id="app" style="width: 100%; height: 100vh; position: absolute; top: 0; left: 0; z-index: 0;"></div>
+    
+    <!-- Game Mode Selection Screen -->
+    <div id="game-mode-select" class="screen" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">DROPFALL</h1>
+        <h2 class="retro-subtitle">SELECT GAME MODE</h2>
+      </div>
+      
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
+        <button id="mode-single-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">SINGLE PLAYER</button>
+        <button id="mode-local-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">LOCAL MULTIPLAYER</button>
+        <button id="mode-online-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">ONLINE</button>
+      </div>
+    </div>
+
+    <!-- Difficulty Selection Screen -->
+    <div id="difficulty-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">DIFFICULTY</h1>
+        <h2 class="retro-subtitle">SELECT DIFFICULTY</h2>
+      </div>
+      
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
+        <button id="difficulty-easy-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #00ff88;">EASY</button>
+        <button id="difficulty-normal-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #0ff;">NORMAL</button>
+        <button id="difficulty-hard-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #ff0088;">HARD</button>
+      </div>
+      
+      <div style="margin-top: 60px; text-align: center; font-size: 1.2rem; color: #0ff; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <p id="difficulty-description" style="margin: 0;"></p>
+      </div>
+    </div>
+
+    <!-- Coming Soon Screen -->
+    <div id="coming-soon" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">COMING SOON</h1>
+        <h2 class="retro-subtitle">ONLINE MULTIPLAYER</h2>
+      </div>
+      
+      <div style="text-align: center; margin: 80px 0; font-size: 2rem; color: #0ff;">
+        <p>🚀 Online multiplayer features are coming soon!</p>
+        <p style="margin-top: 40px; font-size: 1.5rem;">Enjoy single player and local multiplayer in the meantime.</p>
+      </div>
+      
+      <div style="text-align: center;">
+        <button id="coming-soon-back-btn" class="retro-btn" style="padding: 20px 40px; font-size: 1.5rem;">BACK</button>
+      </div>
+    </div>
+    
+    <!-- UI Overlay -->
+    <div id="menu" class="screen hidden">
       <div class="title-container">
         <h1 class="retro-title">DROPFALL</h1>
         <h2 class="retro-subtitle">CYBER ARENA</h2>
@@ -16,26 +73,38 @@
       <div class="controls-display">
         <div class="control-box p1-controls">
           <h3>PLAYER 1</h3>
-          <p>Move: W A S D</p>
-          <p>Boost: SHIFT</p>
+          <p>Keyboard: W A S D</p>
+          <p>Gamepad: Left Stick</p>
+          <p>Boost: SHIFT / A/X/R2</p>
         </div>
-        <div class="control-box p2-controls">
+        <div id="p2-controls-display" class="control-box p2-controls">
           <h3>PLAYER 2</h3>
-          <p>Move: ARROWS</p>
-          <p>Boost: SHIFT</p>
+          <p>Keyboard: ARROWS</p>
+          <p>Gamepad: Left Stick</p>
+          <p>Boost: SHIFT / A/X/R2</p>
         </div>
       </div>
 
-      <button id="start-btn" class="retro-btn">INSERT COIN TO START</button>      <button id="settings-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">SETTINGS</button>
+      <button id="start-btn" class="retro-btn">INSERT COIN TO START</button>
+      <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px; justify-content: center;">
+        <input type="checkbox" id="autorestart-menu" style="width: 20px; height: 20px; cursor: pointer;">
+        <label for="autorestart-menu" style="cursor: pointer; color: #0ff; font-family: 'Courier New', monospace;">Auto-Restart on Game Over</label>
+      </div>
+      <button id="settings-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">SETTINGS</button>
     </div>
 
-    <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100;">
-      <h2 class="retro-subtitle" style="margin-bottom: 2rem;">SETTINGS</h2>
+    <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100; pointer-events: auto;">
+      <h2 class="retro-subtitle" style="margin-bottom: 1rem;">SETTINGS</h2>
       
-      <div style="display: flex; gap: 4rem; align-items: flex-start; width: 90%; max-width: 1200px;">
+      <div class="settings-panel-tabs" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; width: 90%; max-width: 1200px;">
+        <button id="settings-tab" class="tab-btn active" style="flex: 1; padding: 0.8rem;">Game Settings</button>
+        <button id="powerups-tab" class="tab-btn" style="flex: 1; padding: 0.8rem;">Power-ups Guide</button>
+      </div>
+      
+      <div id="settings-content" class="tab-content active" style="display: flex; gap: 2rem; align-items: flex-start; width: 90%; max-width: 1200px;">
         <!-- Sliders Column -->
         <div style="flex: 1;">
-          <h3 class="retro-subtitle" style="margin-bottom: 1rem; font-size: 1.5rem;">GAMEPLAY</h3>
+          <h3 class="retro-subtitle" style="margin-bottom: 0.5rem; font-size: 1.2rem;">GAMEPLAY</h3>
           <div class="settings-grid">
             <div class="setting-item">
               <label for="theme-select">Theme</label>
@@ -68,7 +137,7 @@
             </div>
             <div class="setting-item">
               <label for="arena-size">Arena Size</label>
-              <input type="range" id="arena-size" min="2" max="8" step="1" value="4">
+              <input type="range" id="arena-size" min="2" max="32" step="1" value="4">
               <span id="arena-size-val">4</span>
             </div>
             <div class="setting-item">
@@ -80,6 +149,26 @@
               <label for="ice-rate">Ice Rate (s)</label>
               <input type="range" id="ice-rate" min="0.5" max="10.0" step="0.5" value="2.0">
               <span id="ice-rate-val">2.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="portal-rate">Portal Rate (s)</label>
+              <input type="range" id="portal-rate" min="1.0" max="15.0" step="0.5" value="8.0">
+              <span id="portal-rate-val">8.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="portal-cooldown">Portal Cooldown (s)</label>
+              <input type="range" id="portal-cooldown" min="0.5" max="5.0" step="0.5" value="2.0">
+              <span id="portal-cooldown-val">2.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="bonus-rate">Bonus Rate (s)</label>
+              <input type="range" id="bonus-rate" min="2.0" max="15.0" step="0.5" value="6.0">
+              <span id="bonus-rate-val">6.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="bonus-duration">Bonus Duration (s)</label>
+              <input type="range" id="bonus-duration" min="1.0" max="10.0" step="0.5" value="4.0">
+              <span id="bonus-duration-val">4.0</span>
             </div>
             <div class="setting-item">
               <label for="music-volume">Music Volume</label>
@@ -98,15 +187,46 @@
             </div>
             <div class="setting-item">
               <label for="bloom-level">Bloom Level</label>
-              <input type="range" id="bloom-level" min="0" max="5" step="0.1" value="2.0">
-              <span id="bloom-level-val">2.0</span>
+              <input type="range" id="bloom-level" min="0" max="5" step="0.1" value="0">
+              <span id="bloom-level-val">0</span>
+            </div>
+            <div class="setting-item">
+              <label for="boost-regen-speed">Boost Regen Speed</label>
+              <input type="range" id="boost-regen-speed" min="0.1" max="5" step="0.1" value="1.5">
+              <span id="boost-regen-speed-val">1.5</span>
+            </div>
+            <div class="setting-item">
+              <label for="boost-drain-rate">Boost Drain Rate</label>
+              <input type="range" id="boost-drain-rate" min="5" max="50" step="1" value="20">
+              <span id="boost-drain-rate-val">20</span>
+            </div>
+            <div class="setting-item">
+              <label for="player-aura-size">Aura Size</label>
+              <input type="range" id="player-aura-size" min="0.8" max="2.0" step="0.1" value="1.4">
+              <span id="player-aura-size-val">1.4</span>
+            </div>
+            <div class="setting-item">
+              <label for="player-aura-opacity">Aura Opacity</label>
+              <input type="range" id="player-aura-opacity" min="0.0" max="1.0" step="0.05" value="0.4">
+              <span id="player-aura-opacity-val">0.4</span>
+            </div>
+            <div class="setting-item">
+              <label for="player-glow-intensity">Glow Intensity</label>
+              <input type="range" id="player-glow-intensity" min="0.1" max="5.0" step="0.1" value="3.0">
+              <span id="player-glow-intensity-val">3.0</span>
+            </div>
+            <div class="setting-item">
+              <label for="player-glow-range">Glow Range</label>
+              <input type="range" id="player-glow-range" min="5" max="50" step="1" value="30">
+              <span id="player-glow-range-val">30</span>
             </div>
           </div>
         </div>
 
         <!-- Controls Column -->
         <div style="flex: 1;">
-          <h3 class="retro-subtitle" style="margin-bottom: 1rem; font-size: 1.5rem;">CONTROLS</h3>
+          <h3 class="retro-subtitle" style="margin-bottom: 0.5rem; font-size: 1.2rem;">CONTROLS</h3>
+          <button id="show-controller-settings-btn" class="retro-btn" style="margin-bottom: 1rem; font-size: 1.1rem; padding: 0.5rem 1.5rem;">Controller Settings</button>
           <div class="settings-grid" style="grid-template-columns: 1fr 1fr;">
             <div class="setting-item">
               <label>Player 1 Up</label>
@@ -150,17 +270,64 @@
             </div>
           </div>
         </div>
+        <!-- Controller Settings Section (hidden by default, overlays settings) -->
+        <div id="controller-settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.95); z-index: 200; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: flex-start; align-items: center; padding-top: 4rem;">
+          <div style="background: rgba(0,0,0,0.95); border: 2px solid #0ff; border-radius: 12px; box-shadow: 0 0 20px #0ff; padding: 2rem 3rem; min-width: 400px; max-width: 90vw;">
+            <h2 class="retro-subtitle" style="margin-bottom: 2rem;">Controller Settings</h2>
+            <div style="margin-bottom: 2rem; color: #fff;">Press any button on your controller to see feedback and configure mappings in the main settings.</div>
+            <button id="close-controller-settings-btn" class="retro-btn" style="font-size: 1.2rem;">Back to Settings</button>
+          </div>
+        </div>
+      </div>
+      
+      <div id="powerups-content" class="tab-content hidden" style="width: 90%; max-width: 1200px; max-height: 65vh; overflow-y: auto;">
+        <div id="powerups-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;"></div>
       </div>
 
-      <div style="display: flex; gap: 20px; margin-top: 2rem;">
-        <button id="reset-settings-btn" class="retro-btn" style="font-size: 1.5rem; border-color: #ff00ff; color: #ff00ff; box-shadow: 0 0 20px #ff00ff, inset 0 0 10px #ff00ff; text-shadow: 0 0 10px #ff00ff;">RESET TO DEFAULT</button>
-        <button id="close-settings-btn" class="retro-btn" style="font-size: 1.5rem;">BACK</button>
+      <div style="display: flex; gap: 20px; margin-top: 0.75rem; padding: 0.75rem 1rem; border: 2px solid #0ff; border-radius: 8px; background: rgba(0,255,255,0.05); width: 90%; max-width: 1200px; box-sizing: border-box;">
+        <!-- Presets Column -->
+        <div style="flex: 1;">
+          <h3 class="retro-subtitle" style="margin-bottom: 0.4rem; font-size: 1.2rem;">PRESETS</h3>
+          <div style="display: flex; gap: 10px; margin-bottom: 0.75rem;">
+            <input type="text" id="preset-name" placeholder="Preset name" style="flex: 1; background: #000; color: #0ff; border: 1px solid #0ff; padding: 8px; font-family: 'Courier New', monospace;">
+            <button id="save-preset-btn" class="retro-btn" style="font-size: 1rem; padding: 0.5rem 1rem;">Save</button>
+          </div>
+          <div style="border: 1px solid #0ff; padding: 10px; background: rgba(0,0,0,0.5); max-height: 200px; overflow-y: auto;">
+            <div id="presets-list" style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Presets will be added here -->
+            </div>
+          </div>
+        </div>
       </div>
+
+      <div style="display: flex; gap: 20px; margin-top: 0.75rem;">
+        <button id="reset-settings-btn" class="retro-btn" style="font-size: 1rem; border-color: #ff00ff; color: #ff00ff; box-shadow: 0 0 20px #ff00ff, inset 0 0 10px #ff00ff; text-shadow: 0 0 10px #ff00ff;">RESET TO DEFAULT</button>
+        <button id="close-settings-btn" class="retro-btn" style="font-size: 1rem;">BACK</button>
+      </div>
+    </div>
+
+    <div id="name-entry" class="screen hidden">
+      <h2 class="retro-subtitle" style="margin-bottom: 0.5rem;">PLAYER NAMES</h2>
+      <div id="name-entry-round-info" style="color: #ffff00; font-family: 'Courier New', monospace; font-size: 1.2rem; margin-bottom: 1.5rem; text-shadow: 0 0 8px #ffff00; letter-spacing: 2px;"></div>
+      <div class="name-entry-fields">
+        <div class="name-entry-field">
+          <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444;">PLAYER 1</label>
+          <input id="p1-name-input" type="text" maxlength="12" placeholder="Player 1" autocomplete="off">
+        </div>
+        <div id="name-entry-vs" class="name-entry-vs">VS</div>
+        <div id="name-entry-p2-field" class="name-entry-field">
+          <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff;">PLAYER 2</label>
+          <input id="p2-name-input" type="text" maxlength="12" placeholder="Player 2" autocomplete="off">
+        </div>
+      </div>
+      <button id="name-entry-play-btn" class="retro-btn" style="margin-top: 2rem;">LET'S PLAY!</button>
+      <button id="name-entry-menu-btn" class="retro-btn" style="margin-top: 0.75rem; font-size: 1rem; padding: 0.5rem 1.5rem; opacity: 0.7;">BACK TO MENU</button>
     </div>
 
     <div id="hud" class="screen hidden">
       <div class="player-stats p1">
         <div class="name">Player 1 (Red)</div>
+        <div id="p1-powerups" class="powerup-status"></div>
         <div class="boost-bar-container">
           <div id="p1-boost" class="boost-bar"></div>
         </div>
@@ -170,11 +337,13 @@
       </div>
       <div class="player-stats p2">
         <div class="name">Player 2 (Blue)</div>
+        <div id="p2-powerups" class="powerup-status"></div>
         <div class="boost-bar-container">
           <div id="p2-boost" class="boost-bar"></div>
         </div>
       </div>
       <div id="effects" class="effects-container"></div>
+      <div id="powerup-notifications" class="powerup-notifications-container"></div>
       <div id="countdown-display" class="score-display hidden" style="top: 50%; transform: translate(-50%, -50%); font-size: 8rem; z-index: 50; pointer-events: none;">3</div>
       <div id="hud-controls" style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; pointer-events: auto;">
         <button id="hud-restart-btn" class="retro-btn" style="padding: 0.5rem 1rem; font-size: 1rem; pointer-events: auto;">Restart</button>
@@ -184,6 +353,10 @@
 
     <div id="game-over" class="screen hidden">
       <h1 id="winner-text">Player X Wins!</h1>
+      <div style="margin: 20px 0; display: flex; align-items: center; gap: 10px; justify-content: center;">
+        <input type="checkbox" id="autorestart-gameover" style="width: 20px; height: 20px; cursor: pointer;">
+        <label for="autorestart-gameover" style="cursor: pointer; color: #0ff; font-family: 'Courier New', monospace; font-size: 1.2rem;">Auto-Restart on Game Over</label>
+      </div>
       <button id="restart-btn" class="retro-btn">Play Again</button>
       <button id="menu-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">Return to Menu</button>
     </div>
