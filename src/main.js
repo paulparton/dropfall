@@ -11,6 +11,7 @@ import { LightningSystem } from './entities/LightningSystem.js';
 import { ShockwaveSystem } from './entities/ShockwaveSystem.js';
 import { initAudio, playMusic, playCollisionSound, setMusicSpeed } from './audio.js';
 import { POWER_UP_EFFECTS } from './entities/Player.js';
+import { AIController } from './ai/AIController.js';
 
 function showPowerUpNotification(playerName, powerUpName, icon, color) {
     const container = document.getElementById('powerup-notifications');
@@ -41,7 +42,7 @@ window.showPowerUpNotification = showPowerUpNotification;
 // Export power-up effects for showcase
 window.POWER_UP_EFFECTS = null; // Will be set after Player import
 
-let player1, player2, arena, particles, lightning, shockwaves;
+let player1, player2, arena, particles, lightning, shockwaves, aiController;
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
@@ -265,7 +266,11 @@ async function init() {
     scene.add(sceneFlashLight);
 
     // 2. Setup UI Listeners
-    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('start-btn').addEventListener('click', () => {
+        // Show game mode selection
+        document.getElementById('menu').classList.add('hidden');
+        document.getElementById('game-mode-select').classList.remove('hidden');
+    });
     document.getElementById('restart-btn').addEventListener('click', startGame);
     document.getElementById('menu-btn').addEventListener('click', returnToMenu);
 
@@ -288,6 +293,56 @@ async function init() {
         startGame();
     });
     document.getElementById('hud-menu-btn').addEventListener('click', returnToMenu);
+
+    // Game Mode Selection
+    document.getElementById('mode-single-btn').addEventListener('click', () => {
+        useGameStore.getState().setGameMode('1P');
+    });
+    document.getElementById('mode-local-btn').addEventListener('click', () => {
+        useGameStore.getState().setGameMode('2P');
+        document.getElementById('game-mode-select').classList.add('hidden');
+    });
+    document.getElementById('mode-online-btn').addEventListener('click', () => {
+        document.getElementById('game-mode-select').classList.add('hidden');
+        document.getElementById('coming-soon').classList.remove('hidden');
+    });
+
+    // Coming Soon
+    document.getElementById('coming-soon-back-btn').addEventListener('click', () => {
+        document.getElementById('coming-soon').classList.add('hidden');
+        document.getElementById('game-mode-select').classList.remove('hidden');
+    });
+
+    // Difficulty Selection
+    const difficultyDescriptions = {
+        easy: 'NPC is slower and less accurate. Perfect for learning!',
+        normal: 'Balanced challenge. Standard AI opponent difficulty.',
+        hard: 'Aggressive AI with precise targeting. For experts only!'
+    };
+
+    document.getElementById('difficulty-easy-btn').addEventListener('click', () => {
+        useGameStore.getState().setDifficulty('easy');
+        document.getElementById('difficulty-select').classList.add('hidden');
+    });
+    document.getElementById('difficulty-normal-btn').addEventListener('click', () => {
+        useGameStore.getState().setDifficulty('normal');
+        document.getElementById('difficulty-select').classList.add('hidden');
+    });
+    document.getElementById('difficulty-hard-btn').addEventListener('click', () => {
+        useGameStore.getState().setDifficulty('hard');
+        document.getElementById('difficulty-select').classList.add('hidden');
+    });
+
+    // Show difficulty descriptions on hover
+    Object.entries(difficultyDescriptions).forEach(([key, desc]) => {
+        const btn = document.getElementById(`difficulty-${key}-btn`);
+        btn.addEventListener('mouseenter', () => {
+            document.getElementById('difficulty-description').textContent = desc;
+        });
+        btn.addEventListener('mouseleave', () => {
+            document.getElementById('difficulty-description').textContent = '';
+        });
+    });
     
     const settingsPanel = document.getElementById('settings-panel');
     const controllerSettingsPanel = document.getElementById('controller-settings-panel');
@@ -681,13 +736,25 @@ function _doStartGame() {
 }
 
 function proceedFromNameEntry() {
+    const state = useGameStore.getState();
+    const isOnePlayer = state.gameMode === '1P';
+    
     const p1Raw = document.getElementById('p1-name-input').value.trim();
-    const p2Raw = document.getElementById('p2-name-input').value.trim();
     const p1Name = (p1Raw || 'Player 1').substring(0, 12);
-    const p2Name = (p2Raw || 'Player 2').substring(0, 12);
+    
+    let p2Name;
+    if (isOnePlayer) {
+        // In 1P mode, auto-generate NPC name
+        const difficultyLabel = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
+        p2Name = `NPC ${difficultyLabel}`;
+    } else {
+        // In 2P mode, read from input
+        const p2Raw = document.getElementById('p2-name-input').value.trim();
+        p2Name = (p2Raw || 'Player 2').substring(0, 12);
+    }
+    
     useGameStore.getState().setPlayerNames(p1Name, p2Name);
 
-    const state = useGameStore.getState();
     const totalScore = state.p1Score + state.p2Score;
     const speed = 0.6 + (totalScore * 0.1);
     setMusicSpeed(Math.min(speed, 1.0));
@@ -752,9 +819,26 @@ function resetEntities() {
     if (lightning) lightning.cleanup();
     if (shockwaves) shockwaves.cleanup();
 
+    // Initialize AI Controller if in 1P mode
+    const gameState = useGameStore.getState();
+    const isOnePlayer = gameState.gameMode === '1P';
+    const difficulty = gameState.difficulty || 'normal';
+    
+    if (isOnePlayer) {
+        aiController = new AIController(difficulty);
+    } else {
+        aiController = null;
+    }
+
     // Initialize Entities
     player1 = new Player('player1', 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1Input);
-    player2 = new Player('player2', 0x4444ff, { x: 15, y: 4, z: 0 }, getPlayer2Input);
+    
+    // Use AI input function for P2 in 1P mode, otherwise use human input
+    const player2InputFn = isOnePlayer 
+        ? () => aiController.getInput() 
+        : getPlayer2Input;
+    
+    player2 = new Player('player2', 0x4444ff, { x: 15, y: 4, z: 0 }, player2InputFn);
     arena = new Arena();
     particles = new ParticleSystem();
     lightning = new LightningSystem();
@@ -833,6 +917,30 @@ function animate() {
         // 1. Update Entities
         if (player1) player1.update(delta, arena, particles);
         if (player2) player2.update(delta, arena, particles);
+        
+        // Update AI Controller if active (1P mode)
+        if (aiController && player1 && player2) {
+            // Calculate actual arena radius in world units
+            // Grid spacing is 8.0 per hex, arenaSize is hex radius
+            const gridSpacing = 8.0;
+            const arenaWorldRadius = (useGameStore.getState().settings.arenaSize + 1) * gridSpacing;
+
+            // Pass live velocity from Rapier rigid bodies so the AI can predict player movement
+            const p1Vel = player1.rigidBody ? player1.rigidBody.linvel() : null;
+            const p2Vel = player2.rigidBody ? player2.rigidBody.linvel() : null;
+
+            aiController.update(
+                player1.mesh.position,
+                player2.mesh.position,
+                p1Vel,
+                p2Vel,
+                new THREE.Vector3(0, 0, 0),
+                arenaWorldRadius,
+                delta,
+                state
+            );
+        }
+        
         if (arena) arena.update(delta);
         if (particles) particles.update(delta);
         if (lightning) lightning.update(delta);
@@ -1046,6 +1154,21 @@ const p2ScoreText = document.getElementById('p2-score');
 const effectsContainer = document.getElementById('effects');
 const winnerText = document.getElementById('winner-text');
 
+// Initialize UI - show menu on page load
+function initializeUI() {
+    menuScreen.classList.remove('hidden');
+    hudScreen.classList.add('hidden');
+    gameOverScreen.classList.add('hidden');
+    document.getElementById('name-entry').classList.add('hidden');
+    document.getElementById('countdown-display').classList.add('hidden');
+    document.getElementById('game-mode-select').classList.add('hidden');
+    document.getElementById('difficulty-select').classList.add('hidden');
+    document.getElementById('coming-soon').classList.add('hidden');
+}
+
+// Initialize UI on page load
+initializeUI();
+
 useGameStore.subscribe((state, prevState) => {
     // Update Game State UI
     if (state.gameState !== prevState.gameState) {
@@ -1055,16 +1178,67 @@ useGameStore.subscribe((state, prevState) => {
             gameOverScreen.classList.add('hidden');
             document.getElementById('name-entry').classList.add('hidden');
             document.getElementById('countdown-display').classList.add('hidden');
+            document.getElementById('game-mode-select').classList.add('hidden');
+            document.getElementById('difficulty-select').classList.add('hidden');
+            document.getElementById('coming-soon').classList.add('hidden');
+            
+            // Update P2 controls display based on game mode
+            const p2ControlsDisplay = document.getElementById('p2-controls-display');
+            if (state.gameMode === '1P') {
+                const difficultyLabel = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
+                p2ControlsDisplay.innerHTML = `
+                    <h3>NPC OPPONENT</h3>
+                    <p>Difficulty: <strong>${difficultyLabel}</strong></p>
+                    <p>🤖 AI-Controlled</p>
+                    <p>Adapts to your play style</p>
+                `;
+            } else {
+                p2ControlsDisplay.innerHTML = `
+                    <h3>PLAYER 2</h3>
+                    <p>Keyboard: ARROWS</p>
+                    <p>Gamepad: Left Stick</p>
+                    <p>Boost: SHIFT / A/X/R2</p>
+                `;
+            }
+        } else if (state.gameState === 'DIFFICULTY_SELECT') {
+            menuScreen.classList.add('hidden');
+            hudScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            document.getElementById('name-entry').classList.add('hidden');
+            document.getElementById('countdown-display').classList.add('hidden');
+            document.getElementById('game-mode-select').classList.add('hidden');
+            document.getElementById('coming-soon').classList.add('hidden');
+            document.getElementById('difficulty-select').classList.remove('hidden');
         } else if (state.gameState === 'NAME_ENTRY') {
             const nameEntryScreen = document.getElementById('name-entry');
             menuScreen.classList.add('hidden');
             hudScreen.classList.add('hidden');
             gameOverScreen.classList.add('hidden');
             document.getElementById('countdown-display').classList.add('hidden');
+            document.getElementById('game-mode-select').classList.add('hidden');
+            document.getElementById('difficulty-select').classList.add('hidden');
+            document.getElementById('coming-soon').classList.add('hidden');
             nameEntryScreen.classList.remove('hidden');
             // Pre-fill inputs with stored names
             document.getElementById('p1-name-input').value = state.p1Name;
-            document.getElementById('p2-name-input').value = state.p2Name;
+            
+            // Handle 1P vs 2P mode
+            const isOnePlayer = state.gameMode === '1P';
+            const p2Field = document.getElementById('name-entry-p2-field');
+            const vsDiv = document.getElementById('name-entry-vs');
+            
+            if (isOnePlayer) {
+                p2Field.classList.add('hidden');
+                vsDiv.classList.add('hidden');
+                // Auto-set P2 name for 1P mode
+                const difficultyLabel = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
+                useGameStore.getState().setPlayerNames(state.p1Name, `NPC ${difficultyLabel}`);
+            } else {
+                p2Field.classList.remove('hidden');
+                vsDiv.classList.remove('hidden');
+                document.getElementById('p2-name-input').value = state.p2Name;
+            }
+            
             // Show round info if between rounds
             const infoEl = document.getElementById('name-entry-round-info');
             if (nameEntryMode === 'nextround') {
@@ -1077,6 +1251,9 @@ useGameStore.subscribe((state, prevState) => {
             menuScreen.classList.add('hidden');
             hudScreen.classList.remove('hidden');
             gameOverScreen.classList.add('hidden');
+            document.getElementById('game-mode-select').classList.add('hidden');
+            document.getElementById('difficulty-select').classList.add('hidden');
+            document.getElementById('coming-soon').classList.add('hidden');
             const countdownDisplay = document.getElementById('countdown-display');
             countdownDisplay.classList.remove('hidden');
             countdownDisplay.textContent = '3';
@@ -1084,6 +1261,9 @@ useGameStore.subscribe((state, prevState) => {
             menuScreen.classList.add('hidden');
             hudScreen.classList.remove('hidden');
             gameOverScreen.classList.add('hidden');
+            document.getElementById('game-mode-select').classList.add('hidden');
+            document.getElementById('difficulty-select').classList.add('hidden');
+            document.getElementById('coming-soon').classList.add('hidden');
             const countdownDisplay = document.getElementById('countdown-display');
             countdownDisplay.textContent = 'GO!';
             countdownDisplay.classList.remove('hidden');

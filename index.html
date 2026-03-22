@@ -14,8 +14,57 @@
     <!-- Game canvas container -->
     <div id="app" style="width: 100%; height: 100vh; position: absolute; top: 0; left: 0; z-index: 0;"></div>
     
+    <!-- Game Mode Selection Screen -->
+    <div id="game-mode-select" class="screen" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">DROPFALL</h1>
+        <h2 class="retro-subtitle">SELECT GAME MODE</h2>
+      </div>
+      
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
+        <button id="mode-single-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">SINGLE PLAYER</button>
+        <button id="mode-local-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">LOCAL MULTIPLAYER</button>
+        <button id="mode-online-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">ONLINE</button>
+      </div>
+    </div>
+
+    <!-- Difficulty Selection Screen -->
+    <div id="difficulty-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">DIFFICULTY</h1>
+        <h2 class="retro-subtitle">SELECT DIFFICULTY</h2>
+      </div>
+      
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
+        <button id="difficulty-easy-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #00ff88;">EASY</button>
+        <button id="difficulty-normal-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #0ff;">NORMAL</button>
+        <button id="difficulty-hard-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #ff0088;">HARD</button>
+      </div>
+      
+      <div style="margin-top: 60px; text-align: center; font-size: 1.2rem; color: #0ff; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <p id="difficulty-description" style="margin: 0;"></p>
+      </div>
+    </div>
+
+    <!-- Coming Soon Screen -->
+    <div id="coming-soon" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">COMING SOON</h1>
+        <h2 class="retro-subtitle">ONLINE MULTIPLAYER</h2>
+      </div>
+      
+      <div style="text-align: center; margin: 80px 0; font-size: 2rem; color: #0ff;">
+        <p>🚀 Online multiplayer features are coming soon!</p>
+        <p style="margin-top: 40px; font-size: 1.5rem;">Enjoy single player and local multiplayer in the meantime.</p>
+      </div>
+      
+      <div style="text-align: center;">
+        <button id="coming-soon-back-btn" class="retro-btn" style="padding: 20px 40px; font-size: 1.5rem;">BACK</button>
+      </div>
+    </div>
+    
     <!-- UI Overlay -->
-    <div id="menu" class="screen">
+    <div id="menu" class="screen hidden">
       <div class="title-container">
         <h1 class="retro-title">DROPFALL</h1>
         <h2 class="retro-subtitle">CYBER ARENA</h2>
@@ -28,7 +77,7 @@
           <p>Gamepad: Left Stick</p>
           <p>Boost: SHIFT / A/X/R2</p>
         </div>
-        <div class="control-box p2-controls">
+        <div id="p2-controls-display" class="control-box p2-controls">
           <h3>PLAYER 2</h3>
           <p>Keyboard: ARROWS</p>
           <p>Gamepad: Left Stick</p>
@@ -265,8 +314,8 @@
           <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444;">PLAYER 1</label>
           <input id="p1-name-input" type="text" maxlength="12" placeholder="Player 1" autocomplete="off">
         </div>
-        <div class="name-entry-vs">VS</div>
-        <div class="name-entry-field">
+        <div id="name-entry-vs" class="name-entry-vs">VS</div>
+        <div id="name-entry-p2-field" class="name-entry-field">
           <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff;">PLAYER 2</label>
           <input id="p2-name-input" type="text" maxlength="12" placeholder="Player 2" autocomplete="off">
         </div>

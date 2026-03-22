@@ -38,7 +38,9 @@ const mergedSettings = { ...defaultSettings, ...savedSettings };
 
 export const useGameStore = createStore((set) => ({
     // State
-    gameState: 'MENU', // 'MENU', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER'
+    gameState: 'MENU', // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER'
+    gameMode: localStorage.getItem('dropfall_gamemode') || '2P', // '1P' or '2P'
+    difficulty: localStorage.getItem('dropfall_difficulty') || 'normal', // 'easy', 'normal', 'hard'
     winner: null,
     p1Score: 0,
     p2Score: 0,
@@ -67,6 +69,19 @@ export const useGameStore = createStore((set) => ({
         localStorage.setItem('dropfall_p1name', p1Name);
         localStorage.setItem('dropfall_p2name', p2Name);
         return { p1Name, p2Name };
+    }),
+
+    setGameMode: (mode) => set((state) => {
+        localStorage.setItem('dropfall_gamemode', mode);
+        // For 1P mode, go to difficulty selection
+        // For 2P mode, skip difficulty and go straight to name entry
+        const nextState = mode === '1P' ? 'DIFFICULTY_SELECT' : 'NAME_ENTRY';
+        return { gameMode: mode, gameState: nextState };
+    }),
+
+    setDifficulty: (diff) => set(() => {
+        localStorage.setItem('dropfall_difficulty', diff);
+        return { difficulty: diff, gameState: 'NAME_ENTRY' };
     }),
 
     enterNameEntry: () => set({ gameState: 'NAME_ENTRY' }),
