@@ -62,9 +62,91 @@
         <button id="coming-soon-back-btn" class="retro-btn" style="padding: 20px 40px; font-size: 1.5rem;">BACK</button>
       </div>
     </div>
+
+    <!-- Online Server Connect Screen -->
+    <div id="online-connect" class="screen hidden" style="pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">CONNECT</h1>
+        <h2 class="retro-subtitle">ONLINE SERVER</h2>
+      </div>
+      
+      <div class="online-panel">
+        <div id="online-connect-status"></div>
+        
+        <div class="online-input-group">
+          <label class="online-label">Server Address</label>
+          <input type="text" id="online-server-input" placeholder="192.168.1.100:3000" class="online-input">
+        </div>
+        
+        <div class="online-input-group">
+          <label class="online-label">Your Name</label>
+          <input type="text" id="online-name-input" placeholder="Enter your name" maxlength="20" class="online-input">
+        </div>
+        
+        <button id="online-connect-btn" class="retro-btn">CONNECT</button>
+        
+        <div id="online-connect-error"></div>
+      </div>
+      
+      <div class="online-help">
+        <p>Need a server? Run <code>npm run server</code> on any computer</p>
+      </div>
+      
+      <button id="online-connect-back-btn" class="retro-btn" style="margin-top: 2rem;">BACK</button>
+    </div>
+
+    <!-- Online Lobby Screen -->
+    <div id="online-lobby" class="screen hidden" style="pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">ONLINE</h1>
+        <h2 class="retro-subtitle">MULTIPLAYER LOBBY</h2>
+      </div>
+      
+      <div class="online-server-bar">
+        <span id="online-connected-status" class="online-status-connected">● CONNECTED</span>
+        <span class="online-server-address">Server: <span id="online-server-url"></span></span>
+      </div>
+      
+      <div class="online-actions">
+        <button id="online-create-game-btn" class="retro-btn online-btn-create">CREATE GAME</button>
+        <button id="online-refresh-btn" class="retro-btn">REFRESH LIST</button>
+      </div>
+      
+      <div class="online-games-container">
+        <h3 class="online-section-title">AVAILABLE GAMES</h3>
+        <div id="online-games-list" class="online-games-list">
+          <div class="online-no-games">
+            <p>No games available</p>
+            <p>Create a game or wait for others to host</p>
+          </div>
+        </div>
+      </div>
+      
+      <div id="online-my-game" class="hidden online-game-panel online-host-panel">
+        <h3 class="online-panel-title">YOUR GAME</h3>
+        <div id="online-game-info" class="online-game-info"></div>
+        <div class="online-game-actions">
+          <button id="online-start-btn" class="retro-btn online-btn-start" onclick="console.log('[HTML ONCLICK] Start button clicked!')">START GAME</button>
+          <button id="online-leave-btn" class="retro-btn online-btn-leave">LEAVE</button>
+        </div>
+      </div>
+      
+      <div id="online-joining" class="hidden online-game-panel online-join-panel">
+        <h3 class="online-panel-title">JOINING GAME...</h3>
+        <div class="online-game-info">
+          <p>Waiting for host to start...</p>
+          <button id="online-cancel-join-btn" class="retro-btn online-btn-leave" style="margin-top: 1rem;">CANCEL</button>
+        </div>
+      </div>
+      
+      <div class="online-footer">
+        <button id="online-disconnect-btn" class="retro-btn online-btn-leave">DISCONNECT</button>
+        <button id="online-lobby-back-btn" class="retro-btn">BACK</button>
+      </div>
+    </div>
     
     <!-- UI Overlay -->
-    <div id="menu" class="screen hidden">
+    <div id="menu" class="screen hidden" style="z-index: 50; pointer-events: auto;">
       <div class="title-container">
         <h1 class="retro-title">DROPFALL</h1>
         <h2 class="retro-subtitle">CYBER ARENA</h2>

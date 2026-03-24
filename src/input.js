@@ -9,6 +9,12 @@ const gamepadState = [
     { up: false, down: false, left: false, right: false, boost: false }
 ];
 
+// Mobile touch state
+const touchState = [
+    { up: false, down: false, left: false, right: false, boost: false },
+    { up: false, down: false, left: false, right: false, boost: false }
+];
+
 let initialized = false;
 
 export function initInput() {
@@ -21,6 +27,9 @@ export function initInput() {
     window.addEventListener('keyup', (e) => {
         keys[e.code] = false;
     });
+
+    // Mobile touch controls
+    initTouchControls();
 
     // Gamepad connection listeners
     window.addEventListener('gamepadconnected', (e) => {
@@ -115,28 +124,125 @@ function pollGamepadInputs() {
 export function getPlayer1Input() {
     const controls = useGameStore.getState().settings.controls.p1;
     return {
-        forward: keys[controls.up] || gamepadState[0].up,
-        backward: keys[controls.down] || gamepadState[0].down,
-        left: keys[controls.left] || gamepadState[0].left,
-        right: keys[controls.right] || gamepadState[0].right,
-        boost: keys[controls.boost] || gamepadState[0].boost
+        forward: keys[controls.up] || gamepadState[0].up || touchState[0].up,
+        backward: keys[controls.down] || gamepadState[0].down || touchState[0].down,
+        left: keys[controls.left] || gamepadState[0].left || touchState[0].left,
+        right: keys[controls.right] || gamepadState[0].right || touchState[0].right,
+        boost: keys[controls.boost] || gamepadState[0].boost || touchState[0].boost
     };
 }
 
 export function getPlayer2Input() {
     const controls = useGameStore.getState().settings.controls.p2;
     return {
-        forward: keys[controls.up] || gamepadState[1].up,
-        backward: keys[controls.down] || gamepadState[1].down,
-        left: keys[controls.left] || gamepadState[1].left,
-        right: keys[controls.right] || gamepadState[1].right,
-        boost: keys[controls.boost] || gamepadState[1].boost
+        forward: keys[controls.up] || gamepadState[1].up || touchState[1].up,
+        backward: keys[controls.down] || gamepadState[1].down || touchState[1].down,
+        left: keys[controls.left] || gamepadState[1].left || touchState[1].left,
+        right: keys[controls.right] || gamepadState[1].right || touchState[1].right,
+        boost: keys[controls.boost] || gamepadState[1].boost || touchState[1].boost
     };
 }
 
 // Export gamepad state for debugging
 export function getGamepadState() {
     return gamepadState;
+}
+
+// Mobile touch control initialization
+function initTouchControls() {
+    const THRESHOLD = 0.25; // 25% of screen width/height
+    
+    document.addEventListener('touchstart', (e) => {
+        const touch = e.touches[0];
+        updateTouchInput(touch);
+    }, { passive: true });
+    
+    document.addEventListener('touchmove', (e) => {
+        const touch = e.touches[0];
+        updateTouchInput(touch);
+    }, { passive: true });
+    
+    document.addEventListener('touchend', (e) => {
+        // Reset touch state when touch ends
+        touchState[0] = { up: false, down: false, left: false, right: false, boost: false };
+        touchState[1] = { up: false, down: false, left: false, right: false, boost: false };
+    }, { passive: true });
+    
+    function updateTouchInput(touch) {
+        const x = touch.clientX;
+        const y = touch.clientY;
+        const screenWidth = window.innerWidth;
+        const screenHeight = window.innerHeight;
+        
+        // Normalize coordinates to 0-1 range
+        const normX = x / screenWidth;
+        const normY = y / screenHeight;
+        
+        // For mobile, we map touch to player 1 input
+        // Left side controls left/right, top/bottom controls forward/backward
+        touchState[0].left = normX < (0.5 - THRESHOLD);
+        touchState[0].right = normX > (0.5 + THRESHOLD);
+        touchState[0].forward = normY < (0.5 - THRESHOLD);
+        touchState[0].backward = normY > (0.5 + THRESHOLD);
+    }
+    
+    // Boost button - create it dynamically
+    createMobileBoostButton();
+}
+
+function createMobileBoostButton() {
+    // Check if we already created the button
+    if (document.getElementById('mobile-boost-btn')) return;
+    
+    const btn = document.createElement('button');
+    btn.id = 'mobile-boost-btn';
+    btn.textContent = 'BOOST';
+    btn.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 80px;
+        height: 80px;
+        font-size: 14px;
+        font-weight: bold;
+        border: 3px solid #00ff00;
+        border-radius: 50%;
+        background: rgba(0, 255, 0, 0.1);
+        color: #00ff00;
+        cursor: pointer;
+        z-index: 1000;
+        touch-action: manipulation;
+        user-select: none;
+        display: none;
+    `;
+    
+    // Show boost button only on mobile
+    if (window.innerWidth < 768) {
+        btn.style.display = 'block';
+    }
+    
+    btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        touchState[0].boost = true;
+        btn.style.background = 'rgba(0, 255, 0, 0.3)';
+    });
+    
+    btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        touchState[0].boost = false;
+        btn.style.background = 'rgba(0, 255, 0, 0.1)';
+    });
+    
+    document.body.appendChild(btn);
+    
+    // Show/hide button on resize
+    window.addEventListener('resize', () => {
+        if (window.innerWidth < 768) {
+            btn.style.display = 'block';
+        } else {
+            btn.style.display = 'none';
+        }
+    });
 }
 
 export function getConnectedGamepads() {

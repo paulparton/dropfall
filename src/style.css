@@ -1,4 +1,4 @@
-body { margin: 0; padding: 0; overflow: hidden; background-color: #050510; color: #fff; font-family: 'Courier New', Courier, monospace; } canvas { display: block; } .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; overflow-y: auto; box-sizing: border-box; } .hidden { display: none !important; } #menu, #game-over { background-color: transparent; pointer-events: auto; padding: 1.5rem 1rem; justify-content: flex-start; padding-top: max(1.5rem, calc(50vh - 320px)); } 
+body { margin: 0; padding: 0; overflow: hidden; background-color: #050510; color: #fff; font-family: 'Courier New', Courier, monospace; } canvas { display: block; } .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; overflow-y: auto; box-sizing: border-box; } .hidden { display: none !important; } #menu, #game-over { background-color: transparent; pointer-events: auto; z-index: 50; padding: 1.5rem 1rem; justify-content: flex-start; padding-top: max(1.5rem, calc(50vh - 320px)); } 
 
 /* Retro 80s Title */
 .title-container { text-align: center; margin-bottom: clamp(1rem, 2vh, 2.5rem); transform: perspective(500px) rotateX(10deg); }
@@ -259,5 +259,314 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
 	background: #ff0;
 	color: #000;
 	outline: 2px solid #0ff;
+}
+
+/* Online Multiplayer Screens */
+#online-connect, #online-lobby {
+    background: rgba(0, 0, 0, 0.92);
+    padding: 2rem;
+    pointer-events: auto;
+}
+
+.online-panel {
+    background: rgba(0, 0, 0, 0.7);
+    border: 2px solid #ff00ff;
+    box-shadow: 0 0 20px #ff00ff inset, 0 0 20px #ff00ff;
+    border-radius: 12px;
+    padding: 2.5rem;
+    text-align: center;
+    max-width: 450px;
+    width: 100%;
+}
+
+.online-input-group {
+    margin-bottom: 1.5rem;
+    text-align: left;
+}
+
+.online-label {
+    display: block;
+    color: #00ffff;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    text-transform: uppercase;
+    text-shadow: 0 0 5px #00ffff;
+}
+
+.online-input {
+    width: 100%;
+    padding: 1rem;
+    font-size: 1.1rem;
+    background: #000;
+    color: #00ffff;
+    border: 2px solid #00ffff;
+    border-radius: 8px;
+    font-family: 'Courier New', monospace;
+    text-align: center;
+    box-sizing: border-box;
+    box-shadow: 0 0 10px #00ffff inset;
+}
+
+.online-input:focus {
+    outline: none;
+    box-shadow: 0 0 20px #00ffff, 0 0 30px #ff00ff inset;
+}
+
+.online-input::placeholder {
+    color: rgba(0, 255, 255, 0.4);
+}
+
+#online-connect-status {
+    font-size: 1.2rem;
+    margin-bottom: 1.5rem;
+    min-height: 1.5rem;
+}
+
+#online-connect-error {
+    color: #ff0088;
+    font-size: 1rem;
+    margin-top: 1rem;
+    min-height: 1.5rem;
+    text-shadow: 0 0 10px #ff0088;
+}
+
+.online-help {
+    margin-top: 2rem;
+    color: #888;
+    font-size: 1rem;
+    text-align: center;
+}
+
+.online-help code {
+    color: #00ff88;
+    background: rgba(0, 255, 136, 0.1);
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+}
+
+/* Online Lobby */
+.online-server-bar {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2rem;
+    padding: 1rem 2rem;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid #00ff88;
+    border-radius: 8px;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
+}
+
+.online-status-connected {
+    color: #00ff88;
+    text-shadow: 0 0 10px #00ff88;
+    font-weight: bold;
+}
+
+.online-status-disconnected {
+    color: #ff0088;
+    text-shadow: 0 0 10px #ff0088;
+}
+
+.online-server-address {
+    color: #888;
+}
+
+.online-server-address span {
+    color: #ffff00;
+    text-shadow: 0 0 5px #ffff00;
+}
+
+.online-actions {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.online-btn-create {
+    background-color: rgba(0, 255, 136, 0.2);
+    border-color: #00ff88;
+    box-shadow: 0 0 20px #00ff88, inset 0 0 10px #00ff88;
+    color: #00ff88;
+}
+
+.online-btn-create:hover {
+    background-color: #00ff88;
+    color: #000;
+}
+
+.online-games-container {
+    width: 100%;
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.online-section-title {
+    color: #ffff00;
+    text-shadow: 0 0 10px #ffff00;
+    margin-bottom: 1rem;
+    font-size: 1.2rem;
+    letter-spacing: 5px;
+}
+
+.online-games-list {
+    max-height: 280px;
+    overflow-y: auto;
+    border: 2px solid #00ffff;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.6);
+    box-shadow: 0 0 15px #00ffff inset, 0 0 15px #00ffff;
+}
+
+.online-games-list::-webkit-scrollbar {
+    width: 10px;
+}
+
+.online-games-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.online-games-list::-webkit-scrollbar-thumb {
+    background: #00ffff;
+    border-radius: 5px;
+}
+
+.online-no-games {
+    text-align: center;
+    padding: 3rem;
+    color: #888;
+}
+
+.online-no-games p:first-child {
+    font-size: 1.3rem;
+    color: #666;
+}
+
+.online-game-item {
+    padding: 1.2rem 1.5rem;
+    border-bottom: 1px solid rgba(0, 255, 255, 0.2);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.online-game-item:hover {
+    background: rgba(0, 255, 255, 0.1);
+}
+
+.online-game-item:last-child {
+    border-bottom: none;
+}
+
+.online-game-item-info h4 {
+    color: #00ffff;
+    margin: 0 0 0.3rem 0;
+    font-size: 1.1rem;
+}
+
+.online-game-item-info p {
+    color: #888;
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.online-game-item-join {
+    padding: 0.5rem 1rem;
+    background: rgba(0, 255, 136, 0.2);
+    border: 2px solid #00ff88;
+    color: #00ff88;
+    border-radius: 6px;
+    font-weight: bold;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+}
+
+.online-game-panel {
+    max-width: 700px;
+    width: 100%;
+    margin: 1.5rem auto;
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 2px solid;
+}
+
+.online-host-panel {
+    border-color: #00ff88;
+    background: rgba(0, 255, 136, 0.05);
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
+}
+
+.online-join-panel {
+    border-color: #ffff00;
+    background: rgba(255, 255, 0, 0.05);
+    box-shadow: 0 0 20px rgba(255, 255, 0, 0.2);
+}
+
+.online-panel-title {
+    margin: 0 0 1rem 0;
+    font-size: 1.3rem;
+    letter-spacing: 5px;
+}
+
+.online-host-panel .online-panel-title {
+    color: #00ff88;
+    text-shadow: 0 0 10px #00ff88;
+}
+
+.online-join-panel .online-panel-title {
+    color: #ffff00;
+    text-shadow: 0 0 10px #ffff00;
+}
+
+.online-game-info {
+    text-align: center;
+    color: #ddd;
+    margin-bottom: 1rem;
+}
+
+.online-game-info p {
+    margin: 0.5rem 0;
+}
+
+.online-game-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.online-btn-start {
+    background-color: rgba(0, 255, 136, 0.2);
+    border-color: #00ff88;
+    color: #00ff88;
+    box-shadow: 0 0 20px #00ff88, inset 0 0 10px #00ff88;
+}
+
+.online-btn-start:hover {
+    background-color: #00ff88;
+    color: #000;
+}
+
+.online-btn-leave {
+    border-color: #ff0088;
+    color: #ff0088;
+    box-shadow: 0 0 20px #ff0088, inset 0 0 10px #ff0088;
+}
+
+.online-btn-leave:hover {
+    background-color: #ff0088;
+    color: #000;
+}
+
+.online-footer {
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    margin-top: 2rem;
 }
 

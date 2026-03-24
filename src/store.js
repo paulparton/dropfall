@@ -38,8 +38,8 @@ const mergedSettings = { ...defaultSettings, ...savedSettings };
 
 export const useGameStore = createStore((set) => ({
     // State
-    gameState: 'MENU', // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER'
-    gameMode: localStorage.getItem('dropfall_gamemode') || '2P', // '1P' or '2P'
+    gameState: 'MENU', // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE'
+    gameMode: localStorage.getItem('dropfall_gamemode') || '2P', // '1P', '2P', or 'ONLINE'
     difficulty: localStorage.getItem('dropfall_difficulty') || 'normal', // 'easy', 'normal', 'hard'
     winner: null,
     p1Score: 0,
@@ -49,6 +49,21 @@ export const useGameStore = createStore((set) => ({
     activeTileEffects: [],
     p1Name: localStorage.getItem('dropfall_p1name') || 'Player 1',
     p2Name: localStorage.getItem('dropfall_p2name') || 'Player 2',
+
+    // Online Multiplayer State
+    online: {
+        connected: false,
+        serverUrl: '',
+        playerId: null,
+        currentGame: null,
+        games: [],
+        isHost: false,
+        playerSlot: null,
+        opponentConnected: false,
+        opponentInput: null,
+        opponentName: '',
+        myName: '',
+    },
 
     // Settings
     settings: mergedSettings,
@@ -75,7 +90,8 @@ export const useGameStore = createStore((set) => ({
         localStorage.setItem('dropfall_gamemode', mode);
         // For 1P mode, go to difficulty selection
         // For 2P mode, skip difficulty and go straight to name entry
-        const nextState = mode === '1P' ? 'DIFFICULTY_SELECT' : 'NAME_ENTRY';
+        // For ONLINE mode, show online connect screen (handled by main.js)
+        const nextState = mode === '1P' ? 'DIFFICULTY_SELECT' : mode === 'ONLINE' ? 'MENU' : 'NAME_ENTRY';
         return { gameMode: mode, gameState: nextState };
     }),
 
@@ -157,5 +173,68 @@ export const useGameStore = createStore((set) => ({
     
     removeTileEffect: (effectId) => set((state) => ({
         activeTileEffects: state.activeTileEffects.filter(e => e.id !== effectId)
+    })),
+
+    // Online Multiplayer Actions
+    setOnlineConnected: (connected, serverUrl = '') => set((state) => ({
+        online: { ...state.online, connected, serverUrl }
+    })),
+
+    setOnlinePlayerId: (playerId) => set((state) => ({
+        online: { ...state.online, playerId }
+    })),
+
+    setOnlineGames: (games) => set((state) => ({
+        online: { ...state.online, games }
+    })),
+
+    setOnlineCurrentGame: (game) => set((state) => ({
+        online: { ...state.online, currentGame: game }
+    })),
+
+    setOnlineHost: (isHost) => set((state) => ({
+        online: { ...state.online, isHost }
+    })),
+
+    setOnlinePlayerSlot: (slot) => set((state) => ({
+        online: { ...state.online, playerSlot: slot }
+    })),
+
+    setOnlineOpponentConnected: (connected) => set((state) => ({
+        online: { ...state.online, opponentConnected: connected }
+    })),
+
+    setOnlineOpponentInput: (input) => set((state) => ({
+        online: { ...state.online, opponentInput: input }
+    })),
+
+    setOnlineOpponentName: (name) => set((state) => ({
+        online: { ...state.online, opponentName: name }
+    })),
+
+    setOnlineMyName: (name) => set((state) => ({
+        online: { ...state.online, myName: name }
+    })),
+
+    enterOnlineLobby: () => set({ gameState: 'ONLINE' }),
+
+    setOnlineName: (name) => set((state) => ({
+        online: { ...state.online, myName: name }
+    })),
+
+    resetOnlineState: () => set((state) => ({
+        online: {
+            connected: state.online.connected,
+            serverUrl: state.online.serverUrl,
+            playerId: null,
+            currentGame: null,
+            games: [],
+            isHost: false,
+            playerSlot: null,
+            opponentConnected: false,
+            opponentInput: null,
+            opponentName: '',
+            myName: '',
+        }
     }))
 }));
