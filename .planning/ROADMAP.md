@@ -36,6 +36,8 @@ phases: 6
 
 **Goal:** Define comprehensive TypeScript types for all game domains. Migrate Zustand store to typed interface. Set up Zod schemas for validation.
 
+**Status:** 📋 Planning complete (3 plans, 2 waves)
+
 **Features:**
 - ✓ `types/Game.ts` — Game state, entity types, lifecycle
 - ✓ `types/Input.ts` — Input payloads, handlers, sources
@@ -45,13 +47,18 @@ phases: 6
 - ✓ `store.ts` refactor — Typed Zustand store with validation schemas
 - ✓ `types/Entity.ts` — Base entity interface, lifecycle hooks
 
+**Plans:**
+- [ ] 02-01-PLAN.md — Foundational types (Entity.ts, Game.ts) — Wave 1
+- [ ] 02-02-PLAN.md — Domain types (Input, Physics, Audio, Network) — Wave 1
+- [ ] 02-03-PLAN.md — Store refactor + validation schemas + tests — Wave 2
+
 **Acceptance:**
 - All types exported and importable
 - Store mutations typed and validated with Zod
 - No `any` types in type files
-- Tests pass for store + validation
+- Tests pass for store + validation (≥12 test cases)
 
-**Estimated Plans:** 3-4
+**Progress:** Ready for execution
 
 ---
 
