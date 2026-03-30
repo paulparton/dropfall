@@ -4,8 +4,11 @@ let audioCtx;
 let isMusicPlaying = false;
 let musicGain;
 let sfxGain;
-let currentTempo = 135; // Fast EDM BPM
+let currentTempo = 135;
 let targetTempo = 135;
+let rollingSoundGain;
+let rollingOsc;
+let isRollingPlaying = false;
 
 export function setMusicSpeed(multiplier) {
     targetTempo = 135 * multiplier;
@@ -40,6 +43,11 @@ export function initAudio() {
         musicGain.connect(audioCtx.destination);
         sfxGain.connect(audioCtx.destination);
         console.log('[Audio] Gains connected to destination');
+        
+        // Create rolling sound nodes (initialized but not started)
+        rollingSoundGain = audioCtx.createGain();
+        rollingSoundGain.gain.value = 0;
+        rollingSoundGain.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') {
         console.log('[Audio] Resuming suspended context');
@@ -264,33 +272,41 @@ export function playMusic() {
 }
 
 export function playCollisionSound(intensity) {
+    console.log('[Audio] playCollisionSound called, audioCtx:', !!audioCtx, 'sfxGain:', !!sfxGain, 'intensity:', intensity);
     if (!audioCtx) return;
     
     const theme = useGameStore.getState().settings.theme;
+    const isHighSpeed = intensity > 2.5;
     
     if (theme === 'beach') {
-        // Rubbery collision noise (boing)
+        // Rubbery collision noise (boing/bop)
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         
         osc.type = 'sine';
-        // Pitch drop for boing effect
-        osc.frequency.setValueAtTime(400 + 200 * intensity, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.3);
-        
-        gain.gain.setValueAtTime(1.5 * (intensity / 5), audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        if (isHighSpeed) {
+            // Boing for high speed - pitch drops more
+            osc.frequency.setValueAtTime(400 + 200 * intensity, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.4);
+            gain.gain.setValueAtTime(1.5 * (intensity / 5), audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        } else {
+            // Bop for low speed - subtle quick tap
+            osc.frequency.setValueAtTime(250, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.6 * (intensity / 5), audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        }
         
         osc.connect(gain);
         gain.connect(sfxGain);
         
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.3);
+        osc.stop(audioCtx.currentTime + 0.5);
         
     } else if (theme === 'cracked_stone') {
         // Crunchy stone collision noise
-        // Use a noise buffer
-        const bufferSize = audioCtx.sampleRate * 0.2; // 0.2 seconds
+        const bufferSize = audioCtx.sampleRate * (isHighSpeed ? 0.25 : 0.12);
         const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
@@ -302,12 +318,12 @@ export function playCollisionSound(intensity) {
         
         const filter = audioCtx.createBiquadFilter();
         filter.type = 'bandpass';
-        filter.frequency.value = 800 - 200 * intensity; // Lower frequency for harder hits
-        filter.Q.value = 1;
+        filter.frequency.value = isHighSpeed ? (800 - 200 * intensity) : 600;
+        filter.Q.value = isHighSpeed ? 1 : 2;
         
         const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(2.0 * (intensity / 5), audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+        gain.gain.setValueAtTime(isHighSpeed ? 2.0 * (intensity / 5) : 0.8, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (isHighSpeed ? 0.25 : 0.12));
         
         noise.connect(filter);
         filter.connect(gain);
@@ -322,20 +338,27 @@ export function playCollisionSound(intensity) {
         const gain = audioCtx.createGain();
         const filter = audioCtx.createBiquadFilter();
         
-        osc1.type = 'square';
-        osc2.type = 'sawtooth';
-        
-        // Detuned harsh frequencies
-        osc1.frequency.value = 100 * intensity;
-        osc2.frequency.value = 150 * intensity;
-        
-        filter.type = 'bandpass';
-        filter.frequency.value = 1000;
-        filter.Q.value = 5;
-        
-        // Envelope
-        gain.gain.setValueAtTime(2.4 * (intensity / 5), audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        if (isHighSpeed) {
+            // Boop for high speed - louder, longer
+            osc1.type = 'square';
+            osc2.type = 'sawtooth';
+            osc1.frequency.value = 100 * intensity;
+            osc2.frequency.value = 150 * intensity;
+            filter.frequency.value = 1000;
+            filter.Q.value = 5;
+            gain.gain.setValueAtTime(2.4 * (intensity / 5), audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+        } else {
+            // Bop for low speed - subtle, quick
+            osc1.type = 'sine';
+            osc2.type = 'triangle';
+            osc1.frequency.value = 80;
+            osc2.frequency.value = 120;
+            filter.frequency.value = 400;
+            filter.Q.value = 2;
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+        }
         
         osc1.connect(filter);
         osc2.connect(filter);
@@ -347,6 +370,30 @@ export function playCollisionSound(intensity) {
         osc1.stop(audioCtx.currentTime + 0.4);
         osc2.stop(audioCtx.currentTime + 0.4);
     }
+}
+
+// Rolling/tire sound - called every frame during gameplay
+export function updateRollingSound(playerVelocity) {
+    if (!audioCtx || !rollingSoundGain) return;
+    
+    const speed = Math.sqrt(playerVelocity.x ** 2 + playerVelocity.y ** 2 + playerVelocity.z ** 2);
+    const settings = useGameStore.getState().settings;
+    
+    // Only play sound above minimum threshold
+    const minSpeed = 1.0;
+    const maxSpeed = 30.0;
+    
+    if (speed < minSpeed) {
+        rollingSoundGain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.1);
+        return;
+    }
+    
+    // Volume based on speed
+    const normalizedSpeed = Math.min((speed - minSpeed) / (maxSpeed - minSpeed), 1);
+    const targetVolume = normalizedSpeed * 0.15 * settings.sfxVolume;
+    
+    // Smooth volume transition
+    rollingSoundGain.gain.linearRampToValueAtTime(targetVolume, audioCtx.currentTime + 0.05);
 }
 
 const boostNodes = {};
