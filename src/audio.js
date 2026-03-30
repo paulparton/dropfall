@@ -49,8 +49,13 @@ export function initAudio() {
 }
 
 export function playMusic() {
-    if (isMusicPlaying || !audioCtx) return;
+    console.log('[Audio] playMusic called, isMusicPlaying:', isMusicPlaying, 'audioCtx exists:', !!audioCtx);
+    if (isMusicPlaying || !audioCtx) {
+        console.log('[Audio] playMusic early return - isMusicPlaying:', isMusicPlaying, '!audioCtx:', !audioCtx);
+        return;
+    }
     isMusicPlaying = true;
+    console.log('[Audio] Starting music loop...');
     
     // --- CYBER INSTRUMENTS ---
     function playCyberKick(time, durationScale) {

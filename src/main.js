@@ -1144,6 +1144,20 @@ async function init() {
         initRenderer();
         initInput();
         
+        // Initialize audio on page load
+        console.log('[Init] Initializing audio on page load');
+        initAudio();
+        
+        // Try to start music on first user interaction (browsers block autoplay)
+        const startMusicOnInteraction = () => {
+            console.log('[Init] First interaction, starting music');
+            playMusic();
+            document.removeEventListener('click', startMusicOnInteraction);
+            document.removeEventListener('keydown', startMusicOnInteraction);
+        };
+        document.addEventListener('click', startMusicOnInteraction);
+        document.addEventListener('keydown', startMusicOnInteraction);
+        
         // Initialize InputHandler for unified input processing
         inputHandler = createInputHandler();
         
