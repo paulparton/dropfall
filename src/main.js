@@ -6,6 +6,23 @@ import { getPhysicsSystem } from './systems/PhysicsSystem.js';
 import { initRenderer, updateRenderer, camera, scene, ambientLight, directionalLight } from './renderer.js';
 import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
 import { createInputHandler } from './handlers/InputHandler.js';
+
+// Wrapper functions that use InputHandler when available, fallback to legacy input
+function getPlayer1InputUnified() {
+    if (inputHandler) {
+        const input = inputHandler.getLastInput();
+        if (input && input.source === 'keyboard') return input;
+    }
+    return getPlayer1Input();
+}
+
+function getPlayer2InputUnified() {
+    if (inputHandler) {
+        const input = inputHandler.getLastInput();
+        if (input && input.source === 'keyboard') return input;
+    }
+    return getPlayer2Input();
+}
 import { Player } from './entities/Player.js';
 import { Arena } from './entities/Arena.js';
 import { ParticleSystem } from './entities/ParticleSystem.js';
@@ -188,10 +205,10 @@ function resetEntities() {
     // AI Controller for 1P mode
     aiController = isOnePlayer ? new AIController(state.difficulty || 'normal') : null;
 
-    // Players
-    player1 = new Player('player1', 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1Input);
+    // Players - use unified input handler
+    player1 = new Player('player1', 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1InputUnified);
     player2 = new Player('player2', 0x4444ff, { x: 15, y: 4, z: 0 }, 
-        isOnePlayer ? () => aiController.getInput() : getPlayer2Input);
+        isOnePlayer ? () => aiController.getInput() : getPlayer2InputUnified);
     
     // Effects
     arena = new Arena();
@@ -227,16 +244,16 @@ function resetOnlineEntities() {
     // Player input mapping: local player uses their controls, opponent uses synced input
     if (mySlot === 1) {
         // I'm the host (player 1) on the left
-        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1Input);
+        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
         player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
     } else if (mySlot === 2) {
         // I'm the client (player 2) on the right, but I use player 2 controls (arrows)
         // The visual player1/player2 display doesn't change - it's about my slot
         player1 = new Player('player1', 0xff4444, hostPos, () => useGameStore.getState().online.opponentInput || defaultInput);
-        player2 = new Player('player2', 0x4444ff, clientPos, getPlayer2Input);
+        player2 = new Player('player2', 0x4444ff, clientPos, getPlayer2InputUnified);
     } else {
         // Fallback: assume we're host if slot is unknown
-        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1Input);
+        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
         player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
     }
     
@@ -868,7 +885,7 @@ function animate() {
 
             // Online sync
             if (state.gameMode === 'ONLINE' && state.online.connected) {
-                const input = (state.online.playerSlot === 1 ? getPlayer1Input : getPlayer2Input)();
+                const input = (state.online.playerSlot === 1 ? getPlayer1InputUnified : getPlayer2InputUnified)();
                 online.sendInput({ ...input });
                 if (state.online.isHost && player1 && player2) {
                     const p1Vel = player1.rigidBody.linvel();
