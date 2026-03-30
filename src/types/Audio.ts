@@ -76,6 +76,21 @@ export interface PlaybackRequest {
 }
 
 /**
+ * PlaybackRequest - Request object for direct URL playback operations
+ * Used for simple audio URL playback with loop and volume control
+ */
+export interface PlaybackRequestDirect {
+  /** Audio file URL to play */
+  url: string;
+
+  /** Whether to loop the audio (optional, defaults to false) */
+  loop?: boolean;
+
+  /** Volume level 0-1 (optional, defaults to 0.8) */
+  volume?: number;
+}
+
+/**
  * PlaybackEvent - Notification of playback state change
  */
 export interface PlaybackEvent {
@@ -87,6 +102,31 @@ export interface PlaybackEvent {
 
   /** Error message if type='error' */
   error?: string;
+}
+
+/**
+ * PlaybackEvent - Events emitted by AudioSystem
+ * Discriminated union for type-safe event handling
+ */
+export type PlaybackEventLifecycle = 
+  | { type: 'lifecycle-changed'; state: AudioLifecycle }
+  | { type: 'playback-started'; url: string }
+  | { type: 'playback-stopped' }
+  | { type: 'error'; message: string };
+
+/**
+ * Event type guards for narrowing PlaybackEventLifecycle
+ */
+export function isLifecycleEvent(event: PlaybackEventLifecycle): event is { type: 'lifecycle-changed'; state: AudioLifecycle } {
+  return event.type === 'lifecycle-changed';
+}
+
+export function isPlaybackStartedEvent(event: PlaybackEventLifecycle): event is { type: 'playback-started'; url: string } {
+  return event.type === 'playback-started';
+}
+
+export function isErrorEvent(event: PlaybackEventLifecycle): event is { type: 'error'; message: string } {
+  return event.type === 'error';
 }
 
 /**

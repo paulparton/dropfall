@@ -250,6 +250,47 @@ export const AudioLifecycleSchema = z.union([
 ]).describe('Audio system lifecycle state');
 
 /**
+ * Sound Effect schema - validates short audio clips
+ */
+export const SoundEffectSchema = z.object({
+  id: z.string().describe('Unique identifier for this effect'),
+  type: z.literal('effect').describe('Discriminator for sound effect'),
+  url: z.string().optional().describe('Optional URL for external audio file'),
+  duration: z.number().positive().describe('Duration in milliseconds'),
+  volume: z.number().min(0).max(1).describe('Volume level 0-1'),
+}).describe('Sound effect - a short audio clip');
+
+/**
+ * Music Track schema - validates background music
+ */
+export const MusicTrackSchema = z.object({
+  id: z.string().describe('Unique identifier for this track'),
+  type: z.literal('music').describe('Discriminator for music track'),
+  url: z.string().optional().describe('Optional URL for external audio file'),
+  duration: z.number().positive().describe('Duration in milliseconds'),
+  volume: z.number().min(0).max(1).describe('Volume level 0-1'),
+  loop: z.boolean().describe('Whether to loop when reaching the end'),
+}).describe('Music track - background music or ambient audio');
+
+/**
+ * Audio Asset schema - discriminated union of sound effect and music track
+ */
+export const AudioAssetSchema = z.discriminatedUnion('type', [
+  SoundEffectSchema,
+  MusicTrackSchema,
+]).describe('Audio asset - either sound effect or music track');
+
+/**
+ * Playback Request schema - instructions for audio playback
+ */
+export const PlaybackRequestSchema = z.object({
+  soundId: z.string().describe('Which sound effect or music track to play'),
+  volume: z.number().min(0).max(1).optional().describe('Override volume for this playback (0-1)'),
+  delay: z.number().int().min(0).optional().describe('Delay before starting playback (ms)'),
+  loop: z.boolean().optional().describe('Whether to loop the audio'),
+}).describe('Instructions for how to play an audio asset');
+
+/**
  * Audio Context schema - validates audio system interface
  */
 export const AudioContextSchema = z.object({
@@ -259,6 +300,78 @@ export const AudioContextSchema = z.object({
   setVolume: z.function(),
   dispose: z.function(),
 });
+
+// ===================================
+// Audio Playback Schemas (Phase 3 Wave 1)
+// ===================================
+
+/**
+ * PlaybackRequestDirect schema - validates direct URL-based play() arguments
+ */
+export const PlaybackRequestDirectSchema = z.object({
+  url: z.string().url('Invalid audio URL'),
+  loop: z.boolean().optional().default(false),
+  volume: z.number().min(0).max(1).optional().default(0.8),
+});
+
+export type ValidatedPlaybackRequestDirect = z.infer<typeof PlaybackRequestDirectSchema>;
+
+/**
+ * PlaybackEventLifecycle schema - discriminated union of audio lifecycle events
+ */
+export const PlaybackEventLifecycleSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('lifecycle-changed'),
+    state: AudioLifecycleSchema,
+  }),
+  z.object({
+    type: z.literal('playback-started'),
+    url: z.string().url(),
+  }),
+  z.object({
+    type: z.literal('playback-stopped'),
+  }),
+  z.object({
+    type: z.literal('error'),
+    message: z.string(),
+  }),
+]);
+
+export type ValidatedPlaybackEventLifecycle = z.infer<typeof PlaybackEventLifecycleSchema>;
+
+/**
+ * Validator functions - safe validation with typed results
+ */
+export function validatePlaybackRequestDirect(request: unknown) {
+  return PlaybackRequestDirectSchema.safeParse(request);
+}
+
+export function validatePlaybackEvent(event: unknown) {
+  return PlaybackEventLifecycleSchema.safeParse(event);
+}
+
+export function validatePlaybackEventLifecycle(event: unknown) {
+  return PlaybackEventLifecycleSchema.safeParse(event);
+}
+
+/**
+ * Runtime type checks - for use before dispatching
+ */
+export function isValidPlaybackRequest(request: unknown): request is z.infer<typeof PlaybackRequestSchema> {
+  return PlaybackRequestSchema.safeParse(request).success;
+}
+
+export function isValidPlaybackRequestDirect(request: unknown): request is ValidatedPlaybackRequestDirect {
+  return PlaybackRequestDirectSchema.safeParse(request).success;
+}
+
+export function isValidPlaybackEvent(event: unknown): event is ValidatedPlaybackEventLifecycle {
+  return PlaybackEventLifecycleSchema.safeParse(event).success;
+}
+
+export function isValidPlaybackEventLifecycle(event: unknown): event is ValidatedPlaybackEventLifecycle {
+  return PlaybackEventLifecycleSchema.safeParse(event).success;
+}
 
 /**
  * Network Message Join schema - validates join message
@@ -432,4 +545,34 @@ export function validateNetworkMessageResult(message: unknown) {
  */
 export function isVersionCompatible(version: string): boolean {
   return version === '1.0';
+}
+
+/**
+ * Validates a playback request
+ * Throws ZodError if invalid
+ */
+export function validatePlaybackRequest(request: unknown): z.infer<typeof PlaybackRequestSchema> {
+  return PlaybackRequestSchema.parse(request);
+}
+
+/**
+ * Safely validates playback request, returns error without throwing
+ */
+export function validatePlaybackRequestResult(request: unknown) {
+  return PlaybackRequestSchema.safeParse(request);
+}
+
+/**
+ * Validates an audio asset (sound effect or music track)
+ * Throws ZodError if invalid
+ */
+export function validateAudioAsset(asset: unknown): z.infer<typeof AudioAssetSchema> {
+  return AudioAssetSchema.parse(asset);
+}
+
+/**
+ * Safely validates audio asset, returns error without throwing
+ */
+export function validateAudioAssetResult(asset: unknown) {
+  return AudioAssetSchema.safeParse(asset);
 }
