@@ -238,7 +238,7 @@ export class PhysicsSystem {
     entityId: string, 
     position: { x: number; y: number; z?: number }, 
     options: BodyOptions = {}
-  ): void {
+  ): { rigidBody: RAPIER.RigidBody; collider: RAPIER.Collider } {
     // State guard
     if (this._lifecycle !== 'ready' && this._lifecycle !== 'stepping') {
       throw new Error(
@@ -256,7 +256,7 @@ export class PhysicsSystem {
     // Check if body already exists for this entity
     if (this.bodies.has(entityId)) {
       console.warn(`[PhysicsSystem] Body already exists for entity: ${entityId}`);
-      return;
+      return this.bodies.get(entityId)!;
     }
 
     const z = position.z ?? 0;
@@ -317,6 +317,8 @@ export class PhysicsSystem {
     }
 
     this.bodies.set(entityId, { rigidBody, collider, entityId });
+
+    return { rigidBody, collider };
   }
 
   /**

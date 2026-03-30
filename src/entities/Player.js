@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { createPlayerBody, world } from '../physics.js';
 import { getPhysicsSystem } from '../systems/PhysicsSystem.js';
 import { scene } from '../renderer.js';
 import { getThemeMaterials } from '../utils/themeTextures.js';
@@ -204,8 +203,14 @@ export class Player {
         scene.add(this.auraMesh);
         this.auraMeshVisible = true;
 
-        // 4. Rapier Rigid Body
-        const { rigidBody, collider } = createPlayerBody(startPosition, this.sphereSize, this.sphereWeight, this.collisionBounce);
+        // 4. Rapier Rigid Body - use PhysicsSystem for event tracking
+        const physicsSystem = getPhysicsSystem();
+        const { rigidBody, collider } = physicsSystem.createBody(id, startPosition, {
+            radius: this.sphereSize,
+            mass: this.sphereWeight,
+            restitution: this.collisionBounce,
+            isDynamic: true
+        });
         this.rigidBody = rigidBody;
         this.collider = collider;
 
@@ -454,8 +459,9 @@ export class Player {
         this.auraMesh.material.dispose();
         setBoostSound(this.id, false);
 
-        if (world && this.rigidBody) {
-            world.removeRigidBody(this.rigidBody);
+        if (this.rigidBody) {
+            const physicsSystem = getPhysicsSystem();
+            physicsSystem.destroyBody(this.id);
         }
     }
 

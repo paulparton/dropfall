@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createTileBody, world } from '../physics.js';
+import { getPhysicsSystem } from '../systems/PhysicsSystem.js';
 import { scene } from '../renderer.js';
 import { getThemeMaterials } from '../utils/themeTextures.js';
 import { generateHexGrid, hexToPixel } from '../utils/math.js';
@@ -137,7 +137,14 @@ export class Arena {
             scene.add(mesh);
 
             // === PERFORMANCE: NO PointLight - use emissive instead ===
-            const { rigidBody, collider } = createTileBody(position, tileRadius, height);
+            // Use PhysicsSystem for event tracking
+            const physicsSystem = getPhysicsSystem();
+            const tileId = `tile_${hex.q}_${hex.r}`;
+            const { rigidBody, collider } = physicsSystem.createBody(tileId, position, {
+                radius: tileRadius,
+                height: height,
+                isDynamic: false
+            });
             this.tiles.push({
                 q: hex.q,
                 r: hex.r,
@@ -330,13 +337,14 @@ export class Arena {
     }
 
     cleanup() {
+        const physicsSystem = getPhysicsSystem();
         this.tiles.forEach(tile => {
             scene.remove(tile.mesh);
             // === PERFORMANCE: Don't dispose shared geometry ===
             tile.mesh.material.dispose();
             tile.edges.material.dispose();
-            if (world && tile.rigidBody) {
-                world.removeRigidBody(tile.rigidBody);
+            if (tile.rigidBody) {
+                physicsSystem.destroyBody(`tile_${tile.q}_${tile.r}`);
             }
         });
         
