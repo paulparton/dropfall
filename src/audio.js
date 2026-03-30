@@ -43,12 +43,16 @@ export function initAudio() {
         musicGain.connect(audioCtx.destination);
         sfxGain.connect(audioCtx.destination);
         console.log('[Audio] Gains connected to destination');
-        
-        // Create rolling sound nodes (initialized but not started)
+    }
+    
+    // Always ensure rolling sound gain exists
+    if (!rollingSoundGain && audioCtx) {
         rollingSoundGain = audioCtx.createGain();
         rollingSoundGain.gain.value = 0;
         rollingSoundGain.connect(audioCtx.destination);
+        console.log('[Audio] Rolling sound gain created');
     }
+    
     if (audioCtx.state === 'suspended') {
         console.log('[Audio] Resuming suspended context');
         audioCtx.resume();
@@ -374,10 +378,16 @@ export function playCollisionSound(intensity) {
 
 // Rolling/tire sound - called every frame during gameplay
 export function updateRollingSound(playerVelocity) {
-    if (!audioCtx || !rollingSoundGain) return;
+    console.log('[Audio] updateRollingSound called');
+    if (!audioCtx || !rollingSoundGain) {
+        console.log('[Audio] No audioCtx or rollingSoundGain');
+        return;
+    }
     
     const speed = Math.sqrt(playerVelocity.x ** 2 + playerVelocity.y ** 2 + playerVelocity.z ** 2);
+    console.log('[Audio] Rolling speed:', speed);
     const settings = useGameStore.getState().settings;
+    console.log('[Audio] SFX Volume:', settings.sfxVolume);
     
     // Only play sound above minimum threshold
     const minSpeed = 1.0;

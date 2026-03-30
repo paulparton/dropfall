@@ -510,6 +510,10 @@ function setupButtonHandlers() {
                 const val = parseFloat(e.target.value);
                 valEl.textContent = val;
                 useGameStore.getState().updateSetting(key, val);
+                
+                // Update audio volume in real-time
+                if (key === 'musicVolume') setMusicVolume(val);
+                if (key === 'sfxVolume') setSfxVolume(val);
             });
         }
     }
