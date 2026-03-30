@@ -28,7 +28,7 @@ import { Arena } from './entities/Arena.js';
 import { ParticleSystem } from './entities/ParticleSystem.js';
 import { LightningSystem } from './entities/LightningSystem.js';
 import { ShockwaveSystem } from './entities/ShockwaveSystem.js';
-import { initAudio, playMusic, playCollisionSound, setMusicSpeed, updateRollingSound } from './audio.js';
+import { initAudio, playMusic, playCollisionSound, setMusicSpeed, setSfxVolume, setMusicVolume } from './audio.js';
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
 import { online } from './online.js';
@@ -1011,11 +1011,6 @@ function animate() {
         // Win check
         if (state.gameState === 'PLAYING') {
             checkWinConditions(delta);
-            
-            // Update rolling sound based on player velocities
-            if (player1?.rigidBody) {
-                updateRollingSound(player1.rigidBody.linvel());
-            }
 
             // Online sync
             if (state.gameMode === 'ONLINE' && state.online.connected) {
