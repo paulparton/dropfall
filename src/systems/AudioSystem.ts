@@ -343,11 +343,12 @@ export class AudioSystem {
       // Clear gain node
       this.gainNode = null;
       
-      // Clear all listeners
-      this.listeners.clear();
-      
+      // Emit final lifecycle event BEFORE clearing listeners
       this._lifecycle = 'disposed';
       this.emitInternal({ type: 'lifecycle-changed', state: 'disposed' });
+      
+      // Clear all listeners AFTER emitting final event
+      this.listeners.clear();
       
       console.log('[AudioSystem] Disposed');
     } catch (error) {
