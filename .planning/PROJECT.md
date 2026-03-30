@@ -89,8 +89,8 @@ TypeScript 3D game engines:
 
 ## Out of Scope
 
-- Bug fixes during refactor (e.g., audio race conditions) — Addressed after structure is in place
-- Audio system from scratch — Refactor existing `audio.js` into `AudioSystem` with lifecycle
+- Bug fixes during refactor (e.g., audio race conditions) — ✅ Addressed in Phase 3
+- Audio system from scratch — ✅ Refactored in Phase 3 (AudioSystem with lifecycle)
 - UI redesign — Keep current UI, improve underlying data binding
 - New game modes or stages — Prerequisite is clean architecture
 - Performance optimization (beyond structural improvements) — Separate phase post-refactor
@@ -138,5 +138,13 @@ This document evolves at phase transitions and milestone boundaries.
 3. Measurement of type safety/test coverage improvements
 4. Assessment of architecture clarity for future features
 
+## Current State
+
+- **Phase 1**: ✅ TypeScript Foundation complete
+- **Phase 2**: ✅ Core Types & State complete  
+- **Phase 3**: ✅ Audio System Refactor complete (lifecycle management, race condition fixes)
+- **Phase 4-6**: Pending
+
 ---
-*Last updated: 2026-03-30 at project initialization*
+
+*Last updated: 2026-03-30 at Phase 3 completion*
