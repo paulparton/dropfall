@@ -373,13 +373,26 @@ export class PhysicsSystem {
     // Apply immediate impulse
     this.applyForce(entityId, { x: force.x, y: force.y, z: 0 });
 
-    // Emit knockback event
+    // Emit knockback event with validation
     const knockbackEvent: KnockbackEvent = {
       type: 'knockback',
       targetEntity: entityId,
       force,
       duration,
     };
+    
+    // Validate before emitting
+    try {
+      const validationResult = validatePhysicsEvent(knockbackEvent);
+      if (!validationResult.success) {
+        console.warn('[PhysicsSystem] Knockback event validation failed:', validationResult.error);
+        return;
+      }
+    } catch (error) {
+      console.warn('[PhysicsSystem] Knockback event validation error:', error);
+      return;
+    }
+    
     this.emit('knockback', knockbackEvent);
   }
 
@@ -572,6 +585,19 @@ export class PhysicsSystem {
           lastPosition,
           direction,
         };
+        
+        // Validate before emitting
+        try {
+          const validationResult = validatePhysicsEvent(outOfBoundsEvent);
+          if (!validationResult.success) {
+            console.warn('[PhysicsSystem] Out-of-bounds event validation failed:', validationResult.error);
+            continue;
+          }
+        } catch (error) {
+          console.warn('[PhysicsSystem] Out-of-bounds event validation error:', error);
+          continue;
+        }
+        
         this.emit('out-of-bounds', outOfBoundsEvent);
       }
     }
