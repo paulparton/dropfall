@@ -601,6 +601,28 @@ function setupButtonHandlers() {
         document.getElementById('powerups-content')?.classList.add('active');
         document.getElementById('settings-content')?.classList.remove('active');
     });
+    
+    // Settings navigation buttons (left sidebar)
+    document.querySelectorAll('.settings-nav-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const pane = btn.dataset.pane;
+            
+            // Update nav buttons
+            document.querySelectorAll('.settings-nav-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            
+            // Show/hide panes
+            document.querySelectorAll('.settings-pane').forEach(p => {
+                p.classList.remove('active');
+                p.classList.add('hidden');
+            });
+            const targetPane = document.querySelector(`.settings-pane[data-pane="${pane}"]`);
+            if (targetPane) {
+                targetPane.classList.add('active');
+                targetPane.classList.remove('hidden');
+            }
+        });
+    });
 }
 
 // ============================================

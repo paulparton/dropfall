@@ -247,6 +247,34 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
 .setting-item span { text-align: right; font-size: 0.8rem; color: #fff; }
 .control-btn { padding: 0.4rem 0.75rem; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
 
+/* Settings Navigation */
+.settings-nav-btn {
+  background: rgba(0, 0, 0, 0.8);
+  border: 1px solid #00ffff;
+  color: #00ffff;
+  padding: 0.6rem 1rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9rem;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: all 0.2s;
+  text-align: left;
+}
+.settings-nav-btn:hover {
+  background: rgba(0, 255, 255, 0.15);
+  box-shadow: 0 0 10px #00ffff;
+}
+.settings-nav-btn.active {
+  background: rgba(0, 255, 255, 0.25);
+  border-color: #ff00ff;
+  color: #ff00ff;
+  box-shadow: 0 0 10px #ff00ff, inset 0 0 5px rgba(255, 0, 255, 0.3);
+}
+
+/* Settings Panes */
+.settings-pane { display: none; width: 100%; }
+.settings-pane.active { display: block; }
+
 /* Controller feedback highlight */
 .control-btn.feedback {
 	background: #0ff;
