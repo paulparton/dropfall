@@ -43,7 +43,7 @@ function getTileMaterials(theme, edgeColor, baseColor, iceColor) {
         }),
         warning: new THREE.MeshStandardMaterial({
             ...tileMaterialParams,
-            color: 0xff0000
+            color: 0xaa3333
         }),
         falling: new THREE.MeshStandardMaterial({
             ...tileMaterialParams,
@@ -95,18 +95,19 @@ export class Arena {
         const geometry = getSharedTileGeometry(tileRadius, height);
         const edgesGeometry = getSharedEdgesGeometry(tileRadius, height);
         
-        this.edgeColor = 0xff00ff;
+        // Subtle edge colors (less bright/distracting)
+        this.edgeColor = 0x884488;  // Muted magenta
         this.baseColor = 0x666666;
-        this.iceColor = 0x00ffff;
+        this.iceColor = 0x447777;   // Muted cyan
         if (theme === 'beach') {
-            this.edgeColor = 0x00ffff;
+            this.edgeColor = 0x447777;  // Muted cyan
             this.baseColor = 0xffffff;
-            this.iceColor = 0x0000ff;
+            this.iceColor = 0x446688;   // Muted blue
         }
         if (theme === 'cracked_stone') {
-            this.edgeColor = 0xff4400;
+            this.edgeColor = 0x885533;  // Muted orange
             this.baseColor = 0xffffff;
-            this.iceColor = 0x00ffff;
+            this.iceColor = 0x447777;   // Muted cyan
         }
 
         // === PERFORMANCE: Get shared materials and store as instance member ===
@@ -155,7 +156,7 @@ export class Arena {
                 state: 'NORMAL',
                 timer: 0,
                 distanceToCenter: Math.sqrt(position.x ** 2 + position.z ** 2),
-                edgeOpacity: 0.7
+                edgeOpacity: 0.5  // More subtle default opacity
             });
         });
     }
@@ -245,8 +246,8 @@ export class Arena {
                 
                 if (isFlash) {
                     tile.mesh.material = this.warningMaterial || this.materials.warning;
-                    tile.edges.material.opacity = 1.0;
-                    tile.edges.material.color.setHex(0xff0000);
+                    tile.edges.material.opacity = 0.7;  // Less blinding warning
+                    tile.edges.material.color.setHex(0xaa3333);
                 } else {
                     tile.mesh.material = this.materials.normal;
                     tile.edges.material.opacity = 0.7;
