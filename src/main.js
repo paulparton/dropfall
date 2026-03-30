@@ -2,6 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { useGameStore } from './store.js';
 import { initPhysics, updatePhysics } from './physics.js';
+import { getPhysicsSystem } from './systems/PhysicsSystem.js';
 import { initRenderer, updateRenderer, camera, scene, ambientLight, directionalLight } from './renderer.js';
 import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
 import { Player } from './entities/Player.js';
@@ -39,6 +40,31 @@ function showScreen(screenName) {
 
 function hideAllScreens() {
     Object.values(screens).forEach(s => s?.classList.add('hidden'));
+}
+
+// ============================================
+// POWER-UPS GUIDE
+// ============================================
+function populatePowerupsGuide() {
+    const grid = document.getElementById('powerups-grid');
+    if (!grid) return;
+    
+    grid.innerHTML = '';
+    
+    POWER_UP_EFFECTS.forEach(powerup => {
+        const card = document.createElement('div');
+        card.className = 'powerup-card';
+        card.style.borderColor = `#${powerup.color.toString(16).padStart(6, '0')}`;
+        card.style.color = `#${powerup.color.toString(16).padStart(6, '0')}`;
+        
+        card.innerHTML = `
+            <div class="powerup-card-icon">${powerup.icon}</div>
+            <h3 style="margin: 0.5rem 0; font-size: 1.2rem;">${powerup.name}</h3>
+            <p style="margin: 0; font-size: 0.9rem; opacity: 0.8;">${powerup.description}</p>
+        `;
+        
+        grid.appendChild(card);
+    });
 }
 
 // ============================================
@@ -812,8 +838,16 @@ function animate() {
             if (player2.glow.intensity > 1) player2.glow.intensity -= delta * 10;
             if (sceneFlashLight?.intensity > 0) sceneFlashLight.intensity -= delta * 40;
 
-            camera.position.lerp(new THREE.Vector3(p1Pos.x, Math.max(24, distance * 0.96), p1Pos.z + Math.max(24, distance * 0.96)), 2 * delta);
-            camera.lookAt(new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5));
+            // Frame-rate independent camera movement (constant speed, not delta-dependent)
+            const targetCamPos = new THREE.Vector3(p1Pos.x, Math.max(24, distance * 0.96), p1Pos.z + Math.max(24, distance * 0.96));
+            const camSpeed = 0.08; // Interpolation factor per frame (0-1)
+            camera.position.lerp(targetCamPos, camSpeed);
+            
+            // Smooth camera lookAt target
+            const targetLookAt = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
+            if (!camera.userData.lookAtTarget) camera.userData.lookAtTarget = targetLookAt.clone();
+            camera.userData.lookAtTarget.lerp(targetLookAt, camSpeed);
+            camera.lookAt(camera.userData.lookAtTarget);
         }
 
         // Countdown
@@ -967,6 +1001,27 @@ async function init() {
         initInput();
         await initPhysics();
         
+        // Initialize PhysicsSystem and subscribe to events
+        const physicsSystem = getPhysicsSystem();
+        
+        // Subscribe to collision events from PhysicsSystem
+        physicsSystem.on('collision', (event) => {
+            console.log('[PhysicsSystem] Collision:', event.entityA, '<->', event.entityB);
+            // Handled by direct physics queries in main.js for now
+            // This subscription is for future event-driven architecture
+        });
+        
+        // Subscribe to knockback events
+        physicsSystem.on('knockback', (event) => {
+            console.log('[PhysicsSystem] Knockback applied to:', event.targetEntity);
+        });
+        
+        // Subscribe to out-of-bounds events
+        physicsSystem.on('out-of-bounds', (event) => {
+            console.log('[PhysicsSystem] Out of bounds:', event.entity, event.direction);
+            // Could trigger death handling here in event-driven architecture
+        });
+        
         arena = new Arena();
         particles = new ParticleSystem();
         lightning = new LightningSystem();
@@ -979,6 +1034,7 @@ async function init() {
         setupButtonHandlers();
         setupOnlineHandlers();
         setupStoreSubscription();
+        populatePowerupsGuide();
         
         showScreen('menu');
         animate();

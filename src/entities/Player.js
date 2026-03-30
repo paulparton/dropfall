@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createPlayerBody, world } from '../physics.js';
+import { getPhysicsSystem } from '../systems/PhysicsSystem.js';
 import { scene } from '../renderer.js';
 import { getThemeMaterials } from '../utils/themeTextures.js';
 import { useGameStore } from '../store.js';
@@ -213,6 +214,10 @@ export class Player {
         this.playerName = id === 'player1' ? (storeState.p1Name || 'Player 1') : (storeState.p2Name || 'Player 2');
         this.nameLabel = this._createNameLabel(this.playerName);
         scene.add(this.nameLabel);
+
+        // 6. Initialize position tracking for smooth interpolation
+        this.lastPosition = new THREE.Vector3().copy(startPosition);
+        this.lastRotation = new THREE.Quaternion();
     }
 
     update(delta, arena, particles) {
@@ -220,16 +225,20 @@ export class Player {
         const position = this.rigidBody.translation();
         const rotation = this.rigidBody.rotation();
 
-        this.mesh.position.copy(position);
-        this.mesh.quaternion.copy(rotation);
-        this.glow.position.copy(position);
-        this.auraMesh.position.copy(position);
+        // Convert Rapier Vector3 to THREE.Vector3 for easier math
+        const currentPos = new THREE.Vector3(position.x, position.y, position.z);
+        const currentRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
+
+        this.mesh.position.copy(currentPos);
+        this.mesh.quaternion.copy(currentRot);
+        this.glow.position.copy(currentPos);
+        this.auraMesh.position.copy(currentPos);
         if (this.nameLabel) {
-            this.nameLabel.position.set(position.x, position.y + this.sphereSize + 3.2, position.z);
+            this.nameLabel.position.set(currentPos.x, currentPos.y + this.sphereSize + 3.2, currentPos.z);
         }
 
         // 2. Check Death Condition
-        if (position.y < -10) {
+        if (currentPos.y < -10) {
             this.isDead = true;
         }
 
@@ -423,6 +432,10 @@ export class Player {
         } else {
             useGameStore.getState().updateBoost(this.id, settings.boostRegenSpeed * delta);
         }
+
+        // Store current state for next frame (used for interpolation if needed)
+        this.lastPosition.copy(currentPos);
+        this.lastRotation.copy(currentRot);
     }
 
     cleanup() {
