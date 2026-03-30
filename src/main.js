@@ -5,6 +5,7 @@ import { initPhysics, updatePhysics } from './physics.js';
 import { getPhysicsSystem } from './systems/PhysicsSystem.js';
 import { initRenderer, updateRenderer, camera, scene, ambientLight, directionalLight } from './renderer.js';
 import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
+import { createInputHandler } from './handlers/InputHandler.js';
 import { Player } from './entities/Player.js';
 import { Arena } from './entities/Arena.js';
 import { ParticleSystem } from './entities/ParticleSystem.js';
@@ -71,6 +72,7 @@ function populatePowerupsGuide() {
 // GAME STATE
 // ============================================
 let player1, player2, arena, particles, lightning, shockwaves, aiController;
+let inputHandler; // InputHandler instance for unified input processing
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
@@ -999,6 +1001,10 @@ async function init() {
     try {
         initRenderer();
         initInput();
+        
+        // Initialize InputHandler for unified input processing
+        inputHandler = createInputHandler();
+        
         await initPhysics();
         
         // Initialize PhysicsSystem and subscribe to events
