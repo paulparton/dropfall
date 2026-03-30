@@ -286,8 +286,11 @@ export class PhysicsSystem {
       collider = world.createCollider(colliderDesc, rigidBody);
     } else {
       // Create static/fixed body (arena tiles)
+      // Match visual mesh rotation (30 degrees Y)
+      const rotY = Math.PI / 12; // 30 degrees
       const rigidBodyDesc = RAPIER.RigidBodyDesc.fixed()
-        .setTranslation(position.x, position.y, z);
+        .setTranslation(position.x, position.y, z)
+        .setRotation({ x: 0, y: Math.sin(rotY), z: 0, w: Math.cos(rotY) });
       rigidBody = world.createRigidBody(rigidBodyDesc);
 
       // Use hexagonal prism for tiles
