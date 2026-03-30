@@ -26,13 +26,14 @@
  * ```
  */
 
-import RAPIER from '@dimforge/rapier3d-compat';
+import RAPIER, { EventQueue } from '@dimforge/rapier3d-compat';
 import type { 
   PhysicsEvent, 
   CollisionEvent, 
   KnockbackEvent, 
   OutOfBoundsEvent 
 } from '../types/Physics';
+import { validatePhysicsEvent } from '../validation/schemas';
 
 /**
  * PhysicsSystem lifecycle states
@@ -94,6 +95,9 @@ export class PhysicsSystem {
   /** Accumulator for fixed timestep simulation */
   private accumulator = 0;
   
+  /** Rapier event queue for collision detection */
+  private eventQueue: EventQueue | null = null;
+  
   /** Fixed timestep for physics (1/60 for desktop, 1/30 for mobile) */
   private readonly timeStep: number;
   
@@ -151,6 +155,9 @@ export class PhysicsSystem {
       const gravity = { x: 0.0, y: -20.0, z: 0.0 };
       this.world = new RAPIER.World(gravity);
       
+      // Create event queue for collision detection
+      this.eventQueue = new EventQueue(true);
+      
       // Note: Mobile optimization would require Rapier World configuration
       // via RigidBodyDesc/ColliderDesc, not direct World properties
       
@@ -193,7 +200,11 @@ export class PhysicsSystem {
       // Step physics multiple times if needed for fixed timestep
       let steppedThisFrame = false;
       while (this.accumulator >= this.timeStep) {
-        this.world.step();
+        // Clear event queue before stepping
+        if (this.eventQueue) {
+          this.eventQueue.drainCollisionEvents(() => {});
+        }
+        this.world.step(this.eventQueue || undefined);
         this.accumulator -= this.timeStep;
         steppedThisFrame = true;
       }
@@ -266,7 +277,8 @@ export class PhysicsSystem {
       const colliderDesc = RAPIER.ColliderDesc.ball(radius)
         .setMass(mass)
         .setFriction(friction)
-        .setRestitution(restitution);
+        .setRestitution(restitution)
+        .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
       collider = world.createCollider(colliderDesc, rigidBody);
     } else {
       // Create static/fixed body (arena tiles)
@@ -288,7 +300,8 @@ export class PhysicsSystem {
         }
         const colliderDesc = RAPIER.ColliderDesc.convexHull(new Float32Array(pts))!
           .setFriction(friction)
-          .setRestitution(options.restitution ?? 0.1);
+          .setRestitution(options.restitution ?? 0.1)
+          .setActiveEvents(RAPIER.ActiveEvents.COLLISION_EVENTS);
         collider = world.createCollider(colliderDesc, rigidBody);
       } else {
         // Default to fixed collider
@@ -459,28 +472,63 @@ export class PhysicsSystem {
    * Emit collision events from Rapier contact events
    */
   private emitCollisionEvents(): void {
-    if (!this.world) return;
+    if (!this.world || !this.eventQueue) return;
 
-    // Rapier doesn't have a simple contact event API in the compat version
-    // We'll iterate through bodies and detect overlaps using Rapier's contact API
-    // For now, we'll emit empty events - the actual collision detection
-    // would require more sophisticated Rapier event handling
-    
-    // Placeholder: In a full implementation, we'd use Rapier's contact events
-    // For now, emit an empty collision batch to maintain the API contract
-    const collisionEvent: CollisionEvent = {
-      type: 'collision',
-      entityA: '',
-      entityB: '',
-      started: false,
-      impulse: 0,
-    };
-    
-    // Only emit if there are listeners (we can't detect actual collisions without more setup)
-    if (this.listeners.has('collision') && this.listeners.get('collision')!.size > 0) {
-      // In a production implementation, this would extract actual collision events
-      // from Rapier's event queue
+    // Check if there are any collision listeners
+    if (!this.listeners.has('collision') || this.listeners.get('collision')!.size === 0) {
+      return;
     }
+
+    // Create a reverse map from collider handle to entity ID
+    const colliderToEntity = new Map<number, string>();
+    for (const [entityId, body] of this.bodies) {
+      colliderToEntity.set(body.collider.handle, entityId);
+    }
+
+    // Drain collision events from the queue
+    this.eventQueue.drainCollisionEvents((handle1, handle2, started) => {
+      const entityA = colliderToEntity.get(handle1);
+      const entityB = colliderToEntity.get(handle2);
+
+      // Only emit if we have both entity IDs
+      if (!entityA || !entityB) return;
+
+      // Calculate impulse based on body velocities (approximation)
+      const bodyA = this.bodies.get(entityA);
+      const bodyB = this.bodies.get(entityB);
+      let impulse = 0;
+
+      if (bodyA && bodyB) {
+        const velA = bodyA.rigidBody.linvel();
+        const velB = bodyB.rigidBody.linvel();
+        const relVel = Math.sqrt(
+          Math.pow(velA.x - velB.x, 2) +
+          Math.pow(velA.y - velB.y, 2) +
+          Math.pow(velA.z - velB.z, 2)
+        );
+        impulse = Math.min(relVel / 10, 10); // Clamp impulse
+      }
+
+      const collisionEvent: CollisionEvent = {
+        type: 'collision',
+        entityA,
+        entityB,
+        started,
+        impulse,
+      };
+
+      // Validate the event before emitting
+      try {
+        const validationResult = validatePhysicsEvent(collisionEvent);
+        if (validationResult.success) {
+          this.emit('collision', collisionEvent);
+        } else {
+          console.warn('[PhysicsSystem] Collision event validation failed:', validationResult.error);
+        }
+      } catch (error) {
+        console.warn('[PhysicsSystem] Collision event validation error:', error);
+      }
+    });
   }
 
   /**
