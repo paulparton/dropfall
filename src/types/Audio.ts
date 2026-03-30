@@ -73,6 +73,9 @@ export interface PlaybackRequest {
 
   /** Delay before starting playback (ms, optional) */
   delay?: number;
+
+  /** Whether to loop the audio (optional) */
+  loop?: boolean;
 }
 
 /**
