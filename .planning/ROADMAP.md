@@ -77,9 +77,9 @@ phases: 6
 - ✓ Tests for lifecycle, race conditions, cleanup
 
 **Plans:**
-- [ ] 03-01-PLAN.md — AudioSystem core with lifecycle state machine — Wave 1
-- [ ] 03-02-PLAN.md — Audio event types and validation schemas — Wave 1
-- [ ] 03-03-PLAN.md — Integration tests (race conditions, memory safety) — Wave 2
+3/3 plans executed
+- [x] 03-02-PLAN.md — Audio event types and validation schemas — Wave 1
+- [x] 03-03-PLAN.md — Integration tests (race conditions, memory safety) — Wave 2
 
 **Acceptance:**
 - Audio plays reliably after first input
