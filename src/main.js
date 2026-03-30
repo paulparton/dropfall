@@ -1,7 +1,7 @@
 import './style.css';
 import * as THREE from 'three';
 import { useGameStore } from './store.js';
-import { initPhysics, updatePhysics } from './physics.js';
+import { initPhysics, world as physicsWorld } from './physics.js';
 import { getPhysicsSystem } from './systems/PhysicsSystem.js';
 import { initRenderer, updateRenderer, camera, scene, ambientLight, directionalLight } from './renderer.js';
 import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
@@ -90,6 +90,7 @@ function populatePowerupsGuide() {
 // ============================================
 let player1, player2, arena, particles, lightning, shockwaves, aiController;
 let inputHandler; // InputHandler instance for unified input processing
+let physicsSystem; // PhysicsSystem instance for event-based physics
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
@@ -784,7 +785,7 @@ function animate() {
         particles?.update(delta);
         lightning?.update(delta);
         shockwaves?.update(delta);
-        updatePhysics(delta);
+        physicsSystem.step(delta);
         camera.position.set(Math.sin(clock.getElapsedTime() * 0.1) * 30, 25, Math.cos(clock.getElapsedTime() * 0.1) * 30);
         camera.lookAt(0, 0, 0);
     }
@@ -813,7 +814,7 @@ function animate() {
         // Online clients receive positions from host via gameUpdate handler
         const isOnlineClient = state.gameMode === 'ONLINE' && !state.online.isHost;
         if (!isOnlineClient) {
-            updatePhysics(delta);
+            physicsSystem.step(delta);
         }
 
         // Power-up displays
@@ -918,7 +919,7 @@ function animate() {
         particles?.update(delta);
         lightning?.update(delta);
         shockwaves?.update(delta);
-        updatePhysics(delta);
+        physicsSystem.step(delta);
 
         if (state.winner && state.winner !== 'Draw') {
             const winnerPlayer = state.winner === 'Player 1' ? player1 : player2;
@@ -1024,8 +1025,9 @@ async function init() {
         
         await initPhysics();
         
-        // Initialize PhysicsSystem and subscribe to events
-        const physicsSystem = getPhysicsSystem();
+        // Initialize PhysicsSystem with existing world from physics.js
+        physicsSystem = getPhysicsSystem();
+        await physicsSystem.initialize(physicsWorld);
         
         // Subscribe to collision events from PhysicsSystem
         physicsSystem.on('collision', (event) => {

@@ -26,7 +26,7 @@
  * ```
  */
 
-import RAPIER, { EventQueue } from '@dimforge/rapier3d-compat';
+import RAPIER, { EventQueue, World } from '@dimforge/rapier3d-compat';
 import type { 
   PhysicsEvent, 
   CollisionEvent, 
@@ -136,11 +136,12 @@ export class PhysicsSystem {
   }
 
   /**
-   * Initialize Rapier3D physics world
+   * Initialize the physics world
    * 
+   * @param existingWorld - Optional existing Rapier world to use instead of creating a new one
    * @returns Promise that resolves when initialization is complete
    */
-  async initialize(): Promise<void> {
+  async initialize(existingWorld?: World): Promise<void> {
     // Idempotent - already initialized
     if (this._lifecycle !== 'uninitialized') {
       console.warn('[PhysicsSystem] Already initialized, state:', this._lifecycle);
@@ -148,21 +149,24 @@ export class PhysicsSystem {
     }
 
     try {
-      // Initialize Rapier WASM module
-      await RAPIER.init();
-      
-      // Create world with custom gravity for Dropfall
-      const gravity = { x: 0.0, y: -20.0, z: 0.0 };
-      this.world = new RAPIER.World(gravity);
+      // If using existing world, don't reinitialize Rapier
+      if (!existingWorld) {
+        // Initialize Rapier WASM module
+        await RAPIER.init();
+        
+        // Create world with custom gravity for Dropfall
+        const gravity = { x: 0.0, y: -20.0, z: 0.0 };
+        this.world = new RAPIER.World(gravity);
+      } else {
+        // Use existing world (e.g., from physics.js)
+        this.world = existingWorld;
+      }
       
       // Create event queue for collision detection
       this.eventQueue = new EventQueue(true);
       
-      // Note: Mobile optimization would require Rapier World configuration
-      // via RigidBodyDesc/ColliderDesc, not direct World properties
-      
       this._lifecycle = 'ready';
-      console.log('[PhysicsSystem] Initialized successfully');
+      console.log('[PhysicsSystem] Initialized successfully', existingWorld ? '(using existing world)' : '');
     } catch (error) {
       this._lifecycle = 'uninitialized';
       const errorMessage = error instanceof Error ? error.message : String(error);
