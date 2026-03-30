@@ -178,12 +178,6 @@
     <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100; pointer-events: auto; display: flex; flex-direction: column; align-items: center;">
       <h2 class="retro-subtitle" style="margin-bottom: 1rem;">SETTINGS</h2>
       
-      <!-- Tab bar -->
-      <div class="settings-panel-tabs" style="display: flex; gap: 0.5rem; margin-bottom: 1rem; width: 90%; max-width: 900px;">
-        <button id="settings-tab" class="tab-btn active" style="flex: 1; padding: 0.6rem;">Game Settings</button>
-        <button id="powerups-tab" class="tab-btn" style="flex: 1; padding: 0.6rem;">Power-ups</button>
-      </div>
-      
       <!-- Main settings with left nav -->
       <div id="settings-content" class="tab-content active" style="display: flex; gap: 1.5rem; width: 90%; max-width: 900px; align-items: flex-start;">
         <!-- Left Navigation -->
@@ -192,6 +186,7 @@
           <button class="settings-nav-btn" data-pane="audio">Audio</button>
           <button class="settings-nav-btn" data-pane="visuals">Visuals</button>
           <button class="settings-nav-btn" data-pane="controls">Controls</button>
+          <button class="settings-nav-btn" data-pane="powerups">Power-ups</button>
           <button class="settings-nav-btn" data-pane="presets">Presets</button>
         </nav>
         
@@ -388,6 +383,11 @@
             </div>
           </div>
           
+          <!-- POWER-UPS PANE -->
+          <div class="settings-pane hidden" data-pane="powerups">
+            <div id="powerups-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;"></div>
+          </div>
+          
         </div>
       </div>
       
@@ -398,11 +398,6 @@
           <div style="margin-bottom: 2rem; color: #fff;">Press any button on your controller to see feedback and configure mappings in the main settings.</div>
           <button id="close-controller-settings-btn" class="retro-btn" style="font-size: 1.2rem;">Back to Settings</button>
         </div>
-      </div>
-      
-      <!-- Power-ups tab content -->
-      <div id="powerups-content" class="tab-content hidden" style="width: 90%; max-width: 900px; max-height: 60vh; overflow-y: auto;">
-        <div id="powerups-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem;"></div>
       </div>
       
       <!-- Bottom buttons -->

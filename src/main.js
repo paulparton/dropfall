@@ -588,20 +588,6 @@ function setupButtonHandlers() {
         if (autoRestartMenu) autoRestartMenu.checked = e.target.checked;
     });
 
-    // Settings tabs
-    document.getElementById('settings-tab')?.addEventListener('click', () => {
-        document.getElementById('settings-tab')?.classList.add('active');
-        document.getElementById('powerups-tab')?.classList.remove('active');
-        document.getElementById('settings-content')?.classList.add('active');
-        document.getElementById('powerups-content')?.classList.remove('active');
-    });
-    document.getElementById('powerups-tab')?.addEventListener('click', () => {
-        document.getElementById('powerups-tab')?.classList.add('active');
-        document.getElementById('settings-tab')?.classList.remove('active');
-        document.getElementById('powerups-content')?.classList.add('active');
-        document.getElementById('settings-content')?.classList.remove('active');
-    });
-    
     // Settings navigation buttons (left sidebar)
     document.querySelectorAll('.settings-nav-btn').forEach(btn => {
         btn.addEventListener('click', () => {
