@@ -34,11 +34,9 @@
     "allowJs": true,
     "checkJs": false,
 
-    "noEmit": true,
-    "listFiles": false,
-    "listFilesOnly": false
+    "noEmit": true
   },
-  "include": ["src/**/*.ts", "server/**/*.ts", "tests/**/*.ts"],
+  "include": ["src", "server", "tests"],
   "exclude": ["node_modules", "dist", ".planning", ".git", ".venv"],
   "ts-node": {
     "compilerOptions": {
