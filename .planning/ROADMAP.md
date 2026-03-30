@@ -66,6 +66,8 @@ phases: 6
 
 **Goal:** Extract audio logic into `AudioSystem` class with explicit lifecycle. Add initialization on first input. Remove suspected race conditions.
 
+**Status:** 📋 Planning complete (3 plans, 2 waves)
+
 **Features:**
 - ✓ `systems/AudioSystem.ts` — Initialize, play, stop, dispose
 - ✓ Lifecycle hooks — On input init, on game start, on round end
@@ -74,13 +76,18 @@ phases: 6
 - ✓ State machine — Uninitialized → Ready → Playing → Disposed
 - ✓ Tests for lifecycle, race conditions, cleanup
 
+**Plans:**
+- [ ] 03-01-PLAN.md — AudioSystem core with lifecycle state machine — Wave 1
+- [ ] 03-02-PLAN.md — Audio event types and validation schemas — Wave 1
+- [ ] 03-03-PLAN.md — Integration tests (race conditions, memory safety) — Wave 2
+
 **Acceptance:**
 - Audio plays reliably after first input
-- No race conditions in initialization
+- No race conditions in initialization (verified by integration tests)
 - Music persists correctly through multiple rounds
-- No memory leaks (verified with tests)
+- No memory leaks (verified with buffer/listener cleanup tests)
 
-**Estimated Plans:** 3-4
+**Progress:** Ready for execution (Wave 1)
 
 ---
 
