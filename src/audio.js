@@ -25,32 +25,25 @@ export function setSfxVolume(volume) {
 
 export function initAudio() {
     if (!audioCtx) {
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        console.log('[Audio] Created AudioContext, state:', audioCtx.state);
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();    
         musicGain = audioCtx.createGain();
         sfxGain = audioCtx.createGain();
         
         const settings = useGameStore.getState().settings;
         musicGain.gain.value = settings.musicVolume !== undefined ? settings.musicVolume : 0.6;
         sfxGain.gain.value = settings.sfxVolume !== undefined ? settings.sfxVolume : 0.8;
-        console.log('[Audio] Music volume:', musicGain.gain.value, 'SFX volume:', sfxGain.gain.value);
         
         musicGain.connect(audioCtx.destination);
         sfxGain.connect(audioCtx.destination);
-        console.log('[Audio] Gain nodes connected');
     }
     if (audioCtx.state === 'suspended') {
-        console.log('[Audio] Resuming suspended AudioContext');
         audioCtx.resume();
     }
-    console.log('[Audio] AudioContext state after init:', audioCtx.state);
 }
 
 export function playMusic() {
-    console.log('[Audio] playMusic called, isMusicPlaying:', isMusicPlaying, 'audioCtx:', !!audioCtx);
     if (isMusicPlaying || !audioCtx) return;
     isMusicPlaying = true;
-    console.log('[Audio] Starting music...');
     
     // --- CYBER INSTRUMENTS ---
     function playCyberKick(time, durationScale) {

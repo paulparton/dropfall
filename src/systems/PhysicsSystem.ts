@@ -558,6 +558,9 @@ export class PhysicsSystem {
     if (!this.world) return;
 
     for (const [entityId, body] of this.bodies) {
+      // Only check player entities for out-of-bounds (not tiles)
+      if (entityId.startsWith('tile_')) continue;
+      
       const position = body.rigidBody.translation();
       
       let direction: OutOfBoundsEvent['direction'] | null = null;
