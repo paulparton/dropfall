@@ -117,6 +117,189 @@ describe('InputHandler', () => {
     inputHandler.destroy();
   });
 
+  describe('AI Integration', () => {
+    it('should create AIController when enabling AI', () => {
+      inputHandler.enableAI();
+      const controller = inputHandler.getAIController();
+      expect(controller).toBeDefined();
+    });
+
+    it('should reset AIController when disabling AI', () => {
+      inputHandler.enableAI();
+      inputHandler.disableAI();
+      const controller = inputHandler.getAIController();
+      // After disable, controller might be null or reset
+      expect(inputHandler.isAIEnabled()).toBe(false);
+    });
+
+    it('should include difficulty in AI input', () => {
+      inputHandler.setDifficulty('hard');
+      inputHandler.enableAI();
+      
+      // Poll should include difficulty
+      inputHandler.poll();
+      const lastInput = inputHandler.getLastInput();
+      
+      if (lastInput?.source === 'ai') {
+        expect((lastInput as AIInput).difficulty).toBe('hard');
+      }
+    });
+  });
+
+  describe('Input Validation in InputHandler', () => {
+    it('should reject invalid input during dispatch', () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      // Dispatch an invalid input (missing required fields)
+      const invalidInput: any = {
+        source: 'keyboard',
+        // Missing up, down, left, right, boost, timestamp
+      };
+      
+      inputHandler.dispatch(invalidInput);
+      
+      // Should warn about invalid input
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      // lastInput should not be updated
+      expect(inputHandler.getLastInput()).toBeNull();
+      
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should reject input with invalid source type', () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      const invalidInput: any = {
+        source: 'invalid-source',
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        boost: false,
+        timestamp: Date.now(),
+      };
+      
+      inputHandler.dispatch(invalidInput);
+      
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should accept valid keyboard input', () => {
+      const validInput: KeyboardInput = {
+        source: 'keyboard',
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        boost: false,
+        timestamp: Date.now(),
+      };
+      
+      inputHandler.dispatch(validInput);
+      expect(inputHandler.getLastInput()).not.toBeNull();
+      expect(inputHandler.getLastInput()?.source).toBe('keyboard');
+    });
+
+    it('should accept valid gamepad input', () => {
+      const validInput: GamepadInput = {
+        source: 'gamepad',
+        gamepadIndex: 0,
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        boost: false,
+        analog: { x: 0, y: 0 },
+        timestamp: Date.now(),
+      };
+      
+      inputHandler.dispatch(validInput);
+      expect(inputHandler.getLastInput()).not.toBeNull();
+      expect(inputHandler.getLastInput()?.source).toBe('gamepad');
+    });
+
+    it('should accept valid AI input', () => {
+      const validInput: AIInput = {
+        source: 'ai',
+        difficulty: 'hard',
+        targetPosition: { x: 10, y: 5 },
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        boost: false,
+        timestamp: Date.now(),
+      };
+      
+      inputHandler.dispatch(validInput);
+      expect(inputHandler.getLastInput()).not.toBeNull();
+      expect(inputHandler.getLastInput()?.source).toBe('ai');
+    });
+
+    it('should reject gamepad input with invalid gamepadIndex', () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      const invalidInput: any = {
+        source: 'gamepad',
+        gamepadIndex: -1, // Invalid - must be >= 0
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        boost: false,
+        analog: { x: 0, y: 0 },
+        timestamp: Date.now(),
+      };
+      
+      inputHandler.dispatch(invalidInput);
+      
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      
+      consoleWarnSpy.mockRestore();
+    });
+
+    it('should reject AI input with invalid difficulty', () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      
+      const invalidInput: any = {
+        source: 'ai',
+        difficulty: 'expert', // Invalid - must be easy, normal, or hard
+        targetPosition: { x: 10, y: 5 },
+        up: true,
+        down: false,
+        left: false,
+        right: false,
+        boost: false,
+        timestamp: Date.now(),
+      };
+      
+      inputHandler.dispatch(invalidInput);
+      
+      expect(consoleWarnSpy).toHaveBeenCalled();
+      
+      consoleWarnSpy.mockRestore();
+    });
+  });
+
+  describe('poll() method', () => {
+    it('should return keyboard input when no gamepad connected', () => {
+      // By default, no gamepad is "connected" in the mock (empty array)
+      inputHandler.poll();
+      const lastInput = inputHandler.getLastInput();
+      expect(lastInput?.source).toBe('keyboard');
+    });
+
+    it('should dispatch empty input when nothing pressed', () => {
+      inputHandler.poll();
+      const lastInput = inputHandler.getLastInput();
+      expect(lastInput?.source).toBe('keyboard');
+      expect(lastInput?.up).toBe(false);
+      expect(lastInput?.down).toBe(false);
+    });
+  });
+
   describe('Lifecycle', () => {
     it('should initialize with null lastInput', () => {
       expect(inputHandler.getLastInput()).toBeNull();

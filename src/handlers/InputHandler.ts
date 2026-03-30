@@ -30,7 +30,7 @@ import type {
   AIInput,
   InputHandler as IInputHandler 
 } from '../types/Input';
-import { validateInputPayload } from '../validation/schemas';
+import { validateInputPayloadResult } from '../validation/schemas';
 import { AIController } from '../ai/AIController.js';
 
 /**
@@ -339,14 +339,9 @@ export class InputHandler implements IInputHandler {
    */
   dispatch(input: InputPayload): void {
     // Validate input payload before dispatching
-    try {
-      const validationResult = validateInputPayload(input);
-      if (!validationResult.success) {
-        console.warn('[InputHandler] Invalid input payload:', validationResult.error);
-        return; // Skip invalid input
-      }
-    } catch (error) {
-      console.warn('[InputHandler] Input validation error:', error);
+    const validationResult = validateInputPayloadResult(input);
+    if (!validationResult.success) {
+      console.warn('[InputHandler] Invalid input payload:', validationResult.error);
       return; // Skip invalid input
     }
     

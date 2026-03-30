@@ -33,7 +33,7 @@ import type {
   KnockbackEvent, 
   OutOfBoundsEvent 
 } from '../types/Physics';
-import { validatePhysicsEvent } from '../validation/schemas';
+import { validatePhysicsEventResult } from '../validation/schemas';
 
 /**
  * PhysicsSystem lifecycle states
@@ -383,7 +383,7 @@ export class PhysicsSystem {
     
     // Validate before emitting
     try {
-      const validationResult = validatePhysicsEvent(knockbackEvent);
+      const validationResult = validatePhysicsEventResult(knockbackEvent);
       if (!validationResult.success) {
         console.warn('[PhysicsSystem] Knockback event validation failed:', validationResult.error);
         return;
@@ -532,7 +532,7 @@ export class PhysicsSystem {
 
       // Validate the event before emitting
       try {
-        const validationResult = validatePhysicsEvent(collisionEvent);
+        const validationResult = validatePhysicsEventResult(collisionEvent);
         if (validationResult.success) {
           this.emit('collision', collisionEvent);
         } else {
@@ -588,7 +588,7 @@ export class PhysicsSystem {
         
         // Validate before emitting
         try {
-          const validationResult = validatePhysicsEvent(outOfBoundsEvent);
+          const validationResult = validatePhysicsEventResult(outOfBoundsEvent);
           if (!validationResult.success) {
             console.warn('[PhysicsSystem] Out-of-bounds event validation failed:', validationResult.error);
             continue;
