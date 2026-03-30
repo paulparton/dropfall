@@ -113,7 +113,7 @@ phases: 6
 **Plans:**
 - [x] 04-01-PLAN.md — Physics Event System — Wave 1
 - [x] 04-02-PLAN.md — Input Handler with AI Integration — Wave 1
-- [ ] 04-03-PLAN.md — Validation Schemas + Tests — Wave 2
+- [x] 04-03-PLAN.md — Validation Schemas + Tests — Wave 2
 
 **Requirements:**
 - REQ-PHYSICS-01: Physics queries replaced with typed event system
@@ -124,7 +124,7 @@ phases: 6
 - REQ-VALIDATION-01: Input and physics event validation with Zod
 - REQ-TEST-01: ≥80% test coverage on Input and Physics systems
 
-**Progress:** 2/3 plans complete
+**Progress:** 3/3 plans complete
 
 ---
 
