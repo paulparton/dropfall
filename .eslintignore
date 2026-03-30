@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.planning/
+.git/
+server/node_modules/
+*.config.js
+vitest.config.js
+vite.config.js
