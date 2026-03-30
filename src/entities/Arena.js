@@ -43,7 +43,7 @@ function getTileMaterials(theme, edgeColor, baseColor, iceColor) {
         }),
         warning: new THREE.MeshStandardMaterial({
             ...tileMaterialParams,
-            color: 0xaa3333
+            color: 0xff0000
         }),
         falling: new THREE.MeshStandardMaterial({
             ...tileMaterialParams,
@@ -96,18 +96,18 @@ export class Arena {
         const edgesGeometry = getSharedEdgesGeometry(tileRadius, height);
         
         // Subtle edge colors (less bright/distracting)
-        this.edgeColor = 0x884488;  // Muted magenta
+        this.edgeColor = 0x664466;  // Very muted magenta (Cyber default)
         this.baseColor = 0x666666;
-        this.iceColor = 0x447777;   // Muted cyan
+        this.iceColor = 0x335555;   // Very muted cyan
         if (theme === 'beach') {
-            this.edgeColor = 0x447777;  // Muted cyan
+            this.edgeColor = 0x335555;  // Very muted cyan
             this.baseColor = 0xffffff;
-            this.iceColor = 0x446688;   // Muted blue
+            this.iceColor = 0x335566;   // Very muted blue
         }
         if (theme === 'cracked_stone') {
-            this.edgeColor = 0x885533;  // Muted orange
+            this.edgeColor = 0x664422;  // Very muted orange
             this.baseColor = 0xffffff;
-            this.iceColor = 0x447777;   // Muted cyan
+            this.iceColor = 0x335555;   // Very muted cyan
         }
 
         // === PERFORMANCE: Get shared materials and store as instance member ===
@@ -247,7 +247,7 @@ export class Arena {
                 if (isFlash) {
                     tile.mesh.material = this.warningMaterial || this.materials.warning;
                     tile.edges.material.opacity = 0.7;  // Less blinding warning
-                    tile.edges.material.color.setHex(0xaa3333);
+                    tile.edges.material.color.setHex(0xff0000);
                 } else {
                     tile.mesh.material = this.materials.normal;
                     tile.edges.material.opacity = 0.7;
