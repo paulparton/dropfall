@@ -287,10 +287,6 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
   min-height: 60vh;
   max-height: 768px;
   overflow: hidden;
-  border: 2px solid #00ffff;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.6);
-  box-shadow: 0 0 15px #00ffff inset;
 }
 
 /* Settings Panes */
