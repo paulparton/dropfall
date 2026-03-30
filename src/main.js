@@ -528,6 +528,15 @@ function setupButtonHandlers() {
     const savePresetBtn = document.getElementById('save-preset-btn');
     const presetNameInput = document.getElementById('preset-name');
 
+    const getPresets = () => {
+        const stored = localStorage.getItem('dropfall_presets');
+        return stored ? JSON.parse(stored) : {};
+    };
+
+    const savePresets = (presets) => {
+        localStorage.setItem('dropfall_presets', JSON.stringify(presets));
+    };
+
     if (presetList) {
         const loadPreset = (name, data) => {
             Object.entries(data).forEach(([key, val]) => {
@@ -536,24 +545,30 @@ function setupButtonHandlers() {
         };
 
         const renderPresets = () => {
-            const stored = localStorage.getItem('dropfall_presets');
-            const presets = stored ? JSON.parse(stored) : {};
-            presetList.innerHTML = Object.entries(presets).map(([name, data]) => `
+            const presets = getPresets();
+            const names = Object.keys(presets);
+            if (names.length === 0) {
+                presetList.innerHTML = '<div style="color: #666; font-size: 0.85rem; padding: 0.5rem;">No presets saved yet</div>';
+                return;
+            }
+            presetList.innerHTML = names.map(name => `
                 <div class="preset-item">
                     <button class="preset-load-btn">${name}</button>
-                    <button class="preset-delete-btn">DEL</button>
+                    <button class="preset-delete-btn" data-name="${name}">×</button>
                 </div>
             `).join('');
             
             presetList.querySelectorAll('.preset-load-btn').forEach((btn, i) => {
-                const name = Object.keys(presets)[i];
+                const name = names[i];
                 btn.addEventListener('click', () => loadPreset(name, presets[name]));
             });
-            presetList.querySelectorAll('.preset-delete-btn').forEach((btn, i) => {
-                const name = Object.keys(presets)[i];
+            
+            presetList.querySelectorAll('.preset-delete-btn').forEach(btn => {
+                const name = btn.dataset.name;
                 btn.addEventListener('click', () => {
-                    delete presets[name];
-                    localStorage.setItem('dropfall_presets', JSON.stringify(presets));
+                    const current = getPresets();
+                    delete current[name];
+                    savePresets(current);
                     renderPresets();
                 });
             });
@@ -565,8 +580,9 @@ function setupButtonHandlers() {
             const name = presetNameInput?.value.trim();
             if (!name) return;
             const settings = useGameStore.getState().settings;
+            const presets = getPresets();
             presets[name] = { ...settings };
-            localStorage.setItem('dropfall_presets', JSON.stringify(presets));
+            savePresets(presets);
             renderPresets();
             presetNameInput.value = '';
         });
