@@ -108,7 +108,23 @@ phases: 6
 - AI controller still functions with 3 difficulty levels
 - Input + Physics tests pass with ≥80% coverage
 
-**Estimated Plans:** 4-5
+**Estimated Plans:** 3
+
+**Plans:**
+- [ ] 04-01-PLAN.md — Physics Event System — Wave 1
+- [x] 04-02-PLAN.md — Input Handler with AI Integration — Wave 1
+- [ ] 04-03-PLAN.md — Validation Schemas + Tests — Wave 2
+
+**Requirements:**
+- REQ-PHYSICS-01: Physics queries replaced with typed event system
+- REQ-PHYSICS-02: Physics events (collision, knockback, out-of-bounds) emitted correctly
+- REQ-INPUT-01: Unified input handler normalizes keyboard/gamepad/AI ✓
+- REQ-INPUT-02: AI difficulty levels (easy, normal, hard) work ✓
+- REQ-INPUT-03: Input priority: gamepad > keyboard > AI ✓
+- REQ-VALIDATION-01: Input and physics event validation with Zod
+- REQ-TEST-01: ≥80% test coverage on Input and Physics systems
+
+**Progress:** 1/3 plans complete
 
 ---
 

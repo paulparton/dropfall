@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: milestone
-status: Ready to plan
-last_updated: "2026-03-30T07:14:01.106Z"
+status: Executing Phase 04
+last_updated: "2026-03-30T10:00:45.057Z"
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 9
-  completed_plans: 9
+  total_plans: 12
+  completed_plans: 10
 ---
 
 # Project State: Dropfall v2.0 TypeScript Migration
@@ -20,7 +20,7 @@ progress:
 | 1: TypeScript Foundation | ✅ COMPLETE | 100% | Type checking (0 errors), build baseline (3.57s), IDE ready |
 | 2: Core Types & State | ✅ COMPLETE | 100% | 3 plans executed: 02-01 (Entity/Game), 02-02 (Input/Physics/Audio/Network), 02-03 (Store/Schemas/Tests) - 6 type files created, 29 tests passing |
 | 3: Audio System | ✅ COMPLETE | 100% | 3 plans: 03-01 (AudioSystem core), 03-02 (event types/schemas), 03-03 (integration tests) - 32 tests passing |
-| 4: Physics & Input | 📋 Ready after 3 | 0% | Blocked by Phase 3 |
+| 4: Physics & Input | 🔄 In Progress | 33% | 04-02 complete (InputHandler), 04-01 may overlap |
 | 5: Entity System | Not Started | 0% | Blocked by Phases 3-4 |
 | 6: Testing & Docs | Not Started | 0% | Final validation phase |
 
@@ -34,6 +34,7 @@ progress:
 | **Incremental migration** | Old JS coexists with new TS, reduces all-or-nothing risk | Process | ✓ Approved |
 | **Entity-System pattern** | Replaces ad-hoc lifecycle, improves testability | Architecture | ✓ Approved |
 | **Handler/Event decoupling** | Eliminates circular dependencies, improves maintainability | Architecture | ✓ Approved |
+| **InputHandler priority** | gamepad > keyboard > AI for seamless input switching | Technical | ✓ Approved |
 
 ## Blockers & Concerns
 
