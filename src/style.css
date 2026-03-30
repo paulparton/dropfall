@@ -239,7 +239,7 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
 #settings-panel > h2 { flex-shrink: 0; margin-bottom: 0.6rem !important; font-size: clamp(1rem, 2.5vw, 2rem); }
 #settings-panel > div { flex-shrink: 0; }
 .settings-panel-tabs { gap: 0.5rem !important; margin-bottom: 0.75rem !important; }
-#settings-content { display: flex !important; gap: clamp(1rem, 2vw, 2rem) !important; overflow-y: auto; max-height: calc(100vh - 160px); }
+#settings-content { display: flex !important; gap: clamp(1rem, 2vw, 2rem) !important; width: 90%; max-width: 900px; }
 .settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.6rem; background: rgba(0, 0, 0, 0.8); padding: 1rem; border: 2px solid #00ffff; box-shadow: 0 0 15px #00ffff inset, 0 0 15px #00ffff; border-radius: 10px; width: 100%; box-sizing: border-box; pointer-events: auto; }
 .setting-item { display: flex; flex-direction: column; gap: 0.15rem; }
 .setting-item label { font-size: 0.85rem; color: #00ffff; text-transform: uppercase; text-shadow: 0 0 5px #00ffff; }
@@ -248,6 +248,13 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
 .control-btn { padding: 0.4rem 0.75rem; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
 
 /* Settings Navigation */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 140px;
+  flex-shrink: 0;
+}
 .settings-nav-btn {
   background: rgba(0, 0, 0, 0.8);
   border: 1px solid #00ffff;
@@ -270,6 +277,41 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
   border-color: #ff00ff;
   color: #ff00ff;
   box-shadow: 0 0 10px #ff00ff, inset 0 0 5px rgba(255, 0, 255, 0.3);
+}
+
+/* Settings Right Pane */
+.settings-right-pane {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 60vh;
+  max-height: 768px;
+  overflow: hidden;
+  border: 2px solid #00ffff;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  box-shadow: 0 0 15px #00ffff inset;
+}
+
+/* Settings Panes */
+.settings-pane {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  padding: 1rem;
+  overflow-y: auto;
+  min-height: 100%;
+}
+.settings-pane.active { display: flex; }
+
+/* Settings Bottom Buttons */
+.settings-bottom-buttons {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  border-top: 1px solid rgba(0, 255, 255, 0.3);
+  flex-shrink: 0;
+  background: rgba(0, 0, 0, 0.3);
 }
 
 /* Presets */
