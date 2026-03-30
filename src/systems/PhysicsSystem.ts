@@ -211,10 +211,8 @@ export class PhysicsSystem {
         this.world.step(this.eventQueue || undefined);
         this.accumulator -= this.timeStep;
         steppedThisFrame = true;
-      }
-
-      // Emit collision events if world was stepped
-      if (steppedThisFrame) {
+        
+        // Emit collision events after each step (not just once at the end)
         this.emitCollisionEvents();
         this.emitOutOfBoundsEvents();
       }
