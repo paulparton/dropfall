@@ -129,8 +129,11 @@ window.POWER_UP_EFFECTS = POWER_UP_EFFECTS;
 // GAME FUNCTIONS
 // ============================================
 function startGame(skipNameEntry = false) {
+    console.log('[Game] startGame called, initializing audio...');
     initAudio();
+    console.log('[Game] initAudio returned, playing music...');
     playMusic();
+    console.log('[Game] playMusic called, setting speed...');
     setMusicSpeed(0.5);
     useGameStore.getState().resetScores();
 

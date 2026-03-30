@@ -24,21 +24,28 @@ export function setSfxVolume(volume) {
 }
 
 export function initAudio() {
+    console.log('[Audio] initAudio called');
     if (!audioCtx) {
+        console.log('[Audio] Creating new AudioContext');
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();    
+        console.log('[Audio] AudioContext state:', audioCtx.state);
         musicGain = audioCtx.createGain();
         sfxGain = audioCtx.createGain();
         
         const settings = useGameStore.getState().settings;
         musicGain.gain.value = settings.musicVolume !== undefined ? settings.musicVolume : 0.6;
         sfxGain.gain.value = settings.sfxVolume !== undefined ? settings.sfxVolume : 0.8;
+        console.log('[Audio] Music gain:', musicGain.gain.value, 'SFX gain:', sfxGain.gain.value);
         
         musicGain.connect(audioCtx.destination);
         sfxGain.connect(audioCtx.destination);
+        console.log('[Audio] Gains connected to destination');
     }
     if (audioCtx.state === 'suspended') {
+        console.log('[Audio] Resuming suspended context');
         audioCtx.resume();
     }
+    console.log('[Audio] Final state:', audioCtx.state);
 }
 
 export function playMusic() {
