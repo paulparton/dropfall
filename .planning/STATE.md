@@ -1,68 +1,63 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.0
-milestone_name: TypeScript Migration
-status: Executing Phase 5
-last_updated: "2026-03-31T13:30:00.000Z"
+milestone: v2.1
+milestone_name: Online Multiplayer Fix
+status: Planning
+last_updated: "2026-03-31T13:00:00.000Z"
 progress:
-  total_phases: 6
-  completed_phases: 5
-  current_phase: 6
-  total_plans: 19
-  completed_plans: 19
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
 ---
 
-# Project State: Dropfall v2.0 TypeScript Migration
+# Project State: Dropfall v2.1 Online Multiplayer Fix
+
+## Milestone Goal
+
+Fix broken online multiplayer so both players can control their own characters.
+
+## Current Status
+
+- **Milestone:** v2.1 Online Multiplayer Fix
+- **Status:** Planning phase
+- **v2.0:** Complete (TypeScript migration, Entity System)
+
+## Problem Statement
+
+- Server starts, clients connect successfully
+- Both players see the game (red/blue balls with names)
+- **BUG:** Player 2's inputs control Player 1's ball instead of their own
 
 ## Phase Status
 
 | Phase | Status | Progress | Notes |
 |-------|--------|----------|-------|
-| 1: TypeScript Foundation | ✅ COMPLETE | 100% | Type checking (0 errors), build baseline |
-| 2: Core Types & State | ✅ COMPLETE | 100% | 3 plans executed |
-| 3: Audio System | ✅ COMPLETE | 100% | 3 plans executed |
-| 4: Physics & Input | ✅ COMPLETE | 100% | 4 plans executed |
-| 5: Entity System | ✅ COMPLETE | 100% | 6 plans executed |
-| 6: Testing & Docs | 📋 IN PROGRESS | Planning | Final validation phase |
+| 1: Input Routing Fix | Not Started | 0% | Core bug fix |
+| 2: Player Slot Assignment | Not Started | 0% | Server assigns slots |
+| 3: Integration Testing | Not Started | 0% | End-to-end test |
 
-## Phase 5 Plans Executed
+## Key Context
 
-- ✅ 05-01-PLAN.md — Entity Base Class
-- ✅ 05-02-PLAN.md — Player Migration
-- ✅ 05-03-PLAN.md — Arena Migration
-- ✅ 05-04-PLAN.md — Effect Systems
-- ⚠️ 05-05-PLAN.md — Game Loop Integration (deferred - main.js continues to work)
-- ✅ 05-06-PLAN.md — Integration Tests
-
-## Key Decisions Made
-
-| Decision | Rationale | Owner | Status |
-|----------|-----------|-------|--------|
-| **TypeScript strict mode** | Eliminate type ambiguity, catch bugs early | Team | ✓ Approved |
-| **Keep Three.js + Rapier3D** | Proven stack, additional BC would introduce risk | Technical | ✓ Approved |
-| **Add Zod for validation** | Runtime schema validation prevents data shape bugs | Technical | ✓ Approved |
-| **Incremental migration** | Old JS coexists with new TS, reduces all-or-nothing risk | Process | ✓ Approved |
-| **Entity-System pattern** | Replaces ad-hoc lifecycle, improves testability | Architecture | ✓ Approved |
-| **Handler/Event decoupling** | Eliminates circular dependencies, improves maintainability | Architecture | ✓ Approved |
-| **InputHandler priority** | gamepad > keyboard > AI for seamless input switching | Technical | ✓ Approved |
-| **Use Rapier EventQueue for collisions** | drainCollisionEvents() provides actual contact data | Technical | ✓ Approved |
-| **Safe validation in handlers** | validateInputPayloadResult() returns result, no exceptions | Technical | ✓ Approved |
+- From each client's POV, they use "Player 1 controls" - this is correct
+- Bug: inputs applied to global Player 1, not local client's assigned slot
+- Need to track which slot client is, route inputs to that slot
 
 ## Blockers & Concerns
 
-| Issue | Impact | Mitigation | Status |
-|-------|--------|-----------|--------|
-| **TypeScript team familiarity** | Slower initial progress if team learning TS | Pair programming, documentation | ⚠ manageable |
-| **Breaking changes to gameplay** | Risk during refactor | Strict UAT testing after each plan | ⚠ manageable |
+| Issue | Impact | Status |
+|-------|--------|--------|
+| None identified yet | - | Investigation needed |
 
 ## Next Actions
 
-1. ✓ Phase 1-4 COMPLETE
-2. ✓ Phase 5 EXECUTION COMPLETE (5/6 plans)
-3. **→ Phase 6: Testing & Docs** — Final validation phase
+1. ✓ Milestone planning started
+2. **→ Define requirements** — Scope v2.1 features
+3. **→ Create roadmap** — Plan phases
+4. **→ Execute** — Fix the bug
 
 ## Last Updated
 
-2026-03-31 — Phase 5 complete
+2026-03-31 — v2.1 milestone started
 
-**Next:** Execute Phase 6 plans
+**Next:** Define requirements, create roadmap

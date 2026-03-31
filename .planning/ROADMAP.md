@@ -1,217 +1,107 @@
 ---
-version: 2.0
-milestone: v2.0 TypeScript Migration
-created: 2026-03-30
-phases: 6
+version: 2.1
+milestone: v2.1 Online Multiplayer Fix
+created: 2026-03-31
+phases: 2
 ---
 
-# Dropfall v2.0 Roadmap
+# Dropfall v2.1 Roadmap: Online Multiplayer Fix
 
-**Milestone Goal:** Establish clean, type-safe architecture foundation for Dropfall to support future multiplayer, multi-arena, and game mode expansion.
+**Milestone Goal:** Fix broken online multiplayer so both players can control their own characters.
 
 ---
 
-## Phase 1: TypeScript Foundation & Build Pipeline
+## Phase 1: Input Routing Fix
 
-**Goal:** Set up TypeScript strict mode, configure build tooling for TS, migrate `package.json` and build config.
+**Goal:** Fix the core bug where Player 2's inputs control Player 1's ball instead of their own.
+
+**Status:** 📋 Planning
 
 **Features:**
-- ✓ TypeScript 5.x strict mode configuration
-- ✓ Build pipeline (tsc + Vite) with incremental compilation
-- ✓ Source maps for debugging
-- ✓ Type declaration files for Three.js, Rapier3D, WebSocket
-- ✓ ESLint + TypeScript plugin for static analysis
+- [ ] **ONLINE-01**: Player 2 can control their blue ball when joining as client
+- [ ] **ONLINE-02**: Player input mapped to assigned player slot, not hardcoded Player 1
+- [ ] **ONLINE-03**: Server assigns player slot on client connect
+- [ ] **ONLINE-04**: Client knows "I am player N" (stored in game state)
+- [ ] **ONLINE-05**: Input handler reads assigned slot, routes to correct player
+- [ ] **ONLINE-06**: Both players see red ball (Player 1) and blue ball (Player 2)
+- [ ] **ONLINE-11**: Architecture supports 3+ player slots (design)
+- [ ] **ONLINE-12**: Player colors assigned by slot number
 
-**Acceptance:**
-- `npm run build` builds successfully with 0 TS errors (strict mode)
-- Dev server works with hot reload (no JS needed)
-- Type checking passes on current JS (via allowJs temporarily)
-- No performance regression in bundle size
+**Root Cause Analysis:**
+The code in `main.js` lines 248-261 shows proper slot-based routing:
+- Slot 1 (host): `getPlayer1InputUnified` for player1, `opponentInput` for player2
+- Slot 2 (client): `opponentInput` for player1, `getPlayer2InputUnified` for player2
 
-**Estimated Plans:** 3-4
+But `getPlayer2InputUnified` calls `getPlayer2Input()` which reads `settings.controls.p2` (arrow keys), not Player 1 controls (WASD).
 
----
+The user's requirement: "everyone uses Player 1 controls" from their local POV means both clients should use WASD, not arrow keys for Player 2.
 
-## Phase 2: Core Type System & State Management
+**Fix Required:**
+- Create a unified input getter that uses p1 controls regardless of which slot the client is
+- OR modify online mode to always use p1 controls
 
-**Goal:** Define comprehensive TypeScript types for all game domains. Migrate Zustand store to typed interface. Set up Zod schemas for validation.
-
-**Status:** 📋 Planning complete (3 plans, 2 waves)
-
-**Features:**
-- ✓ `types/Game.ts` — Game state, entity types, lifecycle
-- ✓ `types/Input.ts` — Input payloads, handlers, sources
-- ✓ `types/Physics.ts` — Bodies, collisions, forces, events
-- ✓ `types/Audio.ts` — Sound effects, music, lifecycle
-- ✓ `types/Network.ts` — Message protocol, versioning
-- ✓ `store.ts` refactor — Typed Zustand store with validation schemas
-- ✓ `types/Entity.ts` — Base entity interface, lifecycle hooks
-
-**Plans:**
-- [ ] 02-01-PLAN.md — Foundational types (Entity.ts, Game.ts) — Wave 1
-- [ ] 02-02-PLAN.md — Domain types (Input, Physics, Audio, Network) — Wave 1
-- [ ] 02-03-PLAN.md — Store refactor + validation schemas + tests — Wave 2
-
-**Acceptance:**
-- All types exported and importable
-- Store mutations typed and validated with Zod
-- No `any` types in type files
-- Tests pass for store + validation (≥12 test cases)
-
-**Progress:** Ready for execution
+**Plans:** 2-3
 
 ---
 
-## Phase 3: Audio System Refactor
+## Phase 2: Integration Testing
 
-**Goal:** Extract audio logic into `AudioSystem` class with explicit lifecycle. Add initialization on first input. Remove suspected race conditions.
+**Goal:** Verify both players can control their own balls end-to-end.
 
-**Status:** 📋 Planning complete (3 plans, 2 waves)
-
-**Features:**
-- ✓ `systems/AudioSystem.ts` — Initialize, play, stop, dispose
-- ✓ Lifecycle hooks — On input init, on game start, on round end
-- ✓ Audio validation schema — Prevent invalid playback calls
-- ✓ Memory cleanup — Proper unload of buffers, listeners
-- ✓ State machine — Uninitialized → Ready → Playing → Disposed
-- ✓ Tests for lifecycle, race conditions, cleanup
-
-**Plans:**
-3/3 plans executed
-- [x] 03-02-PLAN.md — Audio event types and validation schemas — Wave 1
-- [x] 03-03-PLAN.md — Integration tests (race conditions, memory safety) — Wave 2
-
-**Acceptance:**
-- Audio plays reliably after first input
-- No race conditions in initialization (verified by integration tests)
-- Music persists correctly through multiple rounds
-- No memory leaks (verified with buffer/listener cleanup tests)
-
-**Progress:** Ready for execution (Wave 1)
-
----
-
-## Phase 4: Physics & Input Systems
-
-**Goal:** Extract physics queries into typed event system. Create input handler pattern decopling keyboard/gamepad/AI from Player.
+**Status:** 📋 Planning
 
 **Features:**
-- ✓ `systems/PhysicsSystem.ts` — Collision detection, events
-- ✓ `handlers/InputHandler.ts` — Unified input source (keyboard, gamepad, AI)
-- ✓ Physics event types — Collision, knockback, out-of-bounds
-- ✓ Input validation schemas — Ensure payload shape
-- ✓ Tests for input combinations, physics events
+- [ ] **ONLINE-08**: Server host can control red ball with Player 1 keys
+- [ ] **ONLINE-09**: Client can control blue ball with Player 1 keys
+- [ ] **ONLINE-10**: No regression in 1P/2P local modes
+- [ ] End-to-end test with real network connection
 
-**Acceptance:**
-- Physics queries replaced with events
-- AI/keyboard/gamepad input normalized to single handler
-- AI controller still functions with 3 difficulty levels
-- Input + Physics tests pass with ≥80% coverage
-
-**Estimated Plans:** 3
-
-**Plans:**
-- [x] 04-01-PLAN.md — Physics Event System — Wave 1
-- [x] 04-02-PLAN.md — Input Handler with AI Integration — Wave 1
-- [x] 04-03-PLAN.md — Validation Schemas + Tests — Wave 2
-- [x] 04-04-PLAN.md — Gap Closure (wiring + coverage) — Wave 1
-
-**Requirements:**
-- REQ-PHYSICS-01: Physics queries replaced with typed event system ✓
-- REQ-PHYSICS-02: Physics events (collision, knockback, out-of-bounds) emitted correctly ✓
-- REQ-INPUT-01: Unified input handler normalizes keyboard/gamepad/AI ✓
-- REQ-INPUT-02: AI difficulty levels (easy, normal, hard) work ✓
-- REQ-INPUT-03: Input priority: gamepad > keyboard > AI ✓
-- REQ-VALIDATION-01: Input and physics event validation with Zod ✓
-- REQ-TEST-01: ≥80% test coverage on Input and Physics systems (Physics: 84.74%, Input: 66.87%)
-
-**Progress:** ✅ COMPLETE - All 4 plans executed
-
----
-
-## Phase 5: Entity System & Game Loop
-
-**Goal:** Create Entity base class and lifecycle hooks. Migrate Player/Arena/Effects to typed entities. Integrate all systems into main game loop.
-
-**Features:**
-- ✓ `entities/Entity.base.ts` — Base class with lifecycle
-- ✓ `entities/Player.ts` — Typed player class, hooks
-- ✓ `entities/Arena.ts` — Typed arena entity
-- ✓ `entities/ParticleSystem.ts`, `LightningSystem.ts`, `ShockwaveSystem.ts` — Typed effect entities
-- ✓ `main.ts` refactor — Integrate entity lifecycle, systems, handlers
-- ✓ Game loop integration tests — Full 1P/2P gameplay flows
-
-**Acceptance:**
-- All entities inherit from base class
-- Entity lifecycle (init → ready → destroy) works without data leaks
-- 1P and 2P modes play end-to-end
-- Game loop tests cover state transitions
-
-**Estimated Plans:** 5-6
-
----
-
-## Phase 6: Testing & Documentation
-
-**Goal:** Achieve ≥80% test coverage on core systems. Document architecture for new contributors. Cleanup old JS files.
-
-**Features:**
-- ✓ Unit tests for all systems (Input, Physics, Audio, State)
-- ✓ Integration tests for 1P/2P/AI gameplay flows
-- ✓ Memory leak tests (entity cleanup, event listener removal)
-- ✓ Architecture documentation — System overview, patterns, lifecycle
-- ✓ Testing guide — How to test new systems
-- ✓ Remove old `.js` files, finalize `.ts` migration
-
-**Acceptance:**
-- Coverage report ≥80% on core systems
-- All critical paths (1P/2P/AI) tested end-to-end
-- No breaking changes to existing gameplay
-- Documentation complete and runnable examples provided
-
-**Estimated Plans:** 4-5
+**Plans:** 1-2
 
 ---
 
 ## Phase Dependencies
 
-| Phase | Dependencies | Critical Path |
-|-------|--------------|----------------|
-| 1 | None | Setup first |
-| 2 | Phase 1 | Foundation for all types |
-| 3 | Phase 1, 2 | Can run parallel with 4 |
-| 4 | Phase 1, 2, 3 | Depends on typed store |
-| 5 | Phase 1, 2, 3, 4 | Requires all subsystems |
-| 6 | Phase 5 | Last phase, validation |
+| Phase | Dependencies | Notes |
+|-------|--------------|-------|
+| 1 | None | Core bug fix |
+| 2 | Phase 1 | Testing after fix |
 
-**Parallelization:** Phases 3-4 can run in parallel after Phase 2 complete.
+---
+
+## Key Technical Notes
+
+**Current Behavior (BUG):**
+1. Client joins, gets `playerSlot: 2`
+2. `resetOnlineEntities()` assigns `getPlayer2InputUnified` to player2
+3. `getPlayer2InputUnified` calls `getPlayer2Input()` which uses `controls.p2` (arrow keys)
+4. Client presses WASD (p1 controls) → no effect
+5. Client presses arrow keys → but player2 doesn't move because...
+
+Wait, let me check the actual bug more carefully. The user said "Player 2 needs to be controlling their character with the player 1 controls". So perhaps the current code DOES use p1 controls but there's a different routing issue?
+
+Let me re-read: "both clients see the game but it only works for player 1". So:
+- Player 1 (host): works fine
+- Player 2 (client): their inputs don't work at all
+
+The code at line 253-257 shows:
+- Slot 2: player2 gets `getPlayer2InputUnified`
+
+And `getPlayer2InputUnified` returns `getPlayer2Input()` which uses p2 controls (arrow keys).
+
+But the user wants BOTH to use p1 controls (WASD). So the fix is to use p1 controls for the local player regardless of slot.
 
 ---
 
 ## Success Metrics
 
-| Metric | Target | Measurement |
-|--------|--------|-------------|
-| TypeScript Coverage | 100% (no `.js` in src/) | File count audit |
-| Type Safety | 0 `any` types | TSC strict mode |
-| Test Coverage | ≥80% on core systems | Istanbul report |
-| Gameplay Regression | 0 issues in 1P/2P | Manual UAT |
-| Load Time | No regression vs baseline | Browser DevTools |
-| Frame Rate | No regression vs baseline | Performance monitoring |
+| Metric | Target |
+|--------|--------|
+| Player 2 controls work | Both players can control their balls |
+| Input uses p1 controls | WASD works for local player in online mode |
+| No regression | 1P/2P local modes unchanged |
+| Architecture ready | 3+ players supported in design |
 
 ---
 
-## Post-Refactor Roadmap (Future)
-
-When v2.0 complete, next milestones:
-
-1. **Multiplayer Synchronization** — Network protocol, lag compensation, 2P online
-2. **Arena Variants** — Multiple stage types, dynamic obstacles
-3. **Game Mode: Arena** — 3+ player free-for-all, ranking system
-4. **Performance Optimization** — Profiling, asset streaming, mobile support
-5. **Bug Fix Sprint** — Audio issues, jank, menu edge cases (now easier to debug with clean architecture)
-
----
-
-*Created: 2026-03-30 at roadmap initialization*
-*Last updated: 2026-03-30*
+*Created: 2026-03-31 at v2.1 milestone start*
