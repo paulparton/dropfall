@@ -274,7 +274,7 @@ export function playCollisionSound(intensity) {
             // Bop for low speed - subtle quick tap
             osc.frequency.setValueAtTime(250, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.6 * (intensity / 5), audioCtx.currentTime);
+            gain.gain.setValueAtTime(Math.max(0.6 * (intensity / 5), 0.5), audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
         }
         
@@ -302,7 +302,7 @@ export function playCollisionSound(intensity) {
         filter.Q.value = isHighSpeed ? 1 : 2;
         
         const gain = audioCtx.createGain();
-        gain.gain.setValueAtTime(isHighSpeed ? 2.0 * (intensity / 5) : 0.8, audioCtx.currentTime);
+        gain.gain.setValueAtTime(isHighSpeed ? 2.0 * (intensity / 5) : Math.max(0.8, 0.5), audioCtx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + (isHighSpeed ? 0.25 : 0.12));
         
         noise.connect(filter);
@@ -336,7 +336,7 @@ export function playCollisionSound(intensity) {
             osc2.frequency.value = 120;
             filter.frequency.value = 400;
             filter.Q.value = 2;
-            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         }
         

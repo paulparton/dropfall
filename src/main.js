@@ -960,6 +960,8 @@ function animate() {
             const distance = p1Pos.distanceTo(p2Pos);
             const collisionDist = state.settings.sphereSize * 2 + 0.1;
 
+            collisionCooldown -= delta;
+
             if (distance <= collisionDist && collisionCooldown <= 0) {
                 collisionCooldown = 0.5;
                 const v1 = player1.rigidBody.linvel();
