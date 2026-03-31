@@ -39,6 +39,9 @@ export interface GameSettings {
   playerGlowIntensity: number;
   playerGlowRange: number;
   autoRestart: boolean;
+  p1Hat: string;
+  p2Hat: string;
+  powerUpWeights: Record<string, number>;
   controls: {
     p1: { up: string; down: string; left: string; right: string; boost: string };
     p2: { up: string; down: string; left: string; right: string; boost: string };
@@ -110,6 +113,7 @@ export interface StoreActions {
   updateSetting(key: keyof GameSettings, value: any): void;
   resetSettings(): void;
   setPlayerNames(p1Name: string, p2Name: string): void;
+  setPlayerHats(p1Hat: string, p2Hat: string): void;
   setGameMode(mode: GameMode | string): void;
   setDifficulty(diff: Difficulty | string): void;
   enterNameEntry(): void;
@@ -168,6 +172,18 @@ const defaultSettings: GameSettings = {
   playerGlowIntensity: 3.0,
   playerGlowRange: 30,
   autoRestart: false,
+  p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
+  p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
+  powerUpWeights: {
+    ACCELERATION_BOOST: 50,
+    SIZE_REDUCTION: 50,
+    WEIGHT_INCREASE: 50,
+    SPEED_BURST: 50,
+    LIGHT_TOUCH: 50,
+    SIZE_INCREASE: 50,
+    GRIP_BOOST: 50,
+    INVULNERABILITY: 50
+  },
   controls: {
     p1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', boost: 'ShiftLeft' },
     p2: {
@@ -247,6 +263,14 @@ export const useGameStore = create<GameStore>()(
         localStorage.setItem('dropfall_p1name', p1Name);
         localStorage.setItem('dropfall_p2name', p2Name);
         return set({ p1Name, p2Name });
+      },
+
+      setPlayerHats: (p1Hat, p2Hat) => {
+        localStorage.setItem('dropfall_p1hat', p1Hat);
+        localStorage.setItem('dropfall_p2hat', p2Hat);
+        return set((state: GameStore) => ({ 
+          settings: { ...state.settings, p1Hat, p2Hat }
+        }));
       },
 
       // Game mode actions

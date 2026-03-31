@@ -1,7 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 
 const defaultSettings = {
-    theme: 'default',
+    theme: 'tron',
     sphereSize: 2.0,
     sphereWeight: 200,
     sphereAccel: 2000,
@@ -12,8 +12,6 @@ const defaultSettings = {
     particleAmount: 1.0,
     destructionRate: 3.0,
     iceRate: 2.0,
-    portalRate: 8.0,
-    portalCooldown: 2.0,
     bonusRate: 6.0,
     bonusDuration: 4.0,
     bloomLevel: 0,
@@ -23,15 +21,29 @@ const defaultSettings = {
     playerAuraOpacity: 0.4,
     playerGlowIntensity: 3.0,
     playerGlowRange: 30,
-    autoRestart: false,
+    autoRestart: true,
     controls: {
         p1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', boost: 'ShiftLeft' },
         p2: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', boost: 'ShiftRight' }
     },
-    activePowerUps: {} // Track active power-ups: { playerId: [{ type, startTime, duration }] }
+    activePowerUps: {}, // Track active power-ups: { playerId: [{ type, startTime, duration }] }
+    powerUpWeights: {
+        ACCELERATION_BOOST: 50,
+        SIZE_REDUCTION: 50,
+        WEIGHT_INCREASE: 50,
+        SPEED_BURST: 50,
+        LIGHT_TOUCH: 50,
+        SIZE_INCREASE: 50,
+        GRIP_BOOST: 50,
+        INVULNERABILITY: 50
+    }
 };
 
 const savedSettings = JSON.parse(localStorage.getItem('dropfall_settings')) || {};
+
+// Backward compatibility: map old theme names
+if (savedSettings.theme === 'default') savedSettings.theme = 'tron';
+if (savedSettings.theme === 'cracked_stone') savedSettings.theme = 'temple';
 
 // Ensure all new settings have values (fill in defaults for any missing)
 const mergedSettings = { ...defaultSettings, ...savedSettings };
@@ -49,6 +61,8 @@ export const useGameStore = createStore((set) => ({
     activeTileEffects: [],
     p1Name: localStorage.getItem('dropfall_p1name') || 'Player 1',
     p2Name: localStorage.getItem('dropfall_p2name') || 'Player 2',
+    p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
+    p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
 
     // Online Multiplayer State
     online: {
@@ -84,6 +98,12 @@ export const useGameStore = createStore((set) => ({
         localStorage.setItem('dropfall_p1name', p1Name);
         localStorage.setItem('dropfall_p2name', p2Name);
         return { p1Name, p2Name };
+    }),
+
+    setPlayerHats: (p1Hat, p2Hat) => set(() => {
+        localStorage.setItem('dropfall_p1hat', p1Hat);
+        localStorage.setItem('dropfall_p2hat', p2Hat);
+        return { p1Hat, p2Hat };
     }),
 
     setGameMode: (mode) => set((state) => {
