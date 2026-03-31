@@ -400,6 +400,7 @@ export class Player extends EntityBase implements PlayerEntity {
                     // Find a different portal tile to teleport to
                     const otherPortals = portalTiles.filter(p => p !== tile);
                     const targetPortal = otherPortals[Math.floor(Math.random() * otherPortals.length)];
+                    if (!targetPortal) return;
 
                     // Teleport to target portal
                     const targetPos = targetPortal.mesh.position;
@@ -619,6 +620,31 @@ export class Player extends EntityBase implements PlayerEntity {
     const sprite = new THREE.Sprite(mat);
     sprite.scale.set(10, 2.5, 1);
     return sprite;
+  }
+  
+  updateNameLabel(newName: string) {
+    if (!this.nameLabel) return;
+    this.playerName = newName;
+    
+    // Recreate the texture with the new name
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const hexColor = '#' + this.color.toString(16).padStart(6, '0');
+    ctx.font = 'bold 38px "Courier New", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+    ctx.lineWidth = 7;
+    ctx.strokeText(newName, 128, 32);
+    ctx.fillStyle = hexColor;
+    ctx.fillText(newName, 128, 32);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    this.nameLabel.material.map = texture;
+    this.nameLabel.material.needsUpdate = true;
   }
 }
 

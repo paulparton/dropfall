@@ -15,19 +15,24 @@ phases: 2
 
 **Goal:** Fix the core bug where Player 2's inputs control Player 1's ball instead of their own.
 
-**Status:** 📋 Planning
+**Status:** ✅ Complete
 
 **Features:**
-- [ ] **ONLINE-01**: Player 2 can control their blue ball when joining as client
-- [ ] **ONLINE-02**: Player input mapped to assigned player slot, not hardcoded Player 1
+- [x] **ONLINE-01**: Player 2 can control their blue ball when joining as client
+- [x] **ONLINE-02**: Player input mapped to assigned player slot, not hardcoded Player 1
+- [x] **ONLINE-04**: Client knows "I am player N" (stored in game state)
+- [x] **ONLINE-05**: Input handler reads assigned slot, routes to correct player
+- [x] **ONLINE-06**: Both players see red ball (Player 1) and blue ball (Player 2)
 - [ ] **ONLINE-03**: Server assigns player slot on client connect
-- [ ] **ONLINE-04**: Client knows "I am player N" (stored in game state)
-- [ ] **ONLINE-05**: Input handler reads assigned slot, routes to correct player
-- [ ] **ONLINE-06**: Both players see red ball (Player 1) and blue ball (Player 2)
 - [ ] **ONLINE-11**: Architecture supports 3+ player slots (design)
 - [ ] **ONLINE-12**: Player colors assigned by slot number
 
-**Root Cause Analysis:**
+**Fix Applied:**
+- Changed `getPlayer2InputUnified` to `getPlayer1InputUnified` in resetOnlineEntities() for slot 2
+- Changed online sync to always use getPlayer1InputUnified regardless of slot
+- Result: Both host and client use WASD controls in online mode
+
+**Root Cause Analysis:** (superseded by fix)
 The code in `main.js` lines 248-261 shows proper slot-based routing:
 - Slot 1 (host): `getPlayer1InputUnified` for player1, `opponentInput` for player2
 - Slot 2 (client): `opponentInput` for player1, `getPlayer2InputUnified` for player2
@@ -36,9 +41,9 @@ But `getPlayer2InputUnified` calls `getPlayer2Input()` which reads `settings.con
 
 The user's requirement: "everyone uses Player 1 controls" from their local POV means both clients should use WASD, not arrow keys for Player 2.
 
-**Fix Required:**
+**Fix Required:** (completed)
 - Create a unified input getter that uses p1 controls regardless of which slot the client is
-- OR modify online mode to always use p1 controls
+- OR modify online mode to always use p1 controls ✓ (done via direct fix)
 
 **Plans:** 2-3
 
