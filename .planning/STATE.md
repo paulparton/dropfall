@@ -1,13 +1,14 @@
 ---
 gsd_state_version: 1.0
 milestone: v2.0
-milestone_name: milestone
-status: Ready to plan
-last_updated: "2026-03-30T12:44:25.546Z"
+milestone_name: TypeScript Migration
+status: Executing Phase 5
+last_updated: "2026-03-31T12:00:00.000Z"
 progress:
   total_phases: 6
   completed_phases: 4
-  total_plans: 13
+  current_phase: 5
+  total_plans: 19
   completed_plans: 13
 ---
 
@@ -17,12 +18,21 @@ progress:
 
 | Phase | Status | Progress | Notes |
 |-------|--------|----------|-------|
-| 1: TypeScript Foundation | ✅ COMPLETE | 100% | Type checking (0 errors), build baseline (3.57s), IDE ready |
-| 2: Core Types & State | ✅ COMPLETE | 100% | 3 plans executed: 02-01 (Entity/Game), 02-02 (Input/Physics/Audio/Network), 02-03 (Store/Schemas/Tests) - 6 type files created, 29 tests passing |
-| 3: Audio System | ✅ COMPLETE | 100% | 3 plans: 03-01 (AudioSystem core), 03-02 (event types/schemas), 03-03 (integration tests) - 32 tests passing |
-| 4: Physics & Input | ✅ COMPLETE | 100% | 04-01 (PhysicsSystem), 04-02 (InputHandler), 04-03 (tests), 04-04 (gap closure) - 6 plans complete |
-| 5: Entity System | Not Started | 0% | Blocked by Phases 3-4 |
+| 1: TypeScript Foundation | ✅ COMPLETE | 100% | Type checking (0 errors), build baseline |
+| 2: Core Types & State | ✅ COMPLETE | 100% | 3 plans executed |
+| 3: Audio System | ✅ COMPLETE | 100% | 3 plans executed |
+| 4: Physics & Input | ✅ COMPLETE | 100% | 4 plans executed |
+| 5: Entity System | 📋 IN PROGRESS | Planning | 6 plans created |
 | 6: Testing & Docs | Not Started | 0% | Final validation phase |
+
+## Phase 5 Plans Created
+
+- 05-01-PLAN.md — Entity Base Class
+- 05-02-PLAN.md — Player Migration
+- 05-03-PLAN.md — Arena Migration
+- 05-04-PLAN.md — Effect Systems
+- 05-05-PLAN.md — Game Loop Integration
+- 05-06-PLAN.md — Integration Tests
 
 ## Key Decisions Made
 
@@ -42,41 +52,17 @@ progress:
 
 | Issue | Impact | Mitigation | Status |
 |-------|--------|-----------|--------|
-| **TypeScript team familiarity** | Slower initial progress if team learning TS | Pair programming, documentation, examples | ⚠ manageable |
-| **Breaking changes to gameplay** | Risk during refactor (menus disappear, etc.) | Strict UAT testing after each phase | ⚠ manageable |
-| **Build complexity** | TS compilation adds build step | Vite's incremental compilation mitigates | ✓ low risk |
-| **Audio race condition root cause unclear** | May not be obvious until refactored | Structured audio lifecycle in Phase 3 should surface issue | ⚠ monitoring |
+| **TypeScript team familiarity** | Slower initial progress if team learning TS | Pair programming, documentation | ⚠ manageable |
+| **Breaking changes to gameplay** | Risk during refactor | Strict UAT testing after each plan | ⚠ manageable |
 
 ## Next Actions
 
-1. ✓ Initialize GSD project structure (PROJECT.md, REQUIREMENTS.md, ROADMAP.md, STATE.md)
-2. ✓ Create Phase 1 PLAN.md — TypeScript setup, tsconfig, build pipeline
-3. ✓ Execute Phase 1 — Get TS strict mode compiling (COMPLETE)
-4. ✓ Plan Phase 2 — Define core type system, Zustand store types (COMPLETE)
-5. **→ Execute Phase 2** — Create types/Entity.ts, types/Game.ts, etc., refactor store with Zod
-6. **→ Plan Phase 3** — Audio system extraction and lifecycle management
-7. **→ Phases 3-6** — Follow roadmap sequentially
-
-## Assumptions
-
-- Current 1P/2P gameplay must remain stable during refactor (no breaking changes)
-- AI controller in AIController.js is mature enough to migrate as-is
-- Vite build pipeline can handle incremental TS compilation without regression
-- Web Audio API will be accessible in refactored AudioSystem
-- Zustand store structure is sound (only needs type wrappers)
-- Team is capable of writing TypeScript at strict mode level
-
-## Success Indicators
-
-- ✓ Phase 1: TypeScript builds with strict mode, 0 errors
-- ✓ Phase 2: All core types defined, store validation works
-- ✓ Phase 3: Audio plays reliably, no race conditions
-- ✓ Phase 4: Input handler unified, physics event system works
-- ✓ Phase 5: Entity lifecycle clear, game loop cleaner
-- ✓ Phase 6: ≥80% test coverage, docs complete, old JS removed
+1. ✓ Phase 1-4 COMPLETE
+2. ✓ Phase 5 PLANS CREATED
+3. **→ Execute Phase 5** — Start with 05-01 (Entity Base Class)
 
 ## Last Updated
 
-2026-03-30 at project initialization
+2026-03-31 — Phase 5 plans created
 
-**Next update:** After Phase 1 PLAN.md created or Phase 1 execution begins
+**Next:** Execute 05-01-PLAN.md
