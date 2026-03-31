@@ -11,6 +11,17 @@ export type EntityType = 'player' | 'arena' | 'effect' | 'particle' | 'lightning
 /** Entity lifecycle state machine - tracks object from creation to destruction */
 export type EntityState = 'created' | 'ready' | 'active' | 'destroyed';
 
+/** Entity event types for lifecycle events */
+export type EntityEventType = 'collision' | 'death' | 'spawn' | 'destroy' | 'stateChange';
+
+/** Entity event interface for lifecycle events */
+export interface EntityEvent {
+  type: EntityEventType;
+  entityId: string;
+  timestamp: number;
+  data?: Record<string, unknown>;
+}
+
 /** Placeholder context for Phase 3 integration - will be expanded with full system interfaces */
 export interface GameContext {
   deltaTime: number;
