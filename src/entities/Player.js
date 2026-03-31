@@ -138,6 +138,7 @@ export class Player {
         this.id = id;
         this.color = color;
         this.inputFn = inputFn;
+        this.isLocal = true; // Default to local - override in main.js for online remote players
         this.isDead = false;
         this.freezeTimer = 0;
         this.iceCooldown = 0;
@@ -374,7 +375,11 @@ export class Player {
             this.collider.setFriction(0.5 * this.frictionMultiplier);
         }
 
-        // 4. Handle Input
+        // 4. Handle Input - skip for remote players (online client receives positions from host)
+        if (!this.isLocal) {
+            return; // Remote player - position is set by host, don't apply local input
+        }
+
         const storeState = useGameStore.getState();
         const input = storeState.gameState === 'PLAYING' ? this.inputFn() : { forward: false, backward: false, left: false, right: false, boost: false };
         const speed = this.sphereAccel * this.sphereAccelMultiplier * delta;
@@ -484,5 +489,29 @@ export class Player {
         const sprite = new THREE.Sprite(mat);
         sprite.scale.set(10, 2.5, 1);
         return sprite;
+    }
+    
+    updateNameLabel(newName) {
+        if (!this.nameLabel) return;
+        this.playerName = newName;
+        
+        // Recreate the texture with the new name
+        const canvas = document.createElement('canvas');
+        canvas.width = 256;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        const hexColor = '#' + this.color.toString(16).padStart(6, '0');
+        ctx.font = 'bold 38px "Courier New", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
+        ctx.lineWidth = 7;
+        ctx.strokeText(newName, 128, 32);
+        ctx.fillStyle = hexColor;
+        ctx.fillText(newName, 128, 32);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        this.nameLabel.material.map = texture;
+        this.nameLabel.material.needsUpdate = true;
     }
 }
