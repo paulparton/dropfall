@@ -1,62 +1,65 @@
 ---
-name: Dropfall Online Multiplayer Fix
-version: v2.1
+name: Dropfall Single-Player Race Mode
+version: v2.2
 type: brownfield
 created: 2026-03-31
-updated: 2026-03-31
+updated: 2026-04-01
 ---
 
-# Dropfall v2.1: Online Multiplayer Fix
+# Dropfall v2.2: Single-Player Race Mode
 
 ## What This Is
 
-Fix the broken online multiplayer so both players can control their own characters. Currently clients connect and see each other, but Player 2's inputs control Player 1's ball instead of their own.
+Add a second game mode offering racing gameplay with Mario Kart-style dynamic track design. Reuses existing ball physics and tile mechanics from the classic Dropfall mode, but presents them in a racing context.
 
 ## Problem Statement
 
-- Server starts, clients connect successfully
-- Both players see the game rendered (red ball, blue ball with names)
-- **BUG:** When Player 2 presses movement keys, the RED ball (Player 1) moves instead of their BLUE ball
-- From each client's local POV, they're "player 1" - but this isn't properly routed
+Classic Dropfall is a single-player survival mode where balls drop and players navigate. To expand engagement, add a racing mode that:
+- Feels like Mario Kart (competitive, fast-paced, dynamic)
+- Reuses existing ball physics and tile mechanics
+- Offers progressive challenge through track design, not just enemy spawning
+- Provides clear win conditions and progression
 
 ## Core Value
 
-Enable real 2-player online gameplay where:
-- Server host = Player 1 (red ball) - controls with Player 1 keys
-- Client joins = assigned Player 2 (blue ball) - controls with Player 1 keys on their computer
-- Each player only controls THEIR ball, not all balls
-- Scalable for future 3+ player support
+Provide players with a second distinct game mode that expands gameplay appeal while leveraging existing physics and asset systems. Racing mode celebrates speed, skill, and track mastery rather than survival duration.
 
 ## Target Features
 
-1. **Player Input Routing Fix** - Map local key presses to assigned player slot
-2. **Player Slot Assignment** - Server assigns slot on connect, client knows "I am player N"
-3. **Visual Player Identification** - Names above balls already working
-4. **2-Player Online Test** - Both players can control their own balls end-to-end
-5. **Scalable Architecture** - Design supports 3+ players (green ball, etc.)
+1. **Game Mode Selection** - Menu/UI to switch between Classic and Race modes
+2. **Race Track Design** - A race track with Mario Kart-inspired features (turns, jumps, speed boosts, obstacles)
+3. **Racing Physics Adaptation** - Ball gravity, momentum, and speed tuned for racing (faster than survival mode)
+4. **Finish Line Detection** - Clear start/finish with lap counting or checkpoint progression
+5. **Race UI/HUD** - Speed indicator, lap counter, best time tracking, finish state
+6. **Progressive Difficulty** - Multiple track variations with increasing challenge
+7. **Performance Optimization** - Ensure racing mode runs smoothly at 60fps
 
 ## Key Context
 
-From earlier discussion:
-- Server works, clients connect, both see the game
-- Each client locally uses "Player 1 controls" - this is correct
-- Bug: The inputs are being applied to Player 1's ball globally, not the local player's ball
-- Need to track which slot the local client is assigned, and route inputs to that slot
+- v2.1 just completed: fixed online multiplayer so 2 players can control their own balls
+- Existing systems ready to reuse: ball physics, tile rendering, particle/visual effects
+- Design philosophy: lean on Mario Kart feel (speed, curves, hazards) not pure simulation
+- Single-player focus initially (multiplayer racing is future scope)
 
 ## Out of Scope
 
-- 3+ player support (design for it, but implement 2-player only)
-- New game modes or arenas
-- Performance optimization
-- UI redesign
+- Multiplayer racing (future milestone)
+- Dynamic weather or advanced visual effects
+- Advanced AI opponents or ghost racing (v1 is no opponents, just track)
+- Mobile/touch controls (desktop first)
+- Cross-platform networking for racing mode
+- Advanced analytics or leaderboards
 
 ## Success Criteria
 
-- [ ] Player 2 can control their blue ball with Player 1 keys
-- [ ] Player 1 can control their red ball on server
-- [ ] Both players see each other's balls with names
-- [ ] Architecture supports 3+ players (ready for future)
-- [ ] No regression in 1P/2P local modes
+- [ ] Player can select Race mode from main menu
+- [ ] Race track renders correctly with obstacles and visual feedback
+- [ ] Ball controls feel responsive and match Mario Kart racing pacing
+- [ ] Start/finish detection works, lap count updates
+- [ ] Race UI displays speed, time, and lap clearly
+- [ ] Multiple difficulty variations available
+- [ ] 60fps maintained during gameplay
+- [ ] No regression in Classic mode functionality
 
 ---
 

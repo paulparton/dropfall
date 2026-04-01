@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.1
-milestone_name: Online Multiplayer Fix
+milestone: v2.2
+milestone_name: Single-Player Race Mode
 status: Planning
-last_updated: "2026-03-31T13:00:00.000Z"
+last_updated: "2026-04-01T12:00:00.000Z"
 progress:
   total_phases: 0
   completed_phases: 0
@@ -11,43 +11,37 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Dropfall v2.1 Online Multiplayer Fix
+# Project State: Dropfall v2.2 Single-Player Race Mode
 
 ## Milestone Goal
 
-Fix broken online multiplayer so both players can control their own characters.
+Add a second game mode: racing with Mario Kart-style track design and ball physics.
 
 ## Current Status
 
-- **Milestone:** v2.1 Online Multiplayer Fix
+- **Milestone:** v2.2 Single-Player Race Mode
 - **Status:** Planning phase
+- **v2.1:** Complete (Online Multiplayer Fix)
 - **v2.0:** Complete (TypeScript migration, Entity System)
-
-## Problem Statement
-
-- Server starts, clients connect successfully
-- Both players see the game (red/blue balls with names)
-- **BUG:** Player 2's inputs control Player 1's ball instead of their own
 
 ## Phase Status
 
 | Phase | Status | Progress | Notes |
 |-------|--------|----------|-------|
-| 1: Input Routing Fix | Not Started | 0% | Core bug fix |
-| 2: Player Slot Assignment | Not Started | 0% | Server assigns slots |
-| 3: Integration Testing | Not Started | 0% | End-to-end test |
+| 1: Race Mode Fundamentals | Not Started | 0% | Game state, mode selection |
+| 2: Track Design & Physics | Not Started | 0% | Track layout, ball adaptation |
+| 3: UI & Polish | Not Started | 0% | HUD, visual feedback |
 
 ## Key Context
 
-- From each client's POV, they use "Player 1 controls" - this is correct
-- Bug: inputs applied to global Player 1, not local client's assigned slot
-- Need to track which slot client is, route inputs to that slot
+- Previous milestones have established solid foundation (physics, rendering, entity system)
+- Reusing: existing ball mechanics, particle effects, tile rendering
+- Challenge: Adapting classic mode mechanics to racing context
+- Focus: Single-player experience with clear progression
 
 ## Blockers & Concerns
 
-| Issue | Impact | Status |
-|-------|--------|--------|
-| None identified yet | - | Investigation needed |
+None identified at start.
 
 ## Next Actions
 
