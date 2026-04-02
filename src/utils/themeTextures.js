@@ -168,7 +168,72 @@ function generateCrackedStoneTheme() {
     return { tile: texs, sphere: texs };
 }
 
+function generateTempleTheme() {
+    return {
+        tile: createTextureSet((ctxs, size) => {
+            ctxs.map.fillStyle = '#8B7355'; ctxs.map.fillRect(0,0,size,size);
+            ctxs.bumpMap.fillStyle = '#808080'; ctxs.bumpMap.fillRect(0,0,size,size);
+            ctxs.roughnessMap.fillStyle = '#aaaaaa'; ctxs.roughnessMap.fillRect(0,0,size,size);
+            ctxs.bumpMap.strokeStyle = '#000000'; ctxs.bumpMap.lineWidth = 8;
+            for(let y=0; y<size; y+=size/4) {
+                ctxs.bumpMap.beginPath();
+                ctxs.bumpMap.moveTo(0, y); ctxs.bumpMap.lineTo(size, y); ctxs.bumpMap.stroke();
+            }
+            addNoise(ctxs.map, size, 30000, 'rgba(0,0,0,0.15)');
+        }),
+        sphere: createTextureSet((ctxs, size) => {
+            ctxs.map.fillStyle = '#DAA520'; ctxs.map.fillRect(0,0,size,size);
+            ctxs.bumpMap.fillStyle = '#808080'; ctxs.bumpMap.fillRect(0,0,size,size);
+            ctxs.roughnessMap.fillStyle = '#666666'; ctxs.roughnessMap.fillRect(0,0,size,size);
+        })
+    };
+}
+
+function generateArcticTheme() {
+    return {
+        tile: createTextureSet((ctxs, size) => {
+            ctxs.map.fillStyle = '#E8F4F8'; ctxs.map.fillRect(0,0,size,size);
+            ctxs.bumpMap.fillStyle = '#808080'; ctxs.bumpMap.fillRect(0,0,size,size);
+            ctxs.roughnessMap.fillStyle = '#cccccc'; ctxs.roughnessMap.fillRect(0,0,size,size);
+            addNoise(ctxs.map, size, 20000, 'rgba(173,216,230,0.3)');
+        }),
+        sphere: createTextureSet((ctxs, size) => {
+            ctxs.map.fillStyle = '#87CEEB'; ctxs.map.fillRect(0,0,size,size);
+            ctxs.bumpMap.fillStyle = '#808080'; ctxs.bumpMap.fillRect(0,0,size,size);
+            ctxs.roughnessMap.fillStyle = '#444444'; ctxs.roughnessMap.fillRect(0,0,size,size);
+        })
+    };
+}
+
+function generateInfernoTheme() {
+    return {
+        tile: createTextureSet((ctxs, size) => {
+            ctxs.map.fillStyle = '#1a0a0a'; ctxs.map.fillRect(0,0,size,size);
+            ctxs.bumpMap.fillStyle = '#808080'; ctxs.bumpMap.fillRect(0,0,size,size);
+            ctxs.roughnessMap.fillStyle = '#333333'; ctxs.roughnessMap.fillRect(0,0,size,size);
+            ctxs.map.strokeStyle = '#FF4500'; ctxs.map.lineWidth = 6;
+            for(let i=0; i<8; i++) {
+                let x = Math.random()*size, y = Math.random()*size;
+                ctxs.map.beginPath(); ctxs.map.moveTo(x, y);
+                for(let j=0; j<5; j++) {
+                    x += (Math.random()-0.5)*100; y += (Math.random()-0.5)*100;
+                    ctxs.map.lineTo(x, y);
+                }
+                ctxs.map.stroke();
+            }
+        }),
+        sphere: createTextureSet((ctxs, size) => {
+            ctxs.map.fillStyle = '#FF4500'; ctxs.map.fillRect(0,0,size,size);
+            ctxs.bumpMap.fillStyle = '#808080'; ctxs.bumpMap.fillRect(0,0,size,size);
+            ctxs.roughnessMap.fillStyle = '#222222'; ctxs.roughnessMap.fillRect(0,0,size,size);
+        })
+    };
+}
+
 export function getThemeMaterials(themeName) {
+    // Map tron theme to default
+    if (themeName === 'tron') themeName = 'default';
+    
     if (themeName === 'default') {
         if (!textureCache.default) {
             textureCache.default = {
@@ -198,6 +263,12 @@ export function getThemeMaterials(themeName) {
             textureCache[themeName] = generateBeachTheme();
         } else if (themeName === 'cracked_stone') {
             textureCache[themeName] = generateCrackedStoneTheme();
+        } else if (themeName === 'temple') {
+            textureCache[themeName] = generateTempleTheme();
+        } else if (themeName === 'arctic') {
+            textureCache[themeName] = generateArcticTheme();
+        } else if (themeName === 'inferno') {
+            textureCache[themeName] = generateInfernoTheme();
         }
     }
 
@@ -234,6 +305,18 @@ export function getThemeMaterials(themeName) {
     if (themeName === 'beach') {
         tileMatParams.metalness = 0.0;
         sphereMatParams.metalness = 0.1;
+    }
+    if (themeName === 'temple') {
+        tileMatParams.metalness = 0.3;
+        sphereMatParams.metalness = 0.7;
+    }
+    if (themeName === 'arctic') {
+        tileMatParams.metalness = 0.1;
+        sphereMatParams.metalness = 0.3;
+    }
+    if (themeName === 'inferno') {
+        tileMatParams.metalness = 0.2;
+        sphereMatParams.metalness = 0.4;
     }
 
     return {

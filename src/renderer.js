@@ -19,7 +19,7 @@ export function initRenderer() {
     
     // 1. Scene
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x000000); // Dark void
+    scene.background = null; // Let Arena set the skybox based on theme
 
     // 2. Camera
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
