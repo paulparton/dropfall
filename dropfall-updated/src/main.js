@@ -1,121 +1,18 @@
 import './style.css';
 import * as THREE from 'three';
 import { useGameStore } from './store.js';
-import { initPhysics, world as physicsWorld } from './physics.js';
-import { getPhysicsSystem } from './systems/PhysicsSystem.js';
+import { initPhysics, updatePhysics } from './physics.js';
 import { initRenderer, updateRenderer, camera, scene, ambientLight, directionalLight } from './renderer.js';
 import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
-import { createInputHandler } from './handlers/InputHandler.js';
-import { createScoresOverlay } from './components/ScoresOverlay.js';
-import { replayRecorder, resetReplayRecorder } from './systems/ReplayRecorder.js';
-import { ReplayPlayer } from './systems/ReplayPlayer.js';
-import { createReplayModal, showQuickReplayClip } from './components/ReplayModal.js';
-import { createCustomizationModal } from './components/CustomizationModal.js';
-
-// Wrapper functions that use InputHandler when available, fallback to legacy input
-function getPlayer1InputUnified() {
-    if (inputHandler) {
-        const input = inputHandler.getLastInput();
-        if (input && input.source === 'keyboard') return input;
-    }
-    return getPlayer1Input();
-}
-
-function getPlayer2InputUnified() {
-    if (inputHandler) {
-        const input = inputHandler.getLastInput();
-        if (input && input.source === 'keyboard') return input;
-    }
-    return getPlayer2Input();
-}
 import { Player } from './entities/Player.js';
 import { Arena } from './entities/Arena.js';
 import { ParticleSystem } from './entities/ParticleSystem.js';
 import { LightningSystem } from './entities/LightningSystem.js';
 import { ShockwaveSystem } from './entities/ShockwaveSystem.js';
-import { initAudio, playMusic, playCollisionSound, setMusicSpeed, updateRollingSound } from './audio.js';
+import { initAudio, playMusic, playCollisionSound, setMusicSpeed } from './audio.js';
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
 import { online } from './online.js';
-
-// ============================================
-// RANDOM BALL WITH HAT GENERATOR
-// ============================================
-function generateRandomBallWithHat() {
-    // Available ball colors
-    const ballColors = [
-        0xff0000, // Red
-        0x00ff00, // Green
-        0x0000ff, // Blue
-        0xffff00, // Yellow
-        0xff00ff, // Magenta
-        0x00ffff, // Cyan
-        0xff8800, // Orange
-        0xff0088, // Pink
-        0x88ff00, // Lime
-        0x0088ff, // Light blue
-    ];
-    
-    // Available hats
-    const hats = ['none', 'santa', 'cowboy', 'afro', 'crown', 'dunce'];
-    
-    // Pick random color and hat
-    const randomColor = ballColors[Math.floor(Math.random() * ballColors.length)];
-    const randomHat = hats[Math.floor(Math.random() * hats.length)];
-    
-    return { color: randomColor, hat: randomHat };
-}
-
-function createBallWithHatCanvas(color, hat) {
-    const canvas = document.createElement('canvas');
-    canvas.width = 100;
-    canvas.height = 120;  // Slightly taller to fit hat
-    const ctx = canvas.getContext('2d');
-    
-    // Clear canvas
-    ctx.fillStyle = 'rgba(0, 0, 0, 0)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw ball
-    const ballX = 50;
-    const ballY = 50;
-    const ballRadius = 30;
-    
-    // Convert hex color to RGB
-    const r = (color >> 16) & 255;
-    const g = (color >> 8) & 255;
-    const b = color & 255;
-    
-    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.beginPath();
-    ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Add shine to ball
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-    ctx.beginPath();
-    ctx.arc(ballX - 10, ballY - 10, ballRadius * 0.35, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Draw hat icons above the ball
-    const hatEmojis = {
-        'none': '',
-        'santa': '🎅',
-        'cowboy': '🤠',
-        'afro': '🟤',
-        'crown': '👑',
-        'dunce': '📐'
-    };
-    
-    if (hat !== 'none') {
-        ctx.font = 'bold 40px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(hatEmojis[hat], ballX, ballY - ballRadius - 5);
-    }
-    
-    return canvas.toDataURL();
-}
 
 // ============================================
 // SCREEN MANAGEMENT
@@ -145,36 +42,9 @@ function hideAllScreens() {
 }
 
 // ============================================
-// POWER-UPS GUIDE
-// ============================================
-function populatePowerupsGuide() {
-    const grid = document.getElementById('powerups-grid');
-    if (!grid) return;
-    
-    grid.innerHTML = '';
-    
-    POWER_UP_EFFECTS.forEach(powerup => {
-        const card = document.createElement('div');
-        card.className = 'powerup-card';
-        card.style.borderColor = `#${powerup.color.toString(16).padStart(6, '0')}`;
-        card.style.color = `#${powerup.color.toString(16).padStart(6, '0')}`;
-        
-        card.innerHTML = `
-            <div class="powerup-card-icon">${powerup.icon}</div>
-            <h3 style="margin: 0.5rem 0; font-size: 1.2rem;">${powerup.name}</h3>
-            <p style="margin: 0; font-size: 0.9rem; opacity: 0.8;">${powerup.description}</p>
-        `;
-        
-        grid.appendChild(card);
-    });
-}
-
-// ============================================
 // GAME STATE
 // ============================================
 let player1, player2, arena, particles, lightning, shockwaves, aiController;
-let inputHandler; // InputHandler instance for unified input processing
-let physicsSystem; // PhysicsSystem instance for event-based physics
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
@@ -182,10 +52,6 @@ let winTimer = 0;
 let pendingWinner = null;
 let countdownTimer = 3.0;
 let nameEntryMode = 'newgame';
-let scoresOverlay = null;
-let replayModalShown = false;
-let customizationShown = false;
-let customizationPlayer = 1; // 1 or 2, tracks which player is customizing
 
 // ============================================
 // POWER-UP NOTIFICATIONS
@@ -217,11 +83,8 @@ window.POWER_UP_EFFECTS = POWER_UP_EFFECTS;
 // GAME FUNCTIONS
 // ============================================
 function startGame(skipNameEntry = false) {
-    console.log('[Game] startGame called, initializing audio...');
     initAudio();
-    console.log('[Game] initAudio returned, playing music...');
     playMusic();
-    console.log('[Game] playMusic called, setting speed...');
     setMusicSpeed(0.5);
     useGameStore.getState().resetScores();
 
@@ -242,6 +105,8 @@ function doStartGame() {
 }
 
 function proceedFromNameEntry() {
+    initAudio();
+    playMusic();
     console.log('[Proceed] Starting name entry flow');
     const state = useGameStore.getState();
     const isOnePlayer = state.gameMode === '1P';
@@ -257,14 +122,20 @@ function proceedFromNameEntry() {
     }
     
     useGameStore.getState().setPlayerNames(p1Name, p2Name);
+    
+    const p1Hat = document.getElementById('p1-hat-select')?.value || 'none';
+    const p2Hat = document.getElementById('p2-hat-select')?.value || 'none';
+    useGameStore.getState().setPlayerHats(p1Hat, p2Hat);
+    
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
 
-    // Initialize customization flow
-    customizationPlayer = 1;
-    customizationShown = false;
-    
-    // Transition to customization state
-    useGameStore.getState().setGameState('CUSTOMIZATION');
+    if (nameEntryMode === 'newgame') {
+        console.log('[Proceed] Calling startGame()');
+        useGameStore.getState().startGame();
+    } else {
+        console.log('[Proceed] Calling startRound()');
+        useGameStore.getState().startRound();
+    }
     resetEntities();
     updateHUDNames();
 }
@@ -296,10 +167,10 @@ function resetEntities() {
     // AI Controller for 1P mode
     aiController = isOnePlayer ? new AIController(state.difficulty || 'normal') : null;
 
-    // Players - use unified input handler and store colors
-    player1 = new Player('player1', state.p1Color || 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1InputUnified);
-    player2 = new Player('player2', state.p2Color || 0x4444ff, { x: 15, y: 4, z: 0 }, 
-        isOnePlayer ? () => aiController.getInput() : getPlayer2InputUnified);
+    // Players
+    player1 = new Player('player1', 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1Input);
+    player2 = new Player('player2', 0x4444ff, { x: 15, y: 4, z: 0 }, 
+        isOnePlayer ? () => aiController.getInput() : getPlayer2Input);
     
     // Effects
     arena = new Arena();
@@ -335,16 +206,16 @@ function resetOnlineEntities() {
     // Player input mapping: local player uses their controls, opponent uses synced input
     if (mySlot === 1) {
         // I'm the host (player 1) on the left
-        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
+        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1Input);
         player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
     } else if (mySlot === 2) {
         // I'm the client (player 2) on the right, but I use player 2 controls (arrows)
         // The visual player1/player2 display doesn't change - it's about my slot
         player1 = new Player('player1', 0xff4444, hostPos, () => useGameStore.getState().online.opponentInput || defaultInput);
-        player2 = new Player('player2', 0x4444ff, clientPos, getPlayer2InputUnified);
+        player2 = new Player('player2', 0x4444ff, clientPos, getPlayer2Input);
     } else {
         // Fallback: assume we're host if slot is unknown
-        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
+        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1Input);
         player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
     }
     
@@ -414,19 +285,9 @@ function checkWinConditions(delta) {
 // BUTTON HANDLERS
 // ============================================
 function setupButtonHandlers() {
-    // Game Mode Selection - Now on main menu
-    document.getElementById('mode-single-btn')?.addEventListener('click', () => {
-        console.log('[Button] Single Player clicked!');
-        useGameStore.getState().setGameMode('1P');
-    });
-    document.getElementById('mode-local-btn')?.addEventListener('click', () => {
-        console.log('[Button] Local Multiplayer clicked!');
-        useGameStore.getState().setGameMode('2P');
-    });
-    document.getElementById('mode-online-btn')?.addEventListener('click', () => {
-        console.log('[Button] Online clicked!');
-        useGameStore.getState().setGameMode('ONLINE');
-        showScreen('onlineConnect');
+    // Menu
+    document.getElementById('start-btn')?.addEventListener('click', () => {
+        showScreen('gameModeSelect');
     });
 
     // Settings
@@ -438,45 +299,27 @@ function setupButtonHandlers() {
     });
 
     // Game Mode Selection
-    const singleBtn = document.getElementById('mode-single-btn');
-    const localBtn = document.getElementById('mode-local-btn');
-    const onlineBtn = document.getElementById('mode-online-btn');
-    
-    console.log('[Setup] Mode buttons found:', { singleBtn: !!singleBtn, localBtn: !!localBtn, onlineBtn: !!onlineBtn });
-    
-    singleBtn?.addEventListener('click', () => {
-        console.log('[Click] SINGLE PLAYER clicked');
+    document.getElementById('mode-single-btn')?.addEventListener('click', () => {
         useGameStore.getState().setGameMode('1P');
-        console.log('[Click] Store updated, new state:', useGameStore.getState());
     });
-    localBtn?.addEventListener('click', () => {
-        console.log('[Click] LOCAL clicked');
+    document.getElementById('mode-local-btn')?.addEventListener('click', () => {
         useGameStore.getState().setGameMode('2P');
-        console.log('[Click] Store updated, new state:', useGameStore.getState());
     });
-    onlineBtn?.addEventListener('click', () => {
-        console.log('[Click] ONLINE clicked');
+    document.getElementById('mode-online-btn')?.addEventListener('click', () => {
         useGameStore.getState().setGameMode('ONLINE');
         showScreen('onlineConnect');
-        console.log('[Click] Screen shown, new state:', useGameStore.getState());
     });
 
     // Difficulty Selection
     ['easy', 'normal', 'hard'].forEach(diff => {
-        const btn = document.getElementById(`difficulty-${diff}-btn`);
-        const radio = document.getElementById(`difficulty-${diff}-radio`);
-        if (btn && radio) {
-            btn.addEventListener('click', () => {
-                console.log('[Button] Difficulty', diff, 'clicked!');
-                radio.checked = true;
-                useGameStore.getState().setDifficulty(diff);
-            });
-        }
+        document.getElementById(`difficulty-${diff}-btn`)?.addEventListener('click', () => {
+            useGameStore.getState().setDifficulty(diff);
+        });
     });
 
     // Coming Soon
     document.getElementById('coming-soon-back-btn')?.addEventListener('click', () => {
-        showScreen('menu');
+        showScreen('gameModeSelect');
     });
 
     // Name Entry
@@ -507,7 +350,7 @@ function setupButtonHandlers() {
     // Online Connect
     document.getElementById('online-connect-back-btn')?.addEventListener('click', () => {
         online.disconnect();
-        showScreen('menu');
+        showScreen('gameModeSelect');
     });
     document.getElementById('online-connect-btn')?.addEventListener('click', () => {
         const serverUrl = document.getElementById('online-server-input')?.value.trim();
@@ -534,7 +377,7 @@ function setupButtonHandlers() {
     });
     document.getElementById('online-lobby-back-btn')?.addEventListener('click', () => {
         online.disconnect();
-        showScreen('menu');
+        showScreen('gameModeSelect');
     });
     document.getElementById('online-refresh-btn')?.addEventListener('click', () => {
         online.listGames();
@@ -609,7 +452,7 @@ function setupButtonHandlers() {
     const settingsMap = {
         'sphere-size': 'sphereSize', 'sphere-weight': 'sphereWeight', 'sphere-accel': 'sphereAccel',
         'collision-bounce': 'collisionBounce', 'arena-size': 'arenaSize', 'destruction-rate': 'destructionRate',
-        'ice-rate': 'iceRate', 'portal-rate': 'portalRate', 'portal-cooldown': 'portalCooldown',
+        'ice-rate': 'iceRate',
         'bonus-rate': 'bonusRate', 'bonus-duration': 'bonusDuration', 'music-volume': 'musicVolume',
         'sfx-volume': 'sfxVolume', 'particle-amount': 'particleAmount', 'bloom-level': 'bloomLevel',
         'boost-regen-speed': 'boostRegenSpeed', 'boost-drain-rate': 'boostDrainRate',
@@ -625,12 +468,24 @@ function setupButtonHandlers() {
                 const val = parseFloat(e.target.value);
                 valEl.textContent = val;
                 useGameStore.getState().updateSetting(key, val);
-                
-                // Update audio volume in real-time
-                if (key === 'musicVolume') setMusicVolume(val);
-                if (key === 'sfxVolume') setSfxVolume(val);
             });
         }
+    }
+
+    // Initialize slider values from store
+    const currentSettings = useGameStore.getState().settings;
+    for (const [id, key] of Object.entries(settingsMap)) {
+        const el = document.getElementById(id);
+        const valEl = document.getElementById(`${id}-val`);
+        if (el && valEl && currentSettings[key] !== undefined) {
+            el.value = currentSettings[key];
+            valEl.textContent = currentSettings[key];
+        }
+    }
+
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect && currentSettings.theme) {
+        themeSelect.value = currentSettings.theme;
     }
 
     document.getElementById('theme-select')?.addEventListener('change', (e) => {
@@ -643,118 +498,20 @@ function setupButtonHandlers() {
 
     document.getElementById('reset-settings-btn')?.addEventListener('click', () => {
         useGameStore.getState().resetSettings();
+        document.querySelectorAll('.powerup-slider').forEach(s => {
+            s.value = 50;
+            const c = s.closest('.powerup-card');
+            if (c) {
+                c.querySelector('.powerup-value').textContent = '50';
+                c.style.opacity = '1';
+            }
+        });
     });
 
     // Presets
     const presetList = document.getElementById('presets-list');
     const savePresetBtn = document.getElementById('save-preset-btn');
     const presetNameInput = document.getElementById('preset-name');
-
-    const getPresets = () => {
-        const stored = localStorage.getItem('dropfall_presets');
-        if (stored) return JSON.parse(stored);
-        
-        // Initialize with default presets
-        const defaults = {
-            'Slow & Bouncy': {
-                sphereAccel: 800,
-                collisionBounce: 1.5,
-                sphereWeight: 50,
-                destructionRate: 6.0,
-                iceRate: 4.0,
-                portalRate: 12.0,
-                bonusRate: 10.0
-            },
-            'Fast & Heavy': {
-                sphereAccel: 3000,
-                collisionBounce: 0.5,
-                sphereWeight: 400,
-                destructionRate: 1.5,
-                iceRate: 1.0,
-                portalRate: 4.0,
-                bonusRate: 3.0
-            },
-            'Tiny Spheres': {
-                sphereSize: 0.8,
-                sphereAccel: 2500,
-                sphereWeight: 80,
-                destructionRate: 3.0,
-                iceRate: 2.0,
-                portalRate: 8.0,
-                bonusRate: 5.0
-            },
-            'Massive Spheres': {
-                sphereSize: 4.5,
-                sphereWeight: 500,
-                sphereAccel: 1200,
-                collisionBounce: 0.3,
-                destructionRate: 4.0,
-                iceRate: 3.0,
-                portalRate: 10.0,
-                bonusRate: 8.0
-            },
-            'Chaos Mode': {
-                sphereAccel: 2800,
-                collisionBounce: 1.3,
-                sphereWeight: 150,
-                destructionRate: 0.8,
-                iceRate: 0.8,
-                portalRate: 2.0,
-                bonusRate: 2.0,
-                bonusDuration: 2.0
-            },
-            'Zen Mode': {
-                sphereAccel: 1200,
-                collisionBounce: 0.8,
-                sphereWeight: 150,
-                destructionRate: 8.0,
-                iceRate: 6.0,
-                portalRate: 15.0,
-                bonusRate: 12.0,
-                bonusDuration: 6.0
-            },
-            'Big Arena': {
-                arenaSize: 8,
-                destructionRate: 4.0,
-                iceRate: 3.0,
-                portalRate: 10.0,
-                bonusRate: 8.0
-            },
-            'Tiny Arena': {
-                arenaSize: 2,
-                destructionRate: 2.0,
-                iceRate: 1.5,
-                portalRate: 5.0,
-                bonusRate: 4.0
-            },
-            'Party Mode': {
-                destructionRate: 1.0,
-                iceRate: 1.0,
-                portalRate: 3.0,
-                bonusRate: 2.5,
-                bonusDuration: 3.0,
-                sphereAccel: 2500,
-                collisionBounce: 1.2
-            },
-            'Gladiator': {
-                sphereSize: 3.5,
-                sphereWeight: 350,
-                sphereAccel: 2000,
-                collisionBounce: 1.4,
-                destructionRate: 2.5,
-                iceRate: 2.0,
-                portalRate: 6.0,
-                bonusRate: 5.0
-            }
-        };
-        
-        savePresets(defaults);
-        return defaults;
-    };
-
-    const savePresets = (presets) => {
-        localStorage.setItem('dropfall_presets', JSON.stringify(presets));
-    };
 
     if (presetList) {
         const loadPreset = (name, data) => {
@@ -764,30 +521,24 @@ function setupButtonHandlers() {
         };
 
         const renderPresets = () => {
-            const presets = getPresets();
-            const names = Object.keys(presets);
-            if (names.length === 0) {
-                presetList.innerHTML = '<div style="color: #666; font-size: 0.85rem; padding: 0.5rem;">No presets saved yet</div>';
-                return;
-            }
-            presetList.innerHTML = names.map(name => `
+            const stored = localStorage.getItem('dropfall_presets');
+            const presets = stored ? JSON.parse(stored) : {};
+            presetList.innerHTML = Object.entries(presets).map(([name, data]) => `
                 <div class="preset-item">
                     <button class="preset-load-btn">${name}</button>
-                    <button class="preset-delete-btn" data-name="${name}">×</button>
+                    <button class="preset-delete-btn">DEL</button>
                 </div>
             `).join('');
             
             presetList.querySelectorAll('.preset-load-btn').forEach((btn, i) => {
-                const name = names[i];
+                const name = Object.keys(presets)[i];
                 btn.addEventListener('click', () => loadPreset(name, presets[name]));
             });
-            
-            presetList.querySelectorAll('.preset-delete-btn').forEach(btn => {
-                const name = btn.dataset.name;
+            presetList.querySelectorAll('.preset-delete-btn').forEach((btn, i) => {
+                const name = Object.keys(presets)[i];
                 btn.addEventListener('click', () => {
-                    const current = getPresets();
-                    delete current[name];
-                    savePresets(current);
+                    delete presets[name];
+                    localStorage.setItem('dropfall_presets', JSON.stringify(presets));
                     renderPresets();
                 });
             });
@@ -799,9 +550,8 @@ function setupButtonHandlers() {
             const name = presetNameInput?.value.trim();
             if (!name) return;
             const settings = useGameStore.getState().settings;
-            const presets = getPresets();
             presets[name] = { ...settings };
-            savePresets(presets);
+            localStorage.setItem('dropfall_presets', JSON.stringify(presets));
             renderPresets();
             presetNameInput.value = '';
         });
@@ -810,6 +560,11 @@ function setupButtonHandlers() {
     // Autorestart checkboxes
     const autoRestartMenu = document.getElementById('autorestart-menu');
     const autoRestartGameover = document.getElementById('autorestart-gameover');
+
+    // Initialize from store
+    const arSetting = useGameStore.getState().settings.autoRestart;
+    if (autoRestartMenu) autoRestartMenu.checked = arSetting;
+    if (autoRestartGameover) autoRestartGameover.checked = arSetting;
     
     autoRestartMenu?.addEventListener('change', (e) => {
         localStorage.setItem('dropfall_autorestart', e.target.checked);
@@ -823,25 +578,42 @@ function setupButtonHandlers() {
         if (autoRestartMenu) autoRestartMenu.checked = e.target.checked;
     });
 
-    // Settings navigation buttons (left sidebar)
-    document.querySelectorAll('.settings-nav-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const pane = btn.dataset.pane;
-            
-            // Update nav buttons
-            document.querySelectorAll('.settings-nav-btn').forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            
-            // Show/hide panes
-            document.querySelectorAll('.settings-pane').forEach(p => {
-                p.classList.remove('active');
-                p.classList.add('hidden');
-            });
-            const targetPane = document.querySelector(`.settings-pane[data-pane="${pane}"]`);
-            if (targetPane) {
-                targetPane.classList.add('active');
-                targetPane.classList.remove('hidden');
+    // Settings tabs
+    document.getElementById('settings-tab')?.addEventListener('click', () => {
+        document.getElementById('settings-tab')?.classList.add('active');
+        document.getElementById('powerups-tab')?.classList.remove('active');
+        document.getElementById('settings-content')?.classList.add('active');
+        document.getElementById('powerups-content')?.classList.remove('active');
+    });
+    document.getElementById('powerups-tab')?.addEventListener('click', () => {
+        document.getElementById('powerups-tab')?.classList.add('active');
+        document.getElementById('settings-tab')?.classList.remove('active');
+        document.getElementById('powerups-content')?.classList.add('active');
+        document.getElementById('settings-content')?.classList.remove('active');
+    });
+
+    // Power-up slider initialization and events
+    document.querySelectorAll('.powerup-slider').forEach(slider => {
+        const key = slider.dataset.powerup;
+        const weights = useGameStore.getState().settings.powerUpWeights || {};
+        const val = weights[key] ?? 50;
+        slider.value = val;
+        const card = slider.closest('.powerup-card');
+        if (card) {
+            card.querySelector('.powerup-value').textContent = val;
+            card.style.opacity = val === 0 ? '0.4' : '1';
+        }
+
+        slider.addEventListener('input', (e) => {
+            const v = parseInt(e.target.value);
+            const c = e.target.closest('.powerup-card');
+            if (c) {
+                c.querySelector('.powerup-value').textContent = v;
+                c.style.opacity = v === 0 ? '0.4' : '1';
             }
+            const currentWeights = { ...(useGameStore.getState().settings.powerUpWeights || {}) };
+            currentWeights[key] = v;
+            useGameStore.getState().updateSetting('powerUpWeights', currentWeights);
         });
     });
 }
@@ -1028,7 +800,7 @@ function animate() {
         particles?.update(delta);
         lightning?.update(delta);
         shockwaves?.update(delta);
-        physicsSystem.step(delta);
+        updatePhysics(delta);
         camera.position.set(Math.sin(clock.getElapsedTime() * 0.1) * 30, 25, Math.cos(clock.getElapsedTime() * 0.1) * 30);
         camera.lookAt(0, 0, 0);
     }
@@ -1057,7 +829,7 @@ function animate() {
         // Online clients receive positions from host via gameUpdate handler
         const isOnlineClient = state.gameMode === 'ONLINE' && !state.online.isHost;
         if (!isOnlineClient) {
-            physicsSystem.step(delta);
+            updatePhysics(delta);
         }
 
         // Power-up displays
@@ -1101,21 +873,8 @@ function animate() {
             if (player2.glow.intensity > 1) player2.glow.intensity -= delta * 10;
             if (sceneFlashLight?.intensity > 0) sceneFlashLight.intensity -= delta * 40;
 
-            // Frame-rate independent camera movement (constant speed, not delta-dependent)
-            const targetCamPos = new THREE.Vector3(p1Pos.x, Math.max(24, distance * 0.96), p1Pos.z + Math.max(24, distance * 0.96));
-            const camSpeed = 0.08; // Interpolation factor per frame (0-1)
-            camera.position.lerp(targetCamPos, camSpeed);
-            
-            // Smooth camera lookAt target
-            const targetLookAt = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
-            if (!camera.userData.lookAtTarget) camera.userData.lookAtTarget = targetLookAt.clone();
-            camera.userData.lookAtTarget.lerp(targetLookAt, camSpeed);
-            camera.lookAt(camera.userData.lookAtTarget);
-        }
-
-        // Customization
-        if (state.gameState === 'CUSTOMIZATION') {
-            // Handled in store subscription
+            camera.position.lerp(new THREE.Vector3(p1Pos.x, Math.max(24, distance * 0.96), p1Pos.z + Math.max(24, distance * 0.96)), 2 * delta);
+            camera.lookAt(new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5));
         }
 
         // Countdown
@@ -1124,7 +883,6 @@ function animate() {
             if (countdownTimer > 0) {
                 screens.countdown.textContent = String(Math.ceil(countdownTimer));
             } else {
-                replayRecorder.startRecording(); // Start replay recording when countdown ends
                 useGameStore.getState().setPlaying();
             }
         }
@@ -1132,42 +890,10 @@ function animate() {
         // Win check
         if (state.gameState === 'PLAYING') {
             checkWinConditions(delta);
-            
-            // Record frame for replay
-            if (player1 && player2) {
-                const p1Pos = player1.mesh.position;
-                const p1Vel = player1.rigidBody?.linvel() || { x: 0, y: 0, z: 0 };
-                const p1Rot = player1.mesh.quaternion;
-                const p2Pos = player2.mesh.position;
-                const p2Vel = player2.rigidBody?.linvel() || { x: 0, y: 0, z: 0 };
-                const p2Rot = player2.mesh.quaternion;
-                
-                replayRecorder.recordFrame({
-                    timestamp: Date.now(),
-                    frameNumber: 0,
-                    player1: {
-                        position: { x: p1Pos.x, y: p1Pos.y, z: p1Pos.z },
-                        velocity: { x: p1Vel.x, y: p1Vel.y, z: p1Vel.z },
-                        rotation: { x: p1Rot.x, y: p1Rot.y, z: p1Rot.z, w: p1Rot.w },
-                        boost: state.player1Boost
-                    },
-                    player2: {
-                        position: { x: p2Pos.x, y: p2Pos.y, z: p2Pos.z },
-                        velocity: { x: p2Vel.x, y: p2Vel.y, z: p2Vel.z },
-                        rotation: { x: p2Rot.x, y: p2Rot.y, z: p2Rot.z, w: p2Rot.w },
-                        boost: state.player2Boost
-                    }
-                });
-            }
-            
-            // Update rolling sound based on player velocities
-            if (player1?.rigidBody) {
-                updateRollingSound(player1.rigidBody.linvel());
-            }
 
             // Online sync
             if (state.gameMode === 'ONLINE' && state.online.connected) {
-                const input = (state.online.playerSlot === 1 ? getPlayer1InputUnified : getPlayer2InputUnified)();
+                const input = (state.online.playerSlot === 1 ? getPlayer1Input : getPlayer2Input)();
                 online.sendInput({ ...input });
                 if (state.online.isHost && player1 && player2) {
                     const p1Vel = player1.rigidBody.linvel();
@@ -1194,22 +920,13 @@ function animate() {
 
     // Round over / Game over
     if (state.gameState === 'ROUND_OVER' || state.gameState === 'GAME_OVER') {
-        // Stop replay recording and show falling clip
-        if (state.gameState === 'ROUND_OVER' && !replayModalShown && replayRecorder.buffer.length > 0) {
-            replayModalShown = true;
-            replayRecorder.stopRecording();
-            setTimeout(() => {
-                showQuickReplayClip(replayRecorder.getBuffer(), 3000);
-            }, 500);
-        }
-        
         player1?.update(delta, arena, particles);
         player2?.update(delta, arena, particles);
         arena?.update(delta);
         particles?.update(delta);
         lightning?.update(delta);
         shockwaves?.update(delta);
-        physicsSystem.step(delta);
+        updatePhysics(delta);
 
         if (state.winner && state.winner !== 'Draw') {
             const winnerPlayer = state.winner === 'Player 1' ? player1 : player2;
@@ -1246,73 +963,20 @@ function setupStoreSubscription() {
                 case 'ONLINE':
                     screens.onlineLobby.classList.remove('hidden');
                     break;
-                case 'CUSTOMIZATION':
-                    hideAllScreens();
-                    // Show customization modal for current player
-                    if (!customizationShown) {
-                        customizationShown = true;
-                        const playerToCustomize = customizationPlayer === 1 ? state.p1Name : state.p2Name;
-                        const initialColor = customizationPlayer === 1 ? state.p1Color : state.p2Color;
-                        const initialHat = customizationPlayer === 1 ? state.p1Hat : state.p2Hat;
-                        
-                        createCustomizationModal(playerToCustomize, {
-                            initialColor,
-                            initialHat,
-                            onConfirm: (result) => {
-                                if (customizationPlayer === 1) {
-                                    useGameStore.getState().setPlayerColors(result.color, state.p2Color);
-                                    useGameStore.getState().setPlayerHats(result.hat, state.p2Hat);
-                                    // Move to player 2 customization
-                                    customizationPlayer = 2;
-                                    customizationShown = false;
-                                } else {
-                                    // Both players done, move to countdown
-                                    useGameStore.getState().setPlayerColors(state.p1Color, result.color);
-                                    useGameStore.getState().setPlayerHats(state.p1Hat, result.hat);
-                                    resetReplayRecorder();
-                                    replayModalShown = false;
-                                    countdownTimer = 3.0;
-                                    useGameStore.getState().startRound();
-                                }
-                            }
-                        });
-                    }
+                case 'DIFFICULTY_SELECT':
+                    screens.difficultySelect.classList.remove('hidden');
                     break;
                 case 'NAME_ENTRY':
                     screens.nameEntry.classList.remove('hidden');
                     document.getElementById('p1-name-input').value = state.p1Name;
+                    document.getElementById('p1-hat-select').value = state.p1Hat || 'none';
                     const isOnePlayer = state.gameMode === '1P';
-                    
-                    // Show/hide difficulty section for single player only
-                    const diffSection = document.getElementById('difficulty-section');
-                    if (diffSection) {
-                        diffSection.classList.toggle('hidden', !isOnePlayer);
-                    }
-                    
-                    // Update difficulty button styling
-                    ['easy', 'normal', 'hard'].forEach(diff => {
-                        const btn = document.getElementById(`difficulty-${diff}-btn`);
-                        if (btn) {
-                            btn.classList.toggle('active', state.difficulty === diff);
-                        }
-                    });
-                    
-                    // Generate random ball with hat for the play button
-                    const { color: ballColor, hat: ballHat } = generateRandomBallWithHat();
-                    const ballImageUrl = createBallWithHatCanvas(ballColor, ballHat);
-                    const playBtn = document.getElementById('name-entry-play-btn');
-                    if (playBtn) {
-                        // Set HTML with ball image on the left and text on the right
-                        playBtn.innerHTML = `<img src="${ballImageUrl}" style="height: 70px; width: auto; margin-right: 15px;"> LET'S PLAY!`;
-                        playBtn.style.display = 'flex';
-                        playBtn.style.alignItems = 'center';
-                        playBtn.style.justifyContent = 'center';
-                        playBtn.style.gap = '0.5rem';
-                    }
-                    
                     document.getElementById('name-entry-p2-field')?.classList.toggle('hidden', isOnePlayer);
                     document.getElementById('name-entry-vs')?.classList.toggle('hidden', isOnePlayer);
-                    if (!isOnePlayer) document.getElementById('p2-name-input').value = state.p2Name;
+                    if (!isOnePlayer) {
+                        document.getElementById('p2-name-input').value = state.p2Name;
+                        document.getElementById('p2-hat-select').value = state.p2Hat || 'none';
+                    }
                     break;
                 case 'COUNTDOWN':
                 case 'PLAYING':
@@ -1327,13 +991,13 @@ function setupStoreSubscription() {
                 case 'ROUND_OVER':
                     setTimeout(() => {
                         if (useGameStore.getState().gameState === 'ROUND_OVER') {
-                            nameEntryMode = 'nextround';
-                            // Show customization before next round
-                            customizationPlayer = 1;
-                            customizationShown = false;
-                            useGameStore.getState().setGameState('CUSTOMIZATION');
+                            const st = useGameStore.getState();
+                            setMusicSpeed(0.6 + (st.p1Score + st.p2Score) * 0.1);
+                            useGameStore.getState().startRound();
+                            resetEntities();
+                            updateHUDNames();
                         }
-                    }, 4000); // Wait for replay to finish (3s replay + 1s buffer)
+                    }, 2500);
                     break;
                 case 'GAME_OVER':
                     screens.gameOver.classList.remove('hidden');
@@ -1356,16 +1020,6 @@ function setupStoreSubscription() {
         document.getElementById('p2-score').textContent = state.p2Score;
         document.getElementById('p1-boost').style.width = `${state.player1Boost}%`;
         document.getElementById('p2-boost').style.width = `${state.player2Boost}%`;
-
-        // Update difficulty button styling when difficulty changes
-        if (state.difficulty !== prevState.difficulty) {
-            ['easy', 'normal', 'hard'].forEach(diff => {
-                const btn = document.getElementById(`difficulty-${diff}-btn`);
-                if (btn) {
-                    btn.classList.toggle('active', state.difficulty === diff);
-                }
-            });
-        }
     });
 }
 
@@ -1379,47 +1033,7 @@ async function init() {
     try {
         initRenderer();
         initInput();
-        
-        // Initialize audio on page load
-        console.log('[Init] Initializing audio on page load');
-        initAudio();
-        
-        // Try to start music on first user interaction (browsers block autoplay)
-        const startMusicOnInteraction = () => {
-            console.log('[Init] First interaction, starting music');
-            playMusic();
-            document.removeEventListener('click', startMusicOnInteraction);
-            document.removeEventListener('keydown', startMusicOnInteraction);
-        };
-        document.addEventListener('click', startMusicOnInteraction);
-        document.addEventListener('keydown', startMusicOnInteraction);
-        
-        // Initialize InputHandler for unified input processing
-        inputHandler = createInputHandler();
-        
         await initPhysics();
-        
-        // Initialize PhysicsSystem with existing world from physics.js
-        physicsSystem = getPhysicsSystem();
-        await physicsSystem.initialize(physicsWorld);
-        
-        // Subscribe to collision events from PhysicsSystem
-        physicsSystem.on('collision', (event) => {
-            console.log('[PhysicsSystem] Collision:', event.entityA, '<->', event.entityB);
-            // Handled by direct physics queries in main.js for now
-            // This subscription is for future event-driven architecture
-        });
-        
-        // Subscribe to knockback events
-        physicsSystem.on('knockback', (event) => {
-            console.log('[PhysicsSystem] Knockback applied to:', event.targetEntity);
-        });
-        
-        // Subscribe to out-of-bounds events
-        physicsSystem.on('out-of-bounds', (event) => {
-            console.log('[PhysicsSystem] Out of bounds:', event.entity, event.direction);
-            // Could trigger death handling here in event-driven architecture
-        });
         
         arena = new Arena();
         particles = new ParticleSystem();
@@ -1433,11 +1047,6 @@ async function init() {
         setupButtonHandlers();
         setupOnlineHandlers();
         setupStoreSubscription();
-        populatePowerupsGuide();
-        
-        // Initialize scores overlay for gameplay
-        const overlayResult = createScoresOverlay();
-        scoresOverlay = overlayResult.container;
         
         showScreen('menu');
         animate();
