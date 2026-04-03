@@ -14,31 +14,31 @@
     <!-- Game canvas container -->
     <div id="app" style="width: 100%; height: 100vh; position: absolute; top: 0; left: 0; z-index: 0;"></div>
     
-    <!-- Game Mode Selection Screen -->
-    <div id="game-mode-select" class="screen" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+    <!-- Game Mode Selection Screen - OBSOLETE (moved to main menu) -->
+    <div id="game-mode-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto; display: none;">
       <div class="title-container">
         <h1 class="retro-title">DROPFALL</h1>
         <h2 class="retro-subtitle">SELECT GAME MODE</h2>
       </div>
       
       <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
-        <button id="mode-single-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">SINGLE PLAYER</button>
-        <button id="mode-local-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">LOCAL MULTIPLAYER</button>
-        <button id="mode-online-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">ONLINE</button>
+        <button id="mode-single-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">SINGLE PLAYER</button>
+        <button id="mode-local-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">LOCAL MULTIPLAYER</button>
+        <button id="mode-online-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">ONLINE</button>
       </div>
     </div>
 
-    <!-- Difficulty Selection Screen -->
-    <div id="difficulty-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+    <!-- Difficulty Selection Screen - OBSOLETE (moved to game settings) -->
+    <div id="difficulty-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto; display: none;">
       <div class="title-container">
         <h1 class="retro-title">DIFFICULTY</h1>
         <h2 class="retro-subtitle">SELECT DIFFICULTY</h2>
       </div>
       
       <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
-        <button id="difficulty-easy-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #00ff88;">EASY</button>
-        <button id="difficulty-normal-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #0ff;">NORMAL</button>
-        <button id="difficulty-hard-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #ff0088;">HARD</button>
+        <button id="difficulty-easy-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #00ff88;">EASY</button>
+        <button id="difficulty-normal-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #0ff;">NORMAL</button>
+        <button id="difficulty-hard-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #ff0088;">HARD</button>
       </div>
       
       <div style="margin-top: 60px; text-align: center; font-size: 1.2rem; color: #0ff; max-width: 600px; margin-left: auto; margin-right: auto;">
@@ -167,12 +167,20 @@
         </div>
       </div>
 
-      <button id="start-btn" class="retro-btn">INSERT COIN TO START</button>
+      <!-- Game mode selection buttons -->
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 20px 0;">
+        <button id="mode-single-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">🎮 SINGLE PLAYER</button>
+        <button id="mode-local-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">👥 LOCAL MULTIPLAYER</button>
+        <button id="mode-online-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">🌐 ONLINE</button>
+      </div>
+
+      <p style="color: #0ff; font-size: 1rem; margin-top: 15px; opacity: 0.8;">INSERT COIN TO START</p>
+
       <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px; justify-content: center;">
         <input type="checkbox" id="autorestart-menu" style="width: 20px; height: 20px; cursor: pointer;">
         <label for="autorestart-menu" style="cursor: pointer; color: #0ff; font-family: 'Courier New', monospace;">Auto-Restart on Game Over</label>
       </div>
-      <button id="settings-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">SETTINGS</button>
+      <button id="settings-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">⚙️ SETTINGS</button>
     </div>
 
     <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100; pointer-events: auto; display: flex; flex-direction: column; align-items: center;">
@@ -411,39 +419,74 @@
     </div>
 
     <div id="name-entry" class="screen hidden">
-      <h2 class="retro-subtitle" style="margin-bottom: 0.5rem;">PLAYER NAMES</h2>
-      <div id="name-entry-round-info" style="color: #ffff00; font-family: 'Courier New', monospace; font-size: 1.2rem; margin-bottom: 1.5rem; text-shadow: 0 0 8px #ffff00; letter-spacing: 2px;"></div>
-      <div class="name-entry-fields">
-        <div class="name-entry-field">
-          <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444;">PLAYER 1</label>
-          <input id="p1-name-input" type="text" maxlength="12" placeholder="Player 1" autocomplete="off">
-          <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444; font-size: 0.85rem; margin-top: 0.5rem;">HAT</label>
-          <select id="p1-hat-select" class="hat-select" style="border-color: #ff4444; box-shadow: 0 0 10px #ff4444 inset, 0 0 10px #ff4444;">
-            <option value="none">None</option>
-            <option value="santa">🎅 Santa</option>
-            <option value="cowboy">🤠 Cowboy</option>
-            <option value="afro">🟤 Afro</option>
-            <option value="crown">👑 Crown</option>
-            <option value="dunce">📐 Dunce</option>
-          </select>
+      <div style="max-width: 600px; margin: 0 auto;">
+        <h2 class="retro-subtitle" style="margin-bottom: 1.5rem; text-align: center;">GAME SETTINGS</h2>
+        <div id="name-entry-round-info" style="color: #ffff00; font-family: 'Courier New', monospace; font-size: 1.2rem; margin-bottom: 1.5rem; text-shadow: 0 0 8px #ffff00; letter-spacing: 2px; text-align: center;"></div>
+        
+        <!-- Difficulty Selection (Single Player only) -->
+        <div id="difficulty-section" class="hidden" style="margin-bottom: 2rem; padding: 1.5rem; background: rgba(0, 255, 255, 0.05); border: 2px solid #0ff; border-radius: 8px; box-shadow: inset 0 0 15px rgba(0, 255, 255, 0.1);">
+          <h3 style="color: #0ff; margin: 0 0 1rem 0; text-align: center; font-size: 1.2rem; text-transform: uppercase; letter-spacing: 2px;">SELECT DIFFICULTY</h3>
+          <div class="difficulty-toggle-group">
+            <input type="radio" id="difficulty-easy-radio" name="difficulty" value="easy" class="difficulty-radio" hidden>
+            <label for="difficulty-easy-radio" id="difficulty-easy-btn" class="difficulty-btn">
+              <span class="difficulty-icon">⭐</span>
+              <span class="difficulty-label">EASY</span>
+            </label>
+            
+            <input type="radio" id="difficulty-normal-radio" name="difficulty" value="normal" class="difficulty-radio" hidden>
+            <label for="difficulty-normal-radio" id="difficulty-normal-btn" class="difficulty-btn">
+              <span class="difficulty-icon">⭐⭐</span>
+              <span class="difficulty-label">NORMAL</span>
+            </label>
+            
+            <input type="radio" id="difficulty-hard-radio" name="difficulty" value="hard" class="difficulty-radio" hidden>
+            <label for="difficulty-hard-radio" id="difficulty-hard-btn" class="difficulty-btn">
+              <span class="difficulty-icon">⭐⭐⭐</span>
+              <span class="difficulty-label">HARD</span>
+            </label>
+          </div>
         </div>
-        <div id="name-entry-vs" class="name-entry-vs">VS</div>
-        <div id="name-entry-p2-field" class="name-entry-field">
-          <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff;">PLAYER 2</label>
-          <input id="p2-name-input" type="text" maxlength="12" placeholder="Player 2" autocomplete="off">
-          <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff; font-size: 0.85rem; margin-top: 0.5rem;">HAT</label>
-          <select id="p2-hat-select" class="hat-select" style="border-color: #4488ff; box-shadow: 0 0 10px #4488ff inset, 0 0 10px #4488ff;">
-            <option value="none">None</option>
-            <option value="santa">🎅 Santa</option>
-            <option value="cowboy">🤠 Cowboy</option>
-            <option value="afro">🟤 Afro</option>
-            <option value="crown">👑 Crown</option>
-            <option value="dunce">📐 Dunce</option>
-          </select>
+        
+        <!-- Player Names Section -->
+        <div style="padding: 1.5rem; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+          <h3 style="color: #0ff; margin: 0 0 1rem 0; text-align: center; font-size: 1.1rem; text-transform: uppercase; letter-spacing: 2px;">PLAYERS</h3>
+          <div class="name-entry-fields">
+            <div class="name-entry-field">
+              <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444; font-weight: bold;">PLAYER 1</label>
+              <input id="p1-name-input" type="text" maxlength="12" placeholder="Player 1" autocomplete="off">
+              <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444; font-size: 0.85rem; margin-top: 0.5rem;">HAT</label>
+              <select id="p1-hat-select" class="hat-select" style="border-color: #ff4444; box-shadow: 0 0 10px #ff4444 inset, 0 0 10px #ff4444;">
+                <option value="none">None</option>
+                <option value="santa">🎅 Santa</option>
+                <option value="cowboy">🤠 Cowboy</option>
+                <option value="afro">🟤 Afro</option>
+                <option value="crown">👑 Crown</option>
+                <option value="dunce">📐 Dunce</option>
+              </select>
+            </div>
+            <div id="name-entry-vs" class="name-entry-vs">VS</div>
+            <div id="name-entry-p2-field" class="name-entry-field">
+              <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff; font-weight: bold;">PLAYER 2</label>
+              <input id="p2-name-input" type="text" maxlength="12" placeholder="Player 2" autocomplete="off">
+              <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff; font-size: 0.85rem; margin-top: 0.5rem;">HAT</label>
+              <select id="p2-hat-select" class="hat-select" style="border-color: #4488ff; box-shadow: 0 0 10px #4488ff inset, 0 0 10px #4488ff;">
+                <option value="none">None</option>
+                <option value="santa">🎅 Santa</option>
+                <option value="cowboy">🤠 Cowboy</option>
+                <option value="afro">🟤 Afro</option>
+                <option value="crown">👑 Crown</option>
+                <option value="dunce">📐 Dunce</option>
+              </select>
+            </div>
+          </div>
         </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: 1rem; margin-top: 2rem; justify-content: center;">
+          <button id="name-entry-play-btn" class="retro-btn" style="flex: 1; max-width: 400px;">🎮 LET'S PLAY!</button>
+        </div>
+        <button id="name-entry-menu-btn" class="retro-btn" style="margin-top: 0.75rem; font-size: 1rem; padding: 0.5rem 1.5rem; opacity: 0.7; display: block; margin-left: auto; margin-right: auto;">← BACK</button>
       </div>
-      <button id="name-entry-play-btn" class="retro-btn" style="margin-top: 2rem;">LET'S PLAY!</button>
-      <button id="name-entry-menu-btn" class="retro-btn" style="margin-top: 0.75rem; font-size: 1rem; padding: 0.5rem 1.5rem; opacity: 0.7;">BACK TO MENU</button>
     </div>
 
     <div id="hud" class="screen hidden">

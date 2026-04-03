@@ -6,6 +6,11 @@ import { getPhysicsSystem } from './systems/PhysicsSystem.js';
 import { initRenderer, updateRenderer, camera, scene, ambientLight, directionalLight } from './renderer.js';
 import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
 import { createInputHandler } from './handlers/InputHandler.js';
+import { createScoresOverlay } from './components/ScoresOverlay.js';
+import { replayRecorder, resetReplayRecorder } from './systems/ReplayRecorder.js';
+import { ReplayPlayer } from './systems/ReplayPlayer.js';
+import { createReplayModal, showQuickReplayClip } from './components/ReplayModal.js';
+import { createCustomizationModal } from './components/CustomizationModal.js';
 
 // Wrapper functions that use InputHandler when available, fallback to legacy input
 function getPlayer1InputUnified() {
@@ -32,6 +37,85 @@ import { initAudio, playMusic, playCollisionSound, setMusicSpeed, updateRollingS
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
 import { online } from './online.js';
+
+// ============================================
+// RANDOM BALL WITH HAT GENERATOR
+// ============================================
+function generateRandomBallWithHat() {
+    // Available ball colors
+    const ballColors = [
+        0xff0000, // Red
+        0x00ff00, // Green
+        0x0000ff, // Blue
+        0xffff00, // Yellow
+        0xff00ff, // Magenta
+        0x00ffff, // Cyan
+        0xff8800, // Orange
+        0xff0088, // Pink
+        0x88ff00, // Lime
+        0x0088ff, // Light blue
+    ];
+    
+    // Available hats
+    const hats = ['none', 'santa', 'cowboy', 'afro', 'crown', 'dunce'];
+    
+    // Pick random color and hat
+    const randomColor = ballColors[Math.floor(Math.random() * ballColors.length)];
+    const randomHat = hats[Math.floor(Math.random() * hats.length)];
+    
+    return { color: randomColor, hat: randomHat };
+}
+
+function createBallWithHatCanvas(color, hat) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 120;  // Slightly taller to fit hat
+    const ctx = canvas.getContext('2d');
+    
+    // Clear canvas
+    ctx.fillStyle = 'rgba(0, 0, 0, 0)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw ball
+    const ballX = 50;
+    const ballY = 50;
+    const ballRadius = 30;
+    
+    // Convert hex color to RGB
+    const r = (color >> 16) & 255;
+    const g = (color >> 8) & 255;
+    const b = color & 255;
+    
+    ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
+    ctx.beginPath();
+    ctx.arc(ballX, ballY, ballRadius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Add shine to ball
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+    ctx.beginPath();
+    ctx.arc(ballX - 10, ballY - 10, ballRadius * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw hat icons above the ball
+    const hatEmojis = {
+        'none': '',
+        'santa': '🎅',
+        'cowboy': '🤠',
+        'afro': '🟤',
+        'crown': '👑',
+        'dunce': '📐'
+    };
+    
+    if (hat !== 'none') {
+        ctx.font = 'bold 40px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(hatEmojis[hat], ballX, ballY - ballRadius - 5);
+    }
+    
+    return canvas.toDataURL();
+}
 
 // ============================================
 // SCREEN MANAGEMENT
@@ -98,6 +182,10 @@ let winTimer = 0;
 let pendingWinner = null;
 let countdownTimer = 3.0;
 let nameEntryMode = 'newgame';
+let scoresOverlay = null;
+let replayModalShown = false;
+let customizationShown = false;
+let customizationPlayer = 1; // 1 or 2, tracks which player is customizing
 
 // ============================================
 // POWER-UP NOTIFICATIONS
@@ -171,13 +259,12 @@ function proceedFromNameEntry() {
     useGameStore.getState().setPlayerNames(p1Name, p2Name);
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
 
-    if (nameEntryMode === 'newgame') {
-        console.log('[Proceed] Calling startGame()');
-        useGameStore.getState().startGame();
-    } else {
-        console.log('[Proceed] Calling startRound()');
-        useGameStore.getState().startRound();
-    }
+    // Initialize customization flow
+    customizationPlayer = 1;
+    customizationShown = false;
+    
+    // Transition to customization state
+    useGameStore.getState().setGameState('CUSTOMIZATION');
     resetEntities();
     updateHUDNames();
 }
@@ -209,9 +296,9 @@ function resetEntities() {
     // AI Controller for 1P mode
     aiController = isOnePlayer ? new AIController(state.difficulty || 'normal') : null;
 
-    // Players - use unified input handler
-    player1 = new Player('player1', 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1InputUnified);
-    player2 = new Player('player2', 0x4444ff, { x: 15, y: 4, z: 0 }, 
+    // Players - use unified input handler and store colors
+    player1 = new Player('player1', state.p1Color || 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1InputUnified);
+    player2 = new Player('player2', state.p2Color || 0x4444ff, { x: 15, y: 4, z: 0 }, 
         isOnePlayer ? () => aiController.getInput() : getPlayer2InputUnified);
     
     // Effects
@@ -327,9 +414,19 @@ function checkWinConditions(delta) {
 // BUTTON HANDLERS
 // ============================================
 function setupButtonHandlers() {
-    // Menu
-    document.getElementById('start-btn')?.addEventListener('click', () => {
-        showScreen('gameModeSelect');
+    // Game Mode Selection - Now on main menu
+    document.getElementById('mode-single-btn')?.addEventListener('click', () => {
+        console.log('[Button] Single Player clicked!');
+        useGameStore.getState().setGameMode('1P');
+    });
+    document.getElementById('mode-local-btn')?.addEventListener('click', () => {
+        console.log('[Button] Local Multiplayer clicked!');
+        useGameStore.getState().setGameMode('2P');
+    });
+    document.getElementById('mode-online-btn')?.addEventListener('click', () => {
+        console.log('[Button] Online clicked!');
+        useGameStore.getState().setGameMode('ONLINE');
+        showScreen('onlineConnect');
     });
 
     // Settings
@@ -340,28 +437,24 @@ function setupButtonHandlers() {
         showScreen('menu');
     });
 
-    // Game Mode Selection
-    document.getElementById('mode-single-btn')?.addEventListener('click', () => {
-        useGameStore.getState().setGameMode('1P');
-    });
-    document.getElementById('mode-local-btn')?.addEventListener('click', () => {
-        useGameStore.getState().setGameMode('2P');
-    });
-    document.getElementById('mode-online-btn')?.addEventListener('click', () => {
-        useGameStore.getState().setGameMode('ONLINE');
-        showScreen('onlineConnect');
-    });
+
 
     // Difficulty Selection
     ['easy', 'normal', 'hard'].forEach(diff => {
-        document.getElementById(`difficulty-${diff}-btn`)?.addEventListener('click', () => {
-            useGameStore.getState().setDifficulty(diff);
-        });
+        const btn = document.getElementById(`difficulty-${diff}-btn`);
+        const radio = document.getElementById(`difficulty-${diff}-radio`);
+        if (btn && radio) {
+            btn.addEventListener('click', () => {
+                console.log('[Button] Difficulty', diff, 'clicked!');
+                radio.checked = true;
+                useGameStore.getState().setDifficulty(diff);
+            });
+        }
     });
 
     // Coming Soon
     document.getElementById('coming-soon-back-btn')?.addEventListener('click', () => {
-        showScreen('gameModeSelect');
+        showScreen('menu');
     });
 
     // Name Entry
@@ -392,7 +485,7 @@ function setupButtonHandlers() {
     // Online Connect
     document.getElementById('online-connect-back-btn')?.addEventListener('click', () => {
         online.disconnect();
-        showScreen('gameModeSelect');
+        showScreen('menu');
     });
     document.getElementById('online-connect-btn')?.addEventListener('click', () => {
         const serverUrl = document.getElementById('online-server-input')?.value.trim();
@@ -419,7 +512,7 @@ function setupButtonHandlers() {
     });
     document.getElementById('online-lobby-back-btn')?.addEventListener('click', () => {
         online.disconnect();
-        showScreen('gameModeSelect');
+        showScreen('menu');
     });
     document.getElementById('online-refresh-btn')?.addEventListener('click', () => {
         online.listGames();
@@ -998,12 +1091,18 @@ function animate() {
             camera.lookAt(camera.userData.lookAtTarget);
         }
 
+        // Customization
+        if (state.gameState === 'CUSTOMIZATION') {
+            // Handled in store subscription
+        }
+
         // Countdown
         if (state.gameState === 'COUNTDOWN') {
             countdownTimer -= delta;
             if (countdownTimer > 0) {
                 screens.countdown.textContent = String(Math.ceil(countdownTimer));
             } else {
+                replayRecorder.startRecording(); // Start replay recording when countdown ends
                 useGameStore.getState().setPlaying();
             }
         }
@@ -1011,6 +1110,33 @@ function animate() {
         // Win check
         if (state.gameState === 'PLAYING') {
             checkWinConditions(delta);
+            
+            // Record frame for replay
+            if (player1 && player2) {
+                const p1Pos = player1.mesh.position;
+                const p1Vel = player1.rigidBody?.linvel() || { x: 0, y: 0, z: 0 };
+                const p1Rot = player1.mesh.quaternion;
+                const p2Pos = player2.mesh.position;
+                const p2Vel = player2.rigidBody?.linvel() || { x: 0, y: 0, z: 0 };
+                const p2Rot = player2.mesh.quaternion;
+                
+                replayRecorder.recordFrame({
+                    timestamp: Date.now(),
+                    frameNumber: 0,
+                    player1: {
+                        position: { x: p1Pos.x, y: p1Pos.y, z: p1Pos.z },
+                        velocity: { x: p1Vel.x, y: p1Vel.y, z: p1Vel.z },
+                        rotation: { x: p1Rot.x, y: p1Rot.y, z: p1Rot.z, w: p1Rot.w },
+                        boost: state.player1Boost
+                    },
+                    player2: {
+                        position: { x: p2Pos.x, y: p2Pos.y, z: p2Pos.z },
+                        velocity: { x: p2Vel.x, y: p2Vel.y, z: p2Vel.z },
+                        rotation: { x: p2Rot.x, y: p2Rot.y, z: p2Rot.z, w: p2Rot.w },
+                        boost: state.player2Boost
+                    }
+                });
+            }
             
             // Update rolling sound based on player velocities
             if (player1?.rigidBody) {
@@ -1046,6 +1172,15 @@ function animate() {
 
     // Round over / Game over
     if (state.gameState === 'ROUND_OVER' || state.gameState === 'GAME_OVER') {
+        // Stop replay recording and show falling clip
+        if (state.gameState === 'ROUND_OVER' && !replayModalShown && replayRecorder.buffer.length > 0) {
+            replayModalShown = true;
+            replayRecorder.stopRecording();
+            setTimeout(() => {
+                showQuickReplayClip(replayRecorder.getBuffer(), 3000);
+            }, 500);
+        }
+        
         player1?.update(delta, arena, particles);
         player2?.update(delta, arena, particles);
         arena?.update(delta);
@@ -1089,13 +1224,70 @@ function setupStoreSubscription() {
                 case 'ONLINE':
                     screens.onlineLobby.classList.remove('hidden');
                     break;
-                case 'DIFFICULTY_SELECT':
-                    screens.difficultySelect.classList.remove('hidden');
+                case 'CUSTOMIZATION':
+                    hideAllScreens();
+                    // Show customization modal for current player
+                    if (!customizationShown) {
+                        customizationShown = true;
+                        const playerToCustomize = customizationPlayer === 1 ? state.p1Name : state.p2Name;
+                        const initialColor = customizationPlayer === 1 ? state.p1Color : state.p2Color;
+                        const initialHat = customizationPlayer === 1 ? state.p1Hat : state.p2Hat;
+                        
+                        createCustomizationModal(playerToCustomize, {
+                            initialColor,
+                            initialHat,
+                            onConfirm: (result) => {
+                                if (customizationPlayer === 1) {
+                                    useGameStore.getState().setPlayerColors(result.color, state.p2Color);
+                                    useGameStore.getState().setPlayerHats(result.hat, state.p2Hat);
+                                    // Move to player 2 customization
+                                    customizationPlayer = 2;
+                                    customizationShown = false;
+                                } else {
+                                    // Both players done, move to countdown
+                                    useGameStore.getState().setPlayerColors(state.p1Color, result.color);
+                                    useGameStore.getState().setPlayerHats(state.p1Hat, result.hat);
+                                    resetReplayRecorder();
+                                    replayModalShown = false;
+                                    countdownTimer = 3.0;
+                                    useGameStore.getState().startRound();
+                                }
+                            }
+                        });
+                    }
                     break;
                 case 'NAME_ENTRY':
                     screens.nameEntry.classList.remove('hidden');
                     document.getElementById('p1-name-input').value = state.p1Name;
                     const isOnePlayer = state.gameMode === '1P';
+                    
+                    // Show/hide difficulty section for single player only
+                    const diffSection = document.getElementById('difficulty-section');
+                    if (diffSection) {
+                        diffSection.classList.toggle('hidden', !isOnePlayer);
+                    }
+                    
+                    // Update difficulty button styling
+                    ['easy', 'normal', 'hard'].forEach(diff => {
+                        const btn = document.getElementById(`difficulty-${diff}-btn`);
+                        if (btn) {
+                            btn.classList.toggle('active', state.difficulty === diff);
+                        }
+                    });
+                    
+                    // Generate random ball with hat for the play button
+                    const { color: ballColor, hat: ballHat } = generateRandomBallWithHat();
+                    const ballImageUrl = createBallWithHatCanvas(ballColor, ballHat);
+                    const playBtn = document.getElementById('name-entry-play-btn');
+                    if (playBtn) {
+                        // Set HTML with ball image on the left and text on the right
+                        playBtn.innerHTML = `<img src="${ballImageUrl}" style="height: 70px; width: auto; margin-right: 15px;"> LET'S PLAY!`;
+                        playBtn.style.display = 'flex';
+                        playBtn.style.alignItems = 'center';
+                        playBtn.style.justifyContent = 'center';
+                        playBtn.style.gap = '0.5rem';
+                    }
+                    
                     document.getElementById('name-entry-p2-field')?.classList.toggle('hidden', isOnePlayer);
                     document.getElementById('name-entry-vs')?.classList.toggle('hidden', isOnePlayer);
                     if (!isOnePlayer) document.getElementById('p2-name-input').value = state.p2Name;
@@ -1114,9 +1306,12 @@ function setupStoreSubscription() {
                     setTimeout(() => {
                         if (useGameStore.getState().gameState === 'ROUND_OVER') {
                             nameEntryMode = 'nextround';
-                            useGameStore.getState().enterNameEntry();
+                            // Show customization before next round
+                            customizationPlayer = 1;
+                            customizationShown = false;
+                            useGameStore.getState().setGameState('CUSTOMIZATION');
                         }
-                    }, 2500);
+                    }, 4000); // Wait for replay to finish (3s replay + 1s buffer)
                     break;
                 case 'GAME_OVER':
                     screens.gameOver.classList.remove('hidden');
@@ -1139,6 +1334,16 @@ function setupStoreSubscription() {
         document.getElementById('p2-score').textContent = state.p2Score;
         document.getElementById('p1-boost').style.width = `${state.player1Boost}%`;
         document.getElementById('p2-boost').style.width = `${state.player2Boost}%`;
+
+        // Update difficulty button styling when difficulty changes
+        if (state.difficulty !== prevState.difficulty) {
+            ['easy', 'normal', 'hard'].forEach(diff => {
+                const btn = document.getElementById(`difficulty-${diff}-btn`);
+                if (btn) {
+                    btn.classList.toggle('active', state.difficulty === diff);
+                }
+            });
+        }
     });
 }
 
@@ -1207,6 +1412,10 @@ async function init() {
         setupOnlineHandlers();
         setupStoreSubscription();
         populatePowerupsGuide();
+        
+        // Initialize scores overlay for gameplay
+        const overlayResult = createScoresOverlay();
+        scoresOverlay = overlayResult.container;
         
         showScreen('menu');
         animate();

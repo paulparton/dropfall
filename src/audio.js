@@ -1526,3 +1526,9 @@ export function setBoostSound(playerId, isBoosting) {
         delete boostNodes[playerId];
     }
 }
+
+// Stub function for rolling sound update - can be enhanced in future
+export function updateRollingSound(velocity) {
+    // Placeholder for future rolling sound implementation
+    // Could play continuous rolling/sliding sounds based on velocity magnitude
+}

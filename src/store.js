@@ -108,10 +108,9 @@ export const useGameStore = createStore((set) => ({
 
     setGameMode: (mode) => set((state) => {
         localStorage.setItem('dropfall_gamemode', mode);
-        // For 1P mode, go to difficulty selection
-        // For 2P mode, skip difficulty and go straight to name entry
-        // For ONLINE mode, show online connect screen (handled by main.js)
-        const nextState = mode === '1P' ? 'DIFFICULTY_SELECT' : mode === 'ONLINE' ? 'MENU' : 'NAME_ENTRY';
+        // All modes go directly to NAME_ENTRY (game settings)
+        // For 1P, difficulty selection appears within game settings
+        const nextState = 'NAME_ENTRY';
         return { gameMode: mode, gameState: nextState };
     }),
 

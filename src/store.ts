@@ -41,6 +41,8 @@ export interface GameSettings {
   autoRestart: boolean;
   p1Hat: string;
   p2Hat: string;
+  p1Color: number; // hex color code
+  p2Color: number; // hex color code
   powerUpWeights: Record<string, number>;
   controls: {
     p1: { up: string; down: string; left: string; right: string; boost: string };
@@ -82,7 +84,7 @@ export interface TileEffect {
  */
 export interface GameStoreState {
   // Core game state
-  gameState: string; // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE'
+  gameState: string; // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'CUSTOMIZATION', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE'
   gameMode: GameMode | string; // '1P', '2P', 'ONLINE', 'AI'
   difficulty: Difficulty | string;
   winner: string | null;
@@ -95,6 +97,8 @@ export interface GameStoreState {
   p2Name: string;
   p1Hat: string;
   p2Hat: string;
+  p1Color: number;
+  p2Color: number;
 
   // Online state
   online: OnlineState;
@@ -116,6 +120,8 @@ export interface StoreActions {
   resetSettings(): void;
   setPlayerNames(p1Name: string, p2Name: string): void;
   setPlayerHats(p1Hat: string, p2Hat: string): void;
+  setPlayerColors(p1Color: number, p2Color: number): void;
+  setGameState(state: string): void;
   setGameMode(mode: GameMode | string): void;
   setDifficulty(diff: Difficulty | string): void;
   enterNameEntry(): void;
@@ -176,6 +182,8 @@ const defaultSettings: GameSettings = {
   autoRestart: false,
   p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
   p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
+  p1Color: parseInt(localStorage.getItem('dropfall_p1color') || '0xff0000', 16),
+  p2Color: parseInt(localStorage.getItem('dropfall_p2color') || '0x0000ff', 16),
   powerUpWeights: {
     ACCELERATION_BOOST: 50,
     SIZE_REDUCTION: 50,
@@ -231,6 +239,8 @@ export const useGameStore = create<GameStore>()(
       p2Name: localStorage.getItem('dropfall_p2name') || 'Player 2',
       p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
       p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
+      p1Color: parseInt(localStorage.getItem('dropfall_p1color') || '0xff0000', 16),
+      p2Color: parseInt(localStorage.getItem('dropfall_p2color') || '0x0000ff', 16),
 
       // Online state
       online: {
@@ -277,11 +287,22 @@ export const useGameStore = create<GameStore>()(
         }));
       },
 
+      setPlayerColors: (p1Color: number, p2Color: number) => {
+        localStorage.setItem('dropfall_p1color', p1Color.toString(16));
+        localStorage.setItem('dropfall_p2color', p2Color.toString(16));
+        return set({ p1Color, p2Color });
+      },
+
+      setGameState: (gameState: string) => {
+        return set({ gameState });
+      },
+
       // Game mode actions
       setGameMode: (mode) =>
         set((state) => {
           localStorage.setItem('dropfall_gamemode', mode);
-          const nextState = mode === '1P' ? 'DIFFICULTY_SELECT' : mode === 'ONLINE' ? 'MENU' : 'NAME_ENTRY';
+          // For all modes, go directly to NAME_ENTRY (game settings) where difficulty is selected for 1P
+          const nextState = 'NAME_ENTRY';
           return { gameMode: mode, gameState: nextState };
         }),
 
