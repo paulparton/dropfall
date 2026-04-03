@@ -28,7 +28,7 @@ import { Arena } from './entities/Arena.js';
 import { ParticleSystem } from './entities/ParticleSystem.js';
 import { LightningSystem } from './entities/LightningSystem.js';
 import { ShockwaveSystem } from './entities/ShockwaveSystem.js';
-import { initAudio, playMusic, playCollisionSound, setMusicSpeed, setSfxVolume, setMusicVolume } from './audio.js';
+import { initAudio, playMusic, playCollisionSound, setMusicSpeed } from './audio.js';
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
 import { online } from './online.js';
@@ -230,11 +230,13 @@ function resetEntities() {
 }
 
 function resetOnlineEntities() {
-    // Clean up old entities if any
     player1?.cleanup();
     player2?.cleanup();
     arena?.cleanup();
-    
+    particles?.cleanup();
+    lightning?.cleanup();
+    shockwaves?.cleanup();
+
     const state = useGameStore.getState();
     const mySlot = state.online?.playerSlot;
     
@@ -247,27 +249,17 @@ function resetOnlineEntities() {
     if (mySlot === 1) {
         // I'm the host (player 1) on the left
         player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
-        player1.isLocal = true; // Host controls player 1
         player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
-        player2.isLocal = false; // player2 is remote (client's player)
     } else if (mySlot === 2) {
-        // I'm the client (player 2) on the right - but I use WASD (Player 1 controls)
-        // Everyone uses Player 1 controls in online mode, regardless of slot
+        // I'm the client (player 2) on the right, but I use player 2 controls (arrows)
+        // The visual player1/player2 display doesn't change - it's about my slot
         player1 = new Player('player1', 0xff4444, hostPos, () => useGameStore.getState().online.opponentInput || defaultInput);
-        player1.isLocal = false; // player1 is remote (host's player)
-        player2 = new Player('player2', 0x4444ff, clientPos, getPlayer1InputUnified);  // <-- FIX: was getPlayer2InputUnified
-        player2.isLocal = true; // Client controls player 2
+        player2 = new Player('player2', 0x4444ff, clientPos, getPlayer2InputUnified);
     } else {
         // Fallback: assume we're host if slot is unknown
         player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
-        player1.isLocal = true;
         player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
-        player2.isLocal = false;
     }
-    
-    // Update player name labels immediately (names may have been set before players were created)
-    if (player1) player1.updateNameLabel(state.p1Name || 'Player 1');
-    if (player2) player2.updateNameLabel(state.p2Name || 'Player 2');
     
     arena = new Arena();
     particles = new ParticleSystem();
@@ -349,15 +341,27 @@ function setupButtonHandlers() {
     });
 
     // Game Mode Selection
-    document.getElementById('mode-single-btn')?.addEventListener('click', () => {
+    const singleBtn = document.getElementById('mode-single-btn');
+    const localBtn = document.getElementById('mode-local-btn');
+    const onlineBtn = document.getElementById('mode-online-btn');
+    
+    console.log('[Setup] Mode buttons found:', { singleBtn: !!singleBtn, localBtn: !!localBtn, onlineBtn: !!onlineBtn });
+    
+    singleBtn?.addEventListener('click', () => {
+        console.log('[Click] SINGLE PLAYER clicked');
         useGameStore.getState().setGameMode('1P');
+        console.log('[Click] Store updated, new state:', useGameStore.getState());
     });
-    document.getElementById('mode-local-btn')?.addEventListener('click', () => {
+    localBtn?.addEventListener('click', () => {
+        console.log('[Click] LOCAL clicked');
         useGameStore.getState().setGameMode('2P');
+        console.log('[Click] Store updated, new state:', useGameStore.getState());
     });
-    document.getElementById('mode-online-btn')?.addEventListener('click', () => {
+    onlineBtn?.addEventListener('click', () => {
+        console.log('[Click] ONLINE clicked');
         useGameStore.getState().setGameMode('ONLINE');
         showScreen('onlineConnect');
+        console.log('[Click] Screen shown, new state:', useGameStore.getState());
     });
 
     // Difficulty Selection
@@ -797,7 +801,7 @@ function setupOnlineHandlers() {
         console.log('[playerJoined] Player joined:', player.name);
         const state = useGameStore.getState();
         const isHost = state.online.isHost;
-        const myName = state.online.myName || 'Player';
+        const myName = state.online.myName;
         const opponentName = player.name || 'Player';
         
         // Set player names based on slots
@@ -808,9 +812,6 @@ function setupOnlineHandlers() {
             // I'm player 2, opponent is player 1
             state.setPlayerNames(opponentName, myName);
         }
-        
-        // Update player name labels immediately since players were created before names were set
-        updateHUDNames();
         
         document.getElementById('online-game-info').innerHTML = `<p>Player joined: ${opponentName}</p>`;
         if (isHost) {
@@ -971,8 +972,6 @@ function animate() {
             const distance = p1Pos.distanceTo(p2Pos);
             const collisionDist = state.settings.sphereSize * 2 + 0.1;
 
-            collisionCooldown -= delta;
-
             if (distance <= collisionDist && collisionCooldown <= 0) {
                 collisionCooldown = 0.5;
                 const v1 = player1.rigidBody.linvel();
@@ -1024,11 +1023,10 @@ function animate() {
         // Win check
         if (state.gameState === 'PLAYING') {
             checkWinConditions(delta);
-
+            
             // Online sync
             if (state.gameMode === 'ONLINE' && state.online.connected) {
-                // Always use Player 1 controls (WASD) in online mode regardless of slot
-                const input = getPlayer1InputUnified();
+                const input = (state.online.playerSlot === 1 ? getPlayer1InputUnified : getPlayer2InputUnified)();
                 online.sendInput({ ...input });
                 if (state.online.isHost && player1 && player2) {
                     const p1Vel = player1.rigidBody.linvel();
