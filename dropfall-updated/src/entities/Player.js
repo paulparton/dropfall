@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getPhysicsSystem } from '../systems/PhysicsSystem.js';
+import { createPlayerBody, world } from '../physics.js';
 import { scene } from '../renderer.js';
 import { getThemeMaterials } from '../utils/themeTextures.js';
 import { useGameStore } from '../store.js';
@@ -138,11 +138,9 @@ export class Player {
         this.id = id;
         this.color = color;
         this.inputFn = inputFn;
-        this.isLocal = true; // Default to local - override in main.js for online remote players
         this.isDead = false;
         this.freezeTimer = 0;
         this.iceCooldown = 0;
-        this.portalCooldown = 0;
         this.isBoosting = false;
         this.wasBoosting = false;
         
@@ -204,14 +202,8 @@ export class Player {
         scene.add(this.auraMesh);
         this.auraMeshVisible = true;
 
-        // 4. Rapier Rigid Body - use PhysicsSystem for event tracking
-        const physicsSystem = getPhysicsSystem();
-        const { rigidBody, collider } = physicsSystem.createBody(id, startPosition, {
-            radius: this.sphereSize,
-            mass: this.sphereWeight,
-            restitution: this.collisionBounce,
-            isDynamic: true
-        });
+        // 4. Rapier Rigid Body
+        const { rigidBody, collider } = createPlayerBody(startPosition, this.sphereSize, this.sphereWeight, this.collisionBounce);
         this.rigidBody = rigidBody;
         this.collider = collider;
 
@@ -227,26 +219,25 @@ export class Player {
             this.nameLabel = null;
         }
 
-        // 5b. Hats
+        // 6. Hat
         this.hatGroup = this._createHat(hatType);
         if (this.hatGroup) {
             scene.add(this.hatGroup);
         }
-        this.hatTiltX = 0;
-        this.hatTiltZ = 0;
-        this.hatTiltVelX = 0;
-        this.hatTiltVelZ = 0;
-        this.hatBobOffset = 0;
-        this.hatBobVel = 0;
-        this.hatSquash = 1.0;
+
+        // Hat physics state
+        this.hatTiltX = 0;      // Current tilt around X axis
+        this.hatTiltZ = 0;      // Current tilt around Z axis
+        this.hatTiltVelX = 0;   // Angular velocity X
+        this.hatTiltVelZ = 0;   // Angular velocity Z
+        this.hatBobOffset = 0;  // Vertical bounce offset
+        this.hatBobVel = 0;     // Vertical bounce velocity
+        this.hatSquash = 1.0;   // Squash-stretch Y scale
         this.hatSquashVel = 0;
-        this.prevVelX = 0;
+        this.prevVelX = 0;      // Previous frame velocity for accel detection
         this.prevVelY = 0;
         this.prevVelZ = 0;
-
-        // 6. Initialize position tracking for smooth interpolation
-        this.lastPosition = new THREE.Vector3().copy(startPosition);
-        this.lastRotation = new THREE.Quaternion();
+        this.hatSettleTime = 0; // Extra wobble after events
     }
 
     update(delta, arena, particles) {
@@ -254,23 +245,19 @@ export class Player {
         const position = this.rigidBody.translation();
         const rotation = this.rigidBody.rotation();
 
-        // Convert Rapier Vector3 to THREE.Vector3 for easier math
-        const currentPos = new THREE.Vector3(position.x, position.y, position.z);
-        const currentRot = new THREE.Quaternion(rotation.x, rotation.y, rotation.z, rotation.w);
-
-        this.mesh.position.copy(currentPos);
-        this.mesh.quaternion.copy(currentRot);
-        this.glow.position.copy(currentPos);
-        this.auraMesh.position.copy(currentPos);
+        this.mesh.position.copy(position);
+        this.mesh.quaternion.copy(rotation);
+        this.glow.position.copy(position);
+        this.auraMesh.position.copy(position);
         if (this.nameLabel) {
-            this.nameLabel.position.set(currentPos.x, currentPos.y + this.sphereSize + 3.2, currentPos.z);
+            this.nameLabel.position.set(position.x, position.y + this.sphereSize + 3.2, position.z);
         }
         if (this.hatGroup) {
-            this._updateHatPhysics(delta, currentPos);
+            this._updateHatPhysics(delta, position);
         }
 
         // 2. Check Death Condition
-        if (currentPos.y < -10) {
+        if (position.y < -10) {
             this.isDead = true;
         }
 
@@ -285,9 +272,8 @@ export class Player {
         // Update timers
         if (this.freezeTimer > 0) this.freezeTimer -= delta;
         if (this.iceCooldown > 0) this.iceCooldown -= delta;
-        if (this.portalCooldown > 0) this.portalCooldown -= delta;
 
-        // 3. Check Tile State for Ice and Portal
+        // 3. Check Tile State for Ice and Bonus
         if (arena) {
             const hex = pixelToHex(position.x, position.z, 8.0); // radius is 8.0
             const tile = arena.getTileAt(hex.q, hex.r);
@@ -300,33 +286,9 @@ export class Player {
                 }
             }
             
-            // Portal tile logic
-            if (tile && tile.state === 'PORTAL') {
-                if (!this.portalCooldown || this.portalCooldown <= 0) {
-                    const portalTiles = arena.getPortalTiles();
-                    if (portalTiles.length > 1) {
-                        // Find a different portal tile to teleport to
-                        const otherPortals = portalTiles.filter(p => p !== tile);
-                        const targetPortal = otherPortals[Math.floor(Math.random() * otherPortals.length)];
-                        
-                        // Teleport to target portal
-                        const targetPos = targetPortal.mesh.position;
-                        this.rigidBody.setTranslation({ x: targetPos.x, y: targetPos.y + 2, z: targetPos.z }, true);
-                        
-                        // Reset velocity to avoid momentum carryover
-                        this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                        
-                        // Set cooldown
-                        const settings = useGameStore.getState().settings;
-                        this.portalCooldown = settings.portalCooldown;
-                    }
-                }
-            }
-            
             // Bonus tile logic
-            if (tile && tile.state === 'BONUS') {
-                // Pick up the bonus and apply random effect
-                const randomEffect = POWER_UP_EFFECTS[Math.floor(Math.random() * POWER_UP_EFFECTS.length)];
+            if (tile && tile.state === 'BONUS' && tile.assignedPowerUp) {
+                const randomEffect = tile.assignedPowerUp;
                 const settings = useGameStore.getState().settings;
                 const duration = settings.bonusDuration;
                 
@@ -348,7 +310,7 @@ export class Player {
                     window.showPowerUpNotification(playerName, randomEffect.name, randomEffect.icon, randomEffect.color);
                 }
                 
-                // Convert bonus tile back to normal
+                // Convert bonus tile back to normal (this also removes the sprite)
                 arena.convertTileToNormal(tile);
             }
             
@@ -401,11 +363,7 @@ export class Player {
             this.collider.setFriction(0.5 * this.frictionMultiplier);
         }
 
-        // 4. Handle Input - skip for remote players (online client receives positions from host)
-        if (!this.isLocal) {
-            return; // Remote player - position is set by host, don't apply local input
-        }
-
+        // 4. Handle Input
         const storeState = useGameStore.getState();
         const input = storeState.gameState === 'PLAYING' ? this.inputFn() : { forward: false, backward: false, left: false, right: false, boost: false };
         const speed = this.sphereAccel * this.sphereAccelMultiplier * delta;
@@ -468,10 +426,6 @@ export class Player {
         } else {
             useGameStore.getState().updateBoost(this.id, settings.boostRegenSpeed * delta);
         }
-
-        // Store current state for next frame (used for interpolation if needed)
-        this.lastPosition.copy(currentPos);
-        this.lastRotation.copy(currentRot);
     }
 
     cleanup() {
@@ -489,7 +443,7 @@ export class Player {
             this.hatGroup.traverse(child => {
                 if (child.isMesh) {
                     child.geometry.dispose();
-                    if (child.material) child.material.dispose();
+                    child.material.dispose();
                 }
             });
             this.hatGroup = null;
@@ -500,9 +454,8 @@ export class Player {
         this.auraMesh.material.dispose();
         setBoostSound(this.id, false);
 
-        if (this.rigidBody) {
-            const physicsSystem = getPhysicsSystem();
-            physicsSystem.destroyBody(this.id);
+        if (world && this.rigidBody) {
+            world.removeRigidBody(this.rigidBody);
         }
     }
 
@@ -526,36 +479,13 @@ export class Player {
         sprite.scale.set(10, 2.5, 1);
         return sprite;
     }
-    
-    updateNameLabel(newName) {
-        if (!this.nameLabel) return;
-        this.playerName = newName;
-        
-        // Recreate the texture with the new name
-        const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 64;
-        const ctx = canvas.getContext('2d');
-        const hexColor = '#' + this.color.toString(16).padStart(6, '0');
-        ctx.font = 'bold 38px "Courier New", monospace';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-        ctx.lineWidth = 7;
-        ctx.strokeText(newName, 128, 32);
-        ctx.fillStyle = hexColor;
-        ctx.fillText(newName, 128, 32);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        this.nameLabel.material.map = texture;
-        this.nameLabel.material.needsUpdate = true;
-    }
 
     _createHat(type) {
         if (type === 'none') return null;
         const group = new THREE.Group();
         const s = this.sphereSize;
 
+        // Shared material helper
         const mat = (color, opts = {}) => new THREE.MeshStandardMaterial({
             color,
             roughness: opts.roughness ?? 0.5,
@@ -568,6 +498,7 @@ export class Player {
 
         switch (type) {
             case 'santa': {
+                // --- Fur brim (fluffy white torus) ---
                 const brimGeo = new THREE.TorusGeometry(s * 0.62, s * 0.2, 12, 24);
                 const brim = new THREE.Mesh(brimGeo, mat(0xeeeeee, { roughness: 0.9, emissive: 0x444444, emissiveIntensity: 0.15 }));
                 brim.rotation.x = Math.PI / 2;
@@ -575,6 +506,8 @@ export class Player {
                 brim.castShadow = true;
                 group.add(brim);
 
+                // --- Santa hat is built as segmented chain for floppy physics ---
+                // We store references to segments so _updateHatPhysics can animate them
                 this.santaSegments = [];
                 const segCount = 6;
                 const segHeight = s * 0.35;
@@ -591,26 +524,32 @@ export class Player {
                     );
                     const seg = new THREE.Mesh(segGeo, coneMat);
                     seg.castShadow = true;
+
+                    // Pivot is at the bottom of each segment
+                    // Shift geometry up so rotation is around the base
                     segGeo.translate(0, segHeight / 2, 0);
 
                     const pivot = new THREE.Group();
                     pivot.add(seg);
+                    // Position each pivot at the top of the previous segment
                     pivot.position.y = i === 0 ? s * 0.05 : segHeight;
 
                     this.santaSegments.push({
                         pivot,
-                        angle: 0,
-                        angleVel: 0,
-                        baseAngle: i === 0 ? 0.15 : 0
+                        angle: 0,     // current droop angle (radians)
+                        angleVel: 0,  // angular velocity
+                        baseAngle: i === 0 ? 0.15 : 0  // slight initial tilt for first segment
                     });
 
                     if (i === 0) {
                         group.add(pivot);
                     } else {
+                        // Parent to previous segment's pivot
                         this.santaSegments[i - 1].pivot.add(pivot);
                     }
                 }
 
+                // --- Pom-pom at tip (attached to last segment) ---
                 const lastPivot = this.santaSegments[segCount - 1].pivot;
                 const pomGroup = new THREE.Group();
                 pomGroup.position.y = segHeight;
@@ -626,19 +565,23 @@ export class Player {
                 }
                 lastPivot.add(pomGroup);
                 this.santaPomGroup = pomGroup;
-                this.santaDroopX = 0;
-                this.santaDroopZ = -1;
+
+                // Initialize floppy physics state
+                this.santaDroopX = 0;  // smoothed droop direction
+                this.santaDroopZ = -1; // default droop backward
                 break;
             }
             case 'cowboy': {
                 const leather = mat(0x6B3A20, { roughness: 0.75, emissive: 0x1a0800, emissiveIntensity: 0.06, side: THREE.DoubleSide });
                 const darkLeather = mat(0x4A2810, { roughness: 0.7, emissive: 0x100500, emissiveIntensity: 0.05, side: THREE.DoubleSide });
 
+                // --- Wide brim (ring: big cylinder minus inner hole) ---
+                // Use a flat ring via LatheGeometry for clean donut-brim
                 const brimProfile = [
                     new THREE.Vector2(s * 0.55, s * -0.03),
                     new THREE.Vector2(s * 0.55, s * 0.03),
-                    new THREE.Vector2(s * 1.45, s * 0.06),
-                    new THREE.Vector2(s * 1.5,  s * 0.12),
+                    new THREE.Vector2(s * 1.45, s * 0.06),  // slight upward curl at edge
+                    new THREE.Vector2(s * 1.5,  s * 0.12),  // front/back lift
                     new THREE.Vector2(s * 1.45, s * 0.06),
                     new THREE.Vector2(s * 0.55, s * -0.03),
                 ];
@@ -648,14 +591,17 @@ export class Player {
                 brim.castShadow = true;
                 group.add(brim);
 
+                // --- Crown (closed cylinder with shaped profile + flat top) ---
                 const crownProfile = [];
                 const crownH = s * 1.0;
                 const crownSteps = 16;
                 for (let i = 0; i <= crownSteps; i++) {
                     const t = i / crownSteps;
+                    // Slightly barrel-shaped: wider at mid, narrower at top
                     const r = s * (0.58 + 0.06 * Math.sin(t * Math.PI) - 0.04 * t);
                     crownProfile.push(new THREE.Vector2(r, s * 0.15 + t * crownH));
                 }
+                // Close the top — bring radius to 0
                 crownProfile.push(new THREE.Vector2(s * 0.52, s * 0.15 + crownH));
                 crownProfile.push(new THREE.Vector2(0, s * 0.15 + crownH));
                 const crownGeo = new THREE.LatheGeometry(crownProfile, 20);
@@ -663,12 +609,14 @@ export class Player {
                 crown.castShadow = true;
                 group.add(crown);
 
+                // --- Top dent (crease) — flatten top center downward ---
                 const dentGeo = new THREE.CylinderGeometry(s * 0.38, s * 0.42, s * 0.12, 16);
                 const dent = new THREE.Mesh(dentGeo, darkLeather);
                 dent.position.y = s * 0.15 + crownH - s * 0.04;
                 dent.castShadow = true;
                 group.add(dent);
 
+                // Front pinch (two small indentations on the crown sides)
                 for (let side = -1; side <= 1; side += 2) {
                     const pinch = new THREE.Mesh(
                         new THREE.SphereGeometry(s * 0.15, 8, 8),
@@ -679,6 +627,7 @@ export class Player {
                     group.add(pinch);
                 }
 
+                // --- Hat band ---
                 const bandGeo = new THREE.TorusGeometry(s * 0.6, s * 0.065, 8, 24);
                 const band = new THREE.Mesh(bandGeo, mat(0x111111, { roughness: 0.4, metalness: 0.3 }));
                 band.rotation.x = Math.PI / 2;
@@ -686,6 +635,7 @@ export class Player {
                 band.castShadow = true;
                 group.add(band);
 
+                // Band buckle
                 const buckleGeo = new THREE.BoxGeometry(s * 0.15, s * 0.12, s * 0.04);
                 const buckle = new THREE.Mesh(buckleGeo, mat(0xdaa520, { metalness: 0.9, roughness: 0.15, emissive: 0x553300, emissiveIntensity: 0.15 }));
                 buckle.position.set(0, s * 0.32, s * 0.63);
@@ -694,14 +644,17 @@ export class Player {
                 break;
             }
             case 'afro': {
+                // Build afro from overlapping noisy spheres for a puffy look
                 const afroMat = mat(0x1a0800, { roughness: 1.0, metalness: 0.0, emissive: 0x0a0400, emissiveIntensity: 0.04 });
 
+                // Core large sphere
                 const coreGeo = new THREE.SphereGeometry(s * 1.35, 20, 20);
                 const core = new THREE.Mesh(coreGeo, afroMat);
                 core.position.y = s * 0.55;
                 core.castShadow = true;
                 group.add(core);
 
+                // Lumpy outer layer — multiple offset spheres
                 const lumpCount = 14;
                 for (let i = 0; i < lumpCount; i++) {
                     const phi = Math.acos(1 - 2 * (i + 0.5) / lumpCount);
@@ -715,12 +668,14 @@ export class Player {
                         s * 0.55 + r * Math.cos(phi) * 0.7 + s * 0.15,
                         r * Math.sin(phi) * Math.sin(theta)
                     );
+                    // Only add lumps above the equator
                     if (lump.position.y > s * 0.2) {
                         lump.castShadow = true;
                         group.add(lump);
                     }
                 }
 
+                // Hair pick (small handle sticking out)
                 const pickHandle = new THREE.Mesh(
                     new THREE.CylinderGeometry(s * 0.04, s * 0.04, s * 0.8, 6),
                     mat(0xff4444, { emissive: 0x440000, emissiveIntensity: 0.1 })
@@ -735,24 +690,28 @@ export class Player {
                 const goldMat = mat(0xffd700, { metalness: 0.9, roughness: 0.15, emissive: 0x996600, emissiveIntensity: 0.2 });
                 const gemColors = [0xff0044, 0x0066ff, 0x00cc44, 0xff0044, 0x8800ff];
 
+                // --- Base band (thicker, regal cylinder) ---
                 const baseGeo = new THREE.CylinderGeometry(s * 0.72, s * 0.78, s * 0.4, 24);
                 const base = new THREE.Mesh(baseGeo, goldMat);
                 base.position.y = s * 0.22;
                 base.castShadow = true;
                 group.add(base);
 
+                // Lower trim ring
                 const trimGeo = new THREE.TorusGeometry(s * 0.76, s * 0.04, 8, 24);
                 const trim = new THREE.Mesh(trimGeo, mat(0xffaa00, { metalness: 0.95, roughness: 0.1, emissive: 0x664400, emissiveIntensity: 0.15 }));
                 trim.rotation.x = Math.PI / 2;
                 trim.position.y = s * 0.04;
                 group.add(trim);
 
+                // --- 5 Crown points (taller, elegant) ---
                 const pointCount = 5;
                 for (let i = 0; i < pointCount; i++) {
                     const angle = (i / pointCount) * Math.PI * 2;
                     const px = Math.cos(angle) * s * 0.58;
                     const pz = Math.sin(angle) * s * 0.58;
 
+                    // Main point — elongated octahedron-like shape using two cones
                     const topCone = new THREE.Mesh(
                         new THREE.ConeGeometry(s * 0.14, s * 0.55, 5),
                         goldMat
@@ -761,6 +720,7 @@ export class Player {
                     topCone.castShadow = true;
                     group.add(topCone);
 
+                    // Small sphere tip
                     const tip = new THREE.Mesh(
                         new THREE.SphereGeometry(s * 0.06, 8, 8),
                         goldMat
@@ -768,6 +728,7 @@ export class Player {
                     tip.position.set(px, s * 0.98, pz);
                     group.add(tip);
 
+                    // Connecting arch between points
                     if (i < pointCount) {
                         const nextAngle = ((i + 1) / pointCount) * Math.PI * 2;
                         const midAngle = (angle + nextAngle) / 2;
@@ -783,6 +744,7 @@ export class Player {
                         group.add(arch);
                     }
 
+                    // Gem inset on each point
                     const gem = new THREE.Mesh(
                         new THREE.OctahedronGeometry(s * 0.08, 1),
                         mat(gemColors[i], { metalness: 0.1, roughness: 0.05, emissive: gemColors[i], emissiveIntensity: 0.6, transparent: true, opacity: 0.9 })
@@ -793,6 +755,7 @@ export class Player {
                     group.add(gem);
                 }
 
+                // --- Velvet cushion (inner top, red) ---
                 const cushion = new THREE.Mesh(
                     new THREE.SphereGeometry(s * 0.5, 12, 8, 0, Math.PI * 2, 0, Math.PI * 0.5),
                     mat(0x880022, { roughness: 0.95, emissive: 0x220008, emissiveIntensity: 0.08, side: THREE.DoubleSide })
@@ -801,6 +764,7 @@ export class Player {
                 cushion.scale.y = 0.4;
                 group.add(cushion);
 
+                // --- Cross/orb on top ---
                 const orb = new THREE.Mesh(
                     new THREE.SphereGeometry(s * 0.08, 10, 10),
                     goldMat
@@ -823,6 +787,7 @@ export class Player {
                 break;
             }
             case 'dunce': {
+                // --- Tall paper cone with visible seam ---
                 const coneH = s * 2.8;
                 const coneR = s * 0.65;
                 const coneProfile = [];
@@ -838,20 +803,24 @@ export class Player {
                 cone.castShadow = true;
                 group.add(cone);
 
+                // --- "DUNCE" text as flat planes on the cone surface ---
                 const makeTextPlane = () => {
                     const canvas = document.createElement('canvas');
                     canvas.width = 256;
                     canvas.height = 96;
                     const ctx = canvas.getContext('2d');
                     ctx.clearRect(0, 0, 256, 96);
+                    // Red hand-drawn text
                     ctx.font = 'bold 72px "Times New Roman", serif';
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
+                    // Outline for visibility
                     ctx.strokeStyle = '#600000';
                     ctx.lineWidth = 4;
                     ctx.strokeText('DUNCE', 128, 44);
                     ctx.fillStyle = '#cc0000';
                     ctx.fillText('DUNCE', 128, 44);
+                    // Underline
                     ctx.strokeStyle = '#cc0000';
                     ctx.lineWidth = 3;
                     ctx.beginPath();
@@ -869,17 +838,20 @@ export class Player {
                     return new THREE.Mesh(planeGeo, planeMat);
                 };
 
+                // Front label
                 const frontLabel = makeTextPlane();
                 const labelHeight = coneH * 0.28;
                 const labelRadius = coneR * 0.6 + 0.02;
                 frontLabel.position.set(0, labelHeight, labelRadius);
                 group.add(frontLabel);
 
+                // Back label
                 const backLabel = makeTextPlane();
                 backLabel.position.set(0, labelHeight, -labelRadius);
                 backLabel.rotation.y = Math.PI;
                 group.add(backLabel);
 
+                // --- Elastic band under chin (decorative) ---
                 const elastic = new THREE.Mesh(
                     new THREE.TorusGeometry(s * 0.5, s * 0.02, 6, 16),
                     mat(0x333333, { roughness: 0.6 })
@@ -891,6 +863,7 @@ export class Player {
             }
         }
 
+        // Enable shadow casting on all meshes
         group.traverse(child => {
             if (child.isMesh) {
                 child.castShadow = true;
@@ -905,8 +878,9 @@ export class Player {
         if (!this.hatGroup) return;
 
         const vel = this.rigidBody.linvel();
-        const dt = Math.min(delta, 0.05);
+        const dt = Math.min(delta, 0.05); // Clamp for stability
 
+        // --- Detect acceleration (change in velocity) ---
         const accelX = (vel.x - this.prevVelX) / Math.max(dt, 0.001);
         const accelY = (vel.y - this.prevVelY) / Math.max(dt, 0.001);
         const accelZ = (vel.z - this.prevVelZ) / Math.max(dt, 0.001);
@@ -914,6 +888,7 @@ export class Player {
         this.prevVelY = vel.y;
         this.prevVelZ = vel.z;
 
+        // --- Spring-damper tilt based on lateral acceleration ---
         const tiltStiffness = 18.0;
         const tiltDamping = 4.5;
         const accelInfluence = 0.0025;
@@ -932,6 +907,7 @@ export class Player {
         this.hatTiltX += this.hatTiltVelX * dt;
         this.hatTiltZ += this.hatTiltVelZ * dt;
 
+        // --- Vertical bob from Y acceleration ---
         const bobStiffness = 30.0;
         const bobDamping = 5.0;
         const bobTarget = -accelY * 0.003;
@@ -939,6 +915,7 @@ export class Player {
         this.hatBobVel += bobForce * dt;
         this.hatBobOffset += this.hatBobVel * dt;
 
+        // --- Squash-stretch ---
         const squashStiffness = 40.0;
         const squashDamping = 6.0;
         const squashTarget = 1.0 + accelY * 0.0008;
@@ -947,12 +924,14 @@ export class Player {
         this.hatSquash += this.hatSquashVel * dt;
         this.hatSquash = Math.max(0.75, Math.min(1.25, this.hatSquash));
 
+        // --- Speed wobble ---
         const speed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
         const wobbleIntensity = Math.min(speed * 0.002, 0.08);
         const time = performance.now() * 0.001;
         const wobbleX = Math.sin(time * 12) * wobbleIntensity;
         const wobbleZ = Math.cos(time * 15) * wobbleIntensity;
 
+        // --- Apply to hat group ---
         const sizeScale = this.sizeMultiplier || 1.0;
         this.hatGroup.position.set(
             position.x,
@@ -963,6 +942,7 @@ export class Player {
         this.hatGroup.rotation.x = this.hatTiltX + wobbleX;
         this.hatGroup.rotation.z = this.hatTiltZ + wobbleZ;
 
+        // Squash-stretch
         const invSquash = 1.0 / Math.sqrt(this.hatSquash);
         this.hatGroup.scale.set(
             sizeScale * invSquash,
@@ -970,23 +950,29 @@ export class Player {
             sizeScale * invSquash
         );
 
+        // --- Santa floppy chain physics ---
         if (this.santaSegments && this.santaSegments.length > 0) {
             const gravity = 14.0;
             const stiffness = 22.0;
             const damping = 6.5;
-            const velInfluence = 0.08;
+            const velInfluence = 0.08;  // How much velocity pulls the hat
 
+            // Smoothly track the droop direction (opposite to velocity)
+            // This gives the hat a consistent trailing direction
             if (speed > 1.0) {
+                // Droop AWAY from travel = opposite of velocity
                 const targetDroopX = -vel.x / speed;
                 const targetDroopZ = -vel.z / speed;
                 const smoothing = 1.0 - Math.exp(-6.0 * dt);
                 this.santaDroopX += (targetDroopX - this.santaDroopX) * smoothing;
                 this.santaDroopZ += (targetDroopZ - this.santaDroopZ) * smoothing;
             }
+            // Normalize droop direction
             const droopLen = Math.sqrt(this.santaDroopX * this.santaDroopX + this.santaDroopZ * this.santaDroopZ);
             const dX = droopLen > 0.01 ? this.santaDroopX / droopLen : 0;
             const dZ = droopLen > 0.01 ? this.santaDroopZ / droopLen : -1;
 
+            // Speed-based droop: faster = more droop
             const speedDroop = Math.min(speed * velInfluence, 1.2);
 
             for (let i = 0; i < this.santaSegments.length; i++) {
@@ -995,10 +981,12 @@ export class Player {
                 const segStiffness = stiffness * (1.0 - flopFactor * 0.65);
                 const segDamping = damping * (1.0 - flopFactor * 0.35);
 
+                // Target droop angle: gravity + velocity trailing
                 const gravDroop = 0.15 * (i + 1) * flopFactor;
                 const velDroop = speedDroop * flopFactor * 0.4;
                 const targetAngle = seg.baseAngle + gravDroop + velDroop;
 
+                // Spring-damper for smooth motion
                 const springForce = segStiffness * (targetAngle - seg.angle) - segDamping * seg.angleVel;
                 const gravTorque = gravity * flopFactor * Math.sin(seg.angle) * 0.04;
 
@@ -1008,6 +996,9 @@ export class Player {
                 const maxAngle = 1.4 + i * 0.2;
                 seg.angle = Math.max(-maxAngle, Math.min(maxAngle, seg.angle));
 
+                // Apply rotation: tilt toward the smoothed droop direction
+                // Rotation around X tilts forward/backward (Z direction)
+                // Rotation around Z tilts left/right (X direction)
                 seg.pivot.rotation.x = seg.angle * dZ;
                 seg.pivot.rotation.z = seg.angle * -dX;
             }

@@ -93,6 +93,8 @@ export interface GameStoreState {
   activeTileEffects: TileEffect[];
   p1Name: string;
   p2Name: string;
+  p1Hat: string;
+  p2Hat: string;
 
   // Online state
   online: OnlineState;
@@ -227,6 +229,8 @@ export const useGameStore = create<GameStore>()(
       activeTileEffects: [],
       p1Name: localStorage.getItem('dropfall_p1name') || 'Player 1',
       p2Name: localStorage.getItem('dropfall_p2name') || 'Player 2',
+      p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
+      p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
 
       // Online state
       online: {

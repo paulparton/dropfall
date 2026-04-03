@@ -9,6 +9,7 @@ import RAPIER, { RigidBody, Collider } from '@dimforge/rapier3d-compat';
 import { getPhysicsSystem } from '../systems/PhysicsSystem';
 import { scene } from '../renderer';
 import { getThemeMaterials } from '../utils/themeTextures';
+import { createSkyboxMaterial, resolveThemeName } from '../shaders/index';
 import { generateHexGrid, hexToPixel } from '../utils/math';
 import { useGameStore } from '../store';
 import { EntityBase } from './Entity.base';
@@ -131,6 +132,11 @@ export class Arena extends EntityBase implements ArenaEntity {
   // Three.js group
   mesh: THREE.Group;
 
+  // Skybox
+  skybox: THREE.Mesh | null = null;
+  skyboxGeometry: THREE.SphereGeometry | null = null;
+  skyboxMaterial: any = null;
+
   constructor(bounds?: Partial<ArenaBounds>) {
     super('arena', 'arena', { x: 0, y: 0 });
     this.bounds = bounds as ArenaBounds || { 
@@ -152,7 +158,7 @@ export class Arena extends EntityBase implements ArenaEntity {
   private _initialize(): void {
     const settings = useGameStore.getState().settings;
     this.arenaSize = settings.arenaSize;
-    const theme = settings.theme || 'default';
+    const theme = resolveThemeName(settings.theme || 'tron');
 
     // 1. Generate Grid
     const hexes = generateHexGrid(this.arenaSize);
@@ -231,6 +237,13 @@ export class Arena extends EntityBase implements ArenaEntity {
             edgeOpacity: 0.5  // More subtle default opacity
         });
     });
+
+    // Create spherical skybox
+    this.skyboxGeometry = new THREE.SphereGeometry(400, 64, 64);
+    this.skyboxMaterial = createSkyboxMaterial(theme);
+    this.skybox = new THREE.Mesh(this.skyboxGeometry, this.skyboxMaterial);
+    this.skybox.renderOrder = -1000;
+    scene.add(this.skybox);
   }
 
   async initialize(context: GameContext): Promise<void> {
@@ -238,12 +251,11 @@ export class Arena extends EntityBase implements ArenaEntity {
   }
 
   // Implement EntityBase.update for lifecycle
-  update(deltaTime: number, _context: GameContext): void {
-    super.update(deltaTime, _context);
+  update(deltaTime: number, _context?: GameContext): void {
+    super.update(deltaTime, _context || {} as any);
+    // Delegate to game update logic
+    this.updateGame(deltaTime);
   }
-
-  // Arena-specific update (backward compatible signature)
-  updateGame(delta: number): void {
     const storeState = useGameStore.getState();
     if (storeState.gameState === 'PLAYING') {
         this.dropTimer += delta;
@@ -356,6 +368,10 @@ export class Arena extends EntityBase implements ArenaEntity {
             tile.mesh.quaternion.copy(rotation);
         }
     });
+
+    if (this.skyboxMaterial) {
+        this.skyboxMaterial.uniforms.uTime.value = this.pulseTime;
+    }
   }
 
   triggerDrop(): void {
@@ -439,6 +455,13 @@ export class Arena extends EntityBase implements ArenaEntity {
             physicsSystem.destroyBody(`tile_${tile.q}_${tile.r}`);
         }
     });
+
+    if (this.skybox) {
+        scene.remove(this.skybox);
+        if (this.skyboxGeometry) this.skyboxGeometry.dispose();
+        if (this.skyboxMaterial) this.skyboxMaterial.dispose();
+        this.skybox = null;
+    }
     
     this.tiles = [];
   }

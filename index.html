@@ -198,11 +198,13 @@
             <!-- Theme row - full width -->
             <div class="settings-theme-row">
               <label for="theme-select">Theme</label>
-              <select id="theme-select" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 8px 12px; font-family: 'Courier New', Courier, monospace; font-size: 1rem;">
-                <option value="default">Default (Cyber)</option>
-                <option value="beach">Beach</option>
-                <option value="cracked_stone">Cracked Stone</option>
-              </select>
+<select id="theme-select" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 8px 12px; font-family: 'Courier New', Courier, monospace; font-size: 1rem;">
+                  <option value="default">Default (Cyber)</option>
+                  <option value="beach">Beach</option>
+                  <option value="temple">Temple (Aztec)</option>
+                  <option value="arctic">Arctic</option>
+                  <option value="inferno">Inferno</option>
+                </select>
             </div>
             <!-- Sliders grid -->
             <div class="settings-grid" style="grid-template-columns: 1fr 1fr;">
@@ -408,25 +410,43 @@
       </div>
     </div>
 
-    <div id="name-entry" class="screen hidden">
+    <div id="name-entry" class="screen hidden" style="pointer-events: auto;">
       <h2 class="retro-subtitle" style="margin-bottom: 0.5rem;">PLAYER NAMES</h2>
       <div id="name-entry-round-info" style="color: #ffff00; font-family: 'Courier New', monospace; font-size: 1.2rem; margin-bottom: 1.5rem; text-shadow: 0 0 8px #ffff00; letter-spacing: 2px;"></div>
       <div class="name-entry-fields">
         <div class="name-entry-field">
           <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444;">PLAYER 1</label>
           <input id="p1-name-input" type="text" maxlength="12" placeholder="Player 1" autocomplete="off">
+          <label style="color: #ff4444; text-shadow: 0 0 8px #ff4444; font-size: 0.85rem; margin-top: 0.5rem;">HAT</label>
+          <select id="p1-hat-select" class="hat-select" style="border-color: #ff4444; box-shadow: 0 0 10px #ff4444 inset, 0 0 10px #ff4444;">
+            <option value="none">None</option>
+            <option value="santa">🎅 Santa</option>
+            <option value="cowboy">🤠 Cowboy</option>
+            <option value="afro">🟤 Afro</option>
+            <option value="crown">👑 Crown</option>
+            <option value="dunce">📐 Dunce</option>
+          </select>
         </div>
         <div id="name-entry-vs" class="name-entry-vs">VS</div>
         <div id="name-entry-p2-field" class="name-entry-field">
           <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff;">PLAYER 2</label>
           <input id="p2-name-input" type="text" maxlength="12" placeholder="Player 2" autocomplete="off">
+          <label style="color: #4488ff; text-shadow: 0 0 8px #4488ff; font-size: 0.85rem; margin-top: 0.5rem;">HAT</label>
+          <select id="p2-hat-select" class="hat-select" style="border-color: #4488ff; box-shadow: 0 0 10px #4488ff inset, 0 0 10px #4488ff;">
+            <option value="none">None</option>
+            <option value="santa">🎅 Santa</option>
+            <option value="cowboy">🤠 Cowboy</option>
+            <option value="afro">🟤 Afro</option>
+            <option value="crown">👑 Crown</option>
+            <option value="dunce">📐 Dunce</option>
+          </select>
         </div>
       </div>
       <button id="name-entry-play-btn" class="retro-btn" style="margin-top: 2rem;">LET'S PLAY!</button>
       <button id="name-entry-menu-btn" class="retro-btn" style="margin-top: 0.75rem; font-size: 1rem; padding: 0.5rem 1.5rem; opacity: 0.7;">BACK TO MENU</button>
     </div>
 
-    <div id="hud" class="screen hidden">
+    <div id="hud" class="screen hidden" style="pointer-events: auto;">
       <div class="player-stats p1">
         <div class="name">Player 1 (Red)</div>
         <div id="p1-powerups" class="powerup-status"></div>
@@ -453,7 +473,7 @@
       </div>
     </div>
 
-    <div id="game-over" class="screen hidden">
+    <div id="game-over" class="screen hidden" style="pointer-events: auto;">
       <h1 id="winner-text">Player X Wins!</h1>
       <div style="margin: 20px 0; display: flex; align-items: center; gap: 10px; justify-content: center;">
         <input type="checkbox" id="autorestart-gameover" style="width: 20px; height: 20px; cursor: pointer;">
