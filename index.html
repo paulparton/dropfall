@@ -46,6 +46,22 @@
       </div>
     </div>
 
+    <!-- Level Select Screen -->
+    <div id="level-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto; display: none;">
+      <div class="title-container">
+        <h1 class="retro-title">LEVEL SELECT</h1>
+        <h2 class="retro-subtitle">CHOOSE YOUR ARENA</h2>
+      </div>
+      
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 40px; max-width: 1000px; margin-left: auto; margin-right: auto;">
+        <div id="levels-container" style="grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px;"></div>
+      </div>
+
+      <div style="text-align: center; margin-top: 40px;">
+        <button id="level-select-back-btn" class="retro-btn" style="padding: 15px 40px; font-size: 1.2rem;">BACK</button>
+      </div>
+    </div>
+
     <!-- Coming Soon Screen -->
     <div id="coming-soon" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
       <div class="title-container">

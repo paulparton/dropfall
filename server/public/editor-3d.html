@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dropfall 3D Level Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Courier New', monospace;
+            background: #0a0e27;
+            color: #00ff00;
+            overflow: hidden;
+        }
+
+        #container {
+            display: flex;
+            height: 100vh;
+            gap: 1px;
+            background: #1a1a3e;
+        }
+
+        #viewport {
+            flex: 1;
+            background: #000;
+            position: relative;
+        }
+
+        #ui {
+            width: 280px;
+            background: #0a0e27;
+            border-left: 1px solid #00ff00;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .panel {
+            padding: 15px;
+            border-bottom: 1px solid #00ff00;
+        }
+
+        h1 {
+            font-size: 14px;
+            color: #00ff00;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+
+        h2 {
+            font-size: 11px;
+            color: #00dd00;
+            margin: 12px 0 8px 0;
+            text-transform: uppercase;
+        }
+
+        label {
+            display: block;
+            font-size: 11px;
+            margin: 8px 0 4px 0;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 6px;
+            background: #1a1a3e;
+            border: 1px solid #00ff00;
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 11px;
+            margin-bottom: 8px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #00ddff;
+            box-shadow: 0 0 5px #00ddff;
+        }
+
+        button {
+            width: 100%;
+            padding: 8px;
+            background: #00ff00;
+            color: #0a0e27;
+            border: 1px solid #00ff00;
+            cursor: pointer;
+            font-weight: bold;
+            font-family: monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        button:hover {
+            background: #00dd00;
+        }
+
+        button:active {
+            background: #00aa00;
+        }
+
+        .tile-button {
+            padding: 8px;
+            margin-bottom: 4px;
+            text-align: left;
+            font-size: 10px;
+            background: #1a1a3e;
+            border: 1px solid #00aa00;
+            color: #00ff00;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .tile-button.active {
+            background: #00ff00;
+            color: #0a0e27;
+        }
+
+        .status {
+            background: #0a1a0a;
+            border: 1px solid #00aa00;
+            padding: 8px;
+            font-size: 10px;
+            color: #00aa00;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .info {
+            font-size: 10px;
+            color: #00aa00;
+            padding: 8px;
+            background: #0a1a0a;
+            border: 1px solid #00aa00;
+            margin-bottom: 10px;
+        }
+
+        .level-item {
+            padding: 6px;
+            margin-bottom: 4px;
+            background: #1a1a3e;
+            border: 1px solid #00aa00;
+            cursor: pointer;
+            font-size: 10px;
+        }
+
+        .level-item:hover {
+            background: #2a2a5e;
+            border-color: #00ff00;
+        }
+
+        .level-item.selected {
+            background: #00ff00;
+            color: #0a0e27;
+        }
+
+        .help {
+            font-size: 9px;
+            color: #006600;
+            padding: 8px;
+            background: #0a1a0a;
+            border: 1px dashed #00aa00;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="viewport"></div>
+        <div id="ui">
+            <div class="panel">
+                <h1>🎨 3D Editor</h1>
+                <div class="help">
+                    <strong>Controls:</strong><br>
+                    • Left Mouse: Rotate<br>
+                    • Scroll: Zoom<br>
+                    • Right click: Place tile
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>Level Info</h2>
+                <label>Name</label>
+                <input id="levelName" type="text" placeholder="Level name" value="My Arena">
+                
+                <label>Description</label>
+                <input id="levelDesc" type="text" placeholder="Description">
+                
+                <label>Difficulty</label>
+                <select id="levelDiff">
+                    <option>easy</option>
+                    <option selected>normal</option>
+                    <option>hard</option>
+                </select>
+
+                <button onclick="editor.newLevel()">✨ NEW LEVEL</button>
+                <button onclick="editor.clearTiles()">🗑️ CLEAR ALL</button>
+            </div>
+
+            <div class="panel">
+                <h2>Tile Type</h2>
+                <button class="tile-button active" onclick="editor.setTileType(event, 'NORMAL')">🟢 NORMAL</button>
+                <button class="tile-button" onclick="editor.setTileType(event, 'ICE')">🔵 ICE</button>
+                <button class="tile-button" onclick="editor.setTileType(event, 'PORTAL')">🟣 PORTAL</button>
+                <button class="tile-button" onclick="editor.setTileType(event, 'BONUS')">🟡 BONUS</button>
+                <button class="tile-button" onclick="editor.setTileType(event, 'WARNING')">🟠 WARNING</button>
+            </div>
+
+            <div class="panel">
+                <h2>Save/Load</h2>
+                <button onclick="editor.saveLevel()">💾 SAVE</button>
+                <button onclick="editor.exportJSON()">📥 EXPORT</button>
+
+                <h2>Levels</h2>
+                <div id="levelsList"></div>
+            </div>
+
+            <div class="panel">
+                <div class="status" id="status">Ready. Right-click on grid to place tiles.</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Simple camera controller
+        class SimpleCameraControls {
+            constructor(camera, domElement) {
+                this.camera = camera;
+                this.domElement = domElement;
+                this.isDragging = false;
+                this.previousMousePosition = { x: 0, y: 0 };
+
+                domElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                domElement.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                domElement.addEventListener('mouseup', (e) => this.onMouseUp(e));
+                domElement.addEventListener('wheel', (e) => this.onMouseWheel(e));
+            }
+
+            onMouseDown(e) {
+                if (e.button === 0) {
+                    this.isDragging = true;
+                    this.previousMousePosition = { x: e.clientX, y: e.clientY };
+                }
+            }
+
+            onMouseMove(e) {
+                if (this.isDragging) {
+                    const deltaX = e.clientX - this.previousMousePosition.x;
+                    const deltaY = e.clientY - this.previousMousePosition.y;
+
+                    const quat = new THREE.Quaternion();
+                    quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), deltaX * 0.005);
+                    this.camera.position.applyQuaternion(quat);
+
+                    const right = new THREE.Vector3();
+                    this.camera.getWorldDirection(right);
+                    right.cross(this.camera.up).normalize();
+                    quat.setFromAxisAngle(right, deltaY * 0.005);
+                    this.camera.position.applyQuaternion(quat);
+
+                    this.camera.lookAt(0, 0, 0);
+                    this.previousMousePosition = { x: e.clientX, y: e.clientY };
+                }
+            }
+
+            onMouseUp(e) {
+                this.isDragging = false;
+            }
+
+            onMouseWheel(e) {
+                e.preventDefault();
+                const direction = this.camera.position.clone().normalize();
+                const distance = this.camera.position.length();
+                const newDistance = Math.max(5, Math.min(200, distance + e.deltaY * 0.05));
+                this.camera.position.copy(direction.multiplyScalar(newDistance));
+            }
+
+            update() {}
+        }
+
+        const API_BASE = 'http://localhost:3001/api';
+
+        class Editor3D {
+            constructor() {
+                this.tileType = 'NORMAL';
+                this.tiles = [];
+                this.currentLevel = null;
+                this.hexSize = 8;
+                this.tileRadius = 7;
+                this.tileHeight = 4;
+
+                this.initThreeJS();
+                this.loadLevels();
+                this.animate();
+            }
+
+            initThreeJS() {
+                // Scene
+                this.scene = new THREE.Scene();
+                this.scene.background = new THREE.Color(0x000000);
+                this.scene.fog = new THREE.Fog(0x000000, 100, 200);
+
+                // Camera
+                const w = window.innerWidth * 0.73;
+                const h = window.innerHeight;
+                this.camera = new THREE.PerspectiveCamera(75, w / h, 0.1, 1000);
+                this.camera.position.set(0, 40, 40);
+                this.camera.lookAt(0, 0, 0);
+
+                // Renderer
+                const canvas = document.querySelector('#viewport');
+                this.renderer = new THREE.WebGLRenderer({ antialias: true });
+                this.renderer.setSize(w, h);
+                this.renderer.shadowMap.enabled = true;
+                canvas.appendChild(this.renderer.domElement);
+
+                // Lights
+                const light = new THREE.DirectionalLight(0xffffff, 1.2);
+                light.position.set(30, 50, 30);
+                light.castShadow = true;
+                light.shadow.mapSize.width = 2048;
+                light.shadow.mapSize.height = 2048;
+                this.scene.add(light);
+
+                const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+                this.scene.add(ambient);
+
+                // Grid
+                const grid = new THREE.GridHelper(100, 20, 0x444444, 0x222222);
+                this.scene.add(grid);
+
+                // Raycaster for picking
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+
+                // Camera controls
+                this.controls = new SimpleCameraControls(this.camera, this.renderer.domElement);
+
+                // Tile meshes
+                this.tileMeshes = [];
+                this.tileGroup = new THREE.Group();
+                this.scene.add(this.tileGroup);
+
+                window.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    this.placeTile(e);
+                });
+                window.addEventListener('resize', () => this.onWindowResize());
+            }
+
+            hexToPixel(q, r) {
+                const x = this.hexSize * (3/2 * q);
+                const z = this.hexSize * (Math.sqrt(3)/2 * q + Math.sqrt(3) * r);
+                return { x, z };
+            }
+
+            pixelToHex(x, z) {
+                const q = (2/3 * x) / this.hexSize;
+                const r = (-1/3 * x + Math.sqrt(3)/3 * z) / this.hexSize;
+                return this.roundHex(q, r);
+            }
+
+            roundHex(q, r) {
+                let rq = Math.round(q);
+                let rr = Math.round(r);
+                const s = -q - r;
+                let rs = Math.round(s);
+
+                const qDiff = Math.abs(rq - q);
+                const rDiff = Math.abs(rr - r);
+                const sDiff = Math.abs(rs - s);
+
+                if (qDiff > rDiff && qDiff > sDiff) {
+                    rq = -rr - rs;
+                } else if (rDiff > sDiff) {
+                    rr = -rq - rs;
+                }
+
+                return { q: rq, r: rr };
+            }
+
+            createTileMesh(q, r, type) {
+                const pos = this.hexToPixel(q, r);
+                const geometry = new THREE.CylinderGeometry(this.tileRadius, this.tileRadius, this.tileHeight, 6);
+
+                const colors = {
+                    'NORMAL': 0x666666,
+                    'ICE': 0x335555,
+                    'PORTAL': 0x00ffff,
+                    'BONUS': 0xffff00,
+                    'WARNING': 0xff6600
+                };
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: colors[type] || 0x666666,
+                    metalness: 0.4,
+                    roughness: 0.6
+                });
+
+                if (type === 'PORTAL') {
+                    material.emissive = new THREE.Color(0x0088ff);
+                    material.emissiveIntensity = 0.6;
+                } else if (type === 'BONUS') {
+                    material.emissive = new THREE.Color(0xff8800);
+                    material.emissiveIntensity = 0.7;
+                }
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.set(pos.x, this.tileHeight / 2, pos.z);
+                mesh.rotation.y = Math.PI / 6;
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                mesh.userData = { q, r, type };
+
+                return mesh;
+            }
+
+            setTileType(event, type) {
+                this.tileType = type;
+                document.querySelectorAll('.tile-button').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event.target.classList.add('active');
+                this.updateStatus(`Tile type: ${type}`);
+            }
+
+            placeTile(e) {
+                const rect = this.renderer.domElement.getBoundingClientRect();
+                this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+                this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+                const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+                const target = new THREE.Vector3();
+                this.raycaster.setFromCamera(this.mouse, this.camera);
+                this.raycaster.ray.intersectPlane(plane, target);
+
+                const hex = this.pixelToHex(target.x, target.z);
+
+                const exists = this.tiles.some(t => t.q === hex.q && t.r === hex.r);
+                if (exists) {
+                    this.tiles = this.tiles.filter(t => !(t.q === hex.q && t.r === hex.r));
+                } else {
+                    this.tiles.push({ q: hex.q, r: hex.r, type: this.tileType });
+                }
+
+                this.redrawTiles();
+                this.updateStatus(`Tiles: ${this.tiles.length}`);
+            }
+
+            redrawTiles() {
+                this.tileGroup.clear();
+                this.tileMeshes = [];
+
+                this.tiles.forEach(tile => {
+                    const mesh = this.createTileMesh(tile.q, tile.r, tile.type);
+                    this.tileGroup.add(mesh);
+                    this.tileMeshes.push(mesh);
+                });
+            }
+
+            newLevel() {
+                this.tiles = [];
+                this.currentLevel = null;
+                document.getElementById('levelName').value = 'My Arena';
+                document.getElementById('levelDesc').value = '';
+                this.redrawTiles();
+                this.updateStatus('New level created', 'success');
+            }
+
+            clearTiles() {
+                if (!confirm('Clear all tiles?')) return;
+                this.tiles = [];
+                this.redrawTiles();
+                this.updateStatus('Tiles cleared', 'success');
+            }
+
+            async saveLevel() {
+                const name = document.getElementById('levelName').value || 'Untitled';
+                const desc = document.getElementById('levelDesc').value;
+                const diff = document.getElementById('levelDiff').value;
+
+                const level = {
+                    name,
+                    description: desc,
+                    difficulty: diff,
+                    theme: 'default',
+                    tiles: this.tiles.map(t => ({
+                        coord: { q: t.q, r: t.r },
+                        ability: t.type,
+                        height: 4
+                    })),
+                    author: 'Editor'
+                };
+
+                try {
+                    const method = this.currentLevel ? 'PUT' : 'POST';
+                    const url = this.currentLevel ? `${API_BASE}/levels/${this.currentLevel}` : `${API_BASE}/levels`;
+
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(level)
+                    });
+
+                    const result = await res.json();
+                    this.currentLevel = result.id;
+                    this.updateStatus(`Saved: ${name}`, 'success');
+                    this.loadLevels();
+                } catch (err) {
+                    this.updateStatus(`Error: ${err.message}`, 'error');
+                }
+            }
+
+            async loadLevels() {
+                try {
+                    const res = await fetch(`${API_BASE}/levels`);
+                    const levels = await res.json();
+                    const list = document.getElementById('levelsList');
+                    list.innerHTML = '';
+
+                    levels.forEach(level => {
+                        const div = document.createElement('div');
+                        div.className = 'level-item';
+                        if (this.currentLevel === level.id) div.classList.add('selected');
+                        div.innerHTML = `<strong>${level.name}</strong><br>${level.tileCount} tiles`;
+                        div.onclick = () => this.loadLevel(level.id);
+                        list.appendChild(div);
+                    });
+                } catch (err) {
+                    this.updateStatus(`Error loading levels: ${err.message}`, 'error');
+                }
+            }
+
+            async loadLevel(id) {
+                try {
+                    const res = await fetch(`${API_BASE}/levels/${id}`);
+                    const level = await res.json();
+                    
+                    this.currentLevel = id;
+                    this.tiles = level.tiles.map(t => ({
+                        q: t.coord.q,
+                        r: t.coord.r,
+                        type: t.ability
+                    }));
+
+                    document.getElementById('levelName').value = level.name;
+                    document.getElementById('levelDesc').value = level.description;
+                    document.getElementById('levelDiff').value = level.difficulty;
+
+                    this.redrawTiles();
+                    this.loadLevels();
+                    this.updateStatus(`Loaded: ${level.name}`, 'success');
+                } catch (err) {
+                    this.updateStatus(`Error: ${err.message}`, 'error');
+                }
+            }
+
+            exportJSON() {
+                if (this.tiles.length === 0) {
+                    this.updateStatus('No tiles to export', 'error');
+                    return;
+                }
+
+                const level = {
+                    name: document.getElementById('levelName').value,
+                    tiles: this.tiles.map(t => ({
+                        coord: { q: t.q, r: t.r },
+                        ability: t.type
+                    }))
+                };
+
+                const json = JSON.stringify(level, null, 2);
+                const blob = new Blob([json], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${level.name.replace(/\s+/g, '_')}.json`;
+                a.click();
+            }
+
+            updateStatus(msg, type = 'info') {
+                const status = document.getElementById('status');
+                const now = new Date().toLocaleTimeString();
+                const color = type === 'error' ? 'color: #ff0000' : type === 'success' ? 'color: #00ff00' : 'color: #00aa00';
+                status.innerHTML = `[${now}] <span style="${color}">${msg}</span><br>` + 
+                    status.innerHTML.split('<br>').slice(0, 4).join('<br>');
+            }
+
+            onWindowResize() {
+                const w = window.innerWidth * 0.73;
+                const h = window.innerHeight;
+                this.camera.aspect = w / h;
+                this.camera.updateProjectionMatrix();
+                this.renderer.setSize(w, h);
+            }
+
+            animate() {
+                requestAnimationFrame(() => this.animate());
+                this.controls.update();
+                this.renderer.render(this.scene, this.camera);
+            }
+        }
+
+        let editor;
+        document.addEventListener('DOMContentLoaded', () => {
+            editor = new Editor3D();
+        });
+    </script>
+</body>
+</html>

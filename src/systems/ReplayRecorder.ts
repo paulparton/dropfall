@@ -23,7 +23,7 @@ export interface FrameState {
  * Stores frame history with automatic trimming for memory management
  */
 export class ReplayRecorder {
-  private buffer: FrameState[] = [];
+  private _buffer: FrameState[] = [];
   private maxFrames: number = 1000; // ~16 seconds at 60fps
   private isRecording: boolean = false;
   private frameCount: number = 0;
@@ -38,7 +38,7 @@ export class ReplayRecorder {
    * Get the buffer directly (for external access)
    */
   get buffer(): FrameState[] {
-    return [...this.buffer];
+    return [...this._buffer];
   }
 
   /**
@@ -48,7 +48,7 @@ export class ReplayRecorder {
     this.isRecording = true;
     this.frameCount = 0;
     this.startTime = Date.now();
-    this.buffer = [];
+    this._buffer = [];
   }
 
   /**
@@ -67,18 +67,18 @@ export class ReplayRecorder {
     frameState.frameNumber = this.frameCount;
     frameState.timestamp = Date.now() - this.startTime;
 
-    this.buffer.push(frameState);
+    this._buffer.push(frameState);
     this.frameCount++;
 
     // Auto-trim oldest frames if buffer exceeds size limit
-    if (this.buffer.length > this.maxFrames) {
-      this.buffer.shift();
+    if (this._buffer.length > this.maxFrames) {
+      this._buffer.shift();
     }
 
     // Estimate memory usage and trim if needed
-    const estimatedMemory = this.buffer.length * 200; // ~200 bytes per frame
+    const estimatedMemory = this._buffer.length * 200; // ~200 bytes per frame
     if (estimatedMemory > this.maxMemoryBytes) {
-      this.buffer = this.buffer.slice(-Math.floor(this.maxFrames * 0.8));
+      this._buffer = this._buffer.slice(-Math.floor(this.maxFrames * 0.8));
     }
   }
 
@@ -86,25 +86,25 @@ export class ReplayRecorder {
    * Get the complete recorded buffer
    */
   getBuffer(): FrameState[] {
-    return [...this.buffer];
+    return [...this._buffer];
   }
 
   /**
    * Get a frame by index
    */
   getFrameAt(index: number): FrameState | null {
-    if (index < 0 || index >= this.buffer.length) {
+    if (index < 0 || index >= this._buffer.length) {
       return null;
     }
-    return this.buffer[index];
+    return this._buffer[index];
   }
 
   /**
    * Get last N frames
    */
   getLastFrames(count: number): FrameState[] {
-    const start = Math.max(0, this.buffer.length - count);
-    return this.buffer.slice(start);
+    const start = Math.max(0, this._buffer.length - count);
+    return this._buffer.slice(start);
   }
 
   /**
@@ -112,15 +112,15 @@ export class ReplayRecorder {
    */
   getFrameRange(startIndex: number, endIndex: number): FrameState[] {
     const start = Math.max(0, startIndex);
-    const end = Math.min(this.buffer.length, endIndex + 1);
-    return this.buffer.slice(start, end);
+    const end = Math.min(this._buffer.length, endIndex + 1);
+    return this._buffer.slice(start, end);
   }
 
   /**
    * Clear the buffer
    */
   clear(): void {
-    this.buffer = [];
+    this._buffer = [];
     this.frameCount = 0;
     this.startTime = 0;
   }
@@ -138,10 +138,10 @@ export class ReplayRecorder {
   getStats() {
     return {
       isRecording: this.isRecording,
-      frameCount: this.buffer.length,
+      frameCount: this._buffer.length,
       maxFrames: this.maxFrames,
-      estimatedDurationSeconds: this.buffer.length / 60, // 60fps
-      estimatedMemoryBytes: this.buffer.length * 200,
+      estimatedDurationSeconds: this._buffer.length / 60, // 60fps
+      estimatedMemoryBytes: this._buffer.length * 200,
     };
   }
 
@@ -150,7 +150,7 @@ export class ReplayRecorder {
    */
   exportJSON(): string {
     return JSON.stringify({
-      buffer: this.buffer,
+      buffer: this._buffer,
       stats: this.getStats(),
       exportTime: new Date().toISOString(),
     });
@@ -165,8 +165,8 @@ export class ReplayRecorder {
       if (!Array.isArray(data.buffer)) {
         return false;
       }
-      this.buffer = data.buffer;
-      this.frameCount = this.buffer.length;
+      this._buffer = data.buffer;
+      this.frameCount = this._buffer.length;
       return true;
     } catch {
       return false;

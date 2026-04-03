@@ -11,6 +11,7 @@ import { replayRecorder, resetReplayRecorder } from './systems/ReplayRecorder.js
 import { ReplayPlayer } from './systems/ReplayPlayer.js';
 import { createReplayModal, showQuickReplayClip } from './components/ReplayModal.js';
 import { createCustomizationModal } from './components/CustomizationModal.js';
+import { loadLevels, getLevel, createLevelButtons, showLevelSelect, hideLevelSelect } from './levelLoader.js';
 
 // Wrapper functions that use InputHandler when available, fallback to legacy input
 function getPlayer1InputUnified() {
@@ -175,6 +176,7 @@ function populatePowerupsGuide() {
 let player1, player2, arena, particles, lightning, shockwaves, aiController;
 let inputHandler; // InputHandler instance for unified input processing
 let physicsSystem; // PhysicsSystem instance for event-based physics
+let selectedLevelData = null; // Custom level loaded from editor
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
@@ -216,6 +218,23 @@ window.POWER_UP_EFFECTS = POWER_UP_EFFECTS;
 // ============================================
 // GAME FUNCTIONS
 // ============================================
+
+/**
+ * Select a custom level from the editor
+ */
+async function selectLevel(levelId) {
+    console.log('[Game] Loading level:', levelId);
+    const levelData = await getLevel(levelId);
+    if (levelData) {
+        selectedLevelData = levelData;
+        console.log('[Game] Level loaded:', levelData.name, 'with', levelData.tiles?.length, 'tiles');
+        hideLevelSelect();
+        showScreen('name-entry');
+    } else {
+        console.error('[Game] Failed to load level');
+    }
+}
+
 function startGame(skipNameEntry = false) {
     console.log('[Game] startGame called, initializing audio...');
     initAudio();
@@ -302,7 +321,7 @@ function resetEntities() {
         isOnePlayer ? () => aiController.getInput() : getPlayer2InputUnified);
     
     // Effects
-    arena = new Arena();
+    arena = new Arena(undefined, selectedLevelData?.tiles);
     particles = new ParticleSystem();
     lightning = new LightningSystem();
     shockwaves = new ShockwaveSystem();
@@ -466,12 +485,25 @@ function setupButtonHandlers() {
         const btn = document.getElementById(`difficulty-${diff}-btn`);
         const radio = document.getElementById(`difficulty-${diff}-radio`);
         if (btn && radio) {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 console.log('[Button] Difficulty', diff, 'clicked!');
                 radio.checked = true;
                 useGameStore.getState().setDifficulty(diff);
+                
+                // Load levels and show level selector
+                const levels = await loadLevels();
+                createLevelButtons(levels, (levelId) => {
+                    selectLevel(levelId);
+                });
+                showLevelSelect();
             });
         }
+    });
+
+    // Level Select Screen
+    document.getElementById('level-select-back-btn')?.addEventListener('click', () => {
+        hideLevelSelect();
+        showScreen('menu');
     });
 
     // Coming Soon

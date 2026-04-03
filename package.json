@@ -10,6 +10,8 @@
     "preview": "vite preview",
     "server": "node server/server.js",
     "server:dev": "node --watch server/server.js",
+    "editor": "node server/editor-3d-server.js",
+    "editor:dev": "node --watch server/editor-3d-server.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "type-check": "tsc --noEmit",

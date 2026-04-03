@@ -132,12 +132,15 @@ export class Arena extends EntityBase implements ArenaEntity {
   // Three.js group
   mesh: THREE.Group;
 
+  // Custom tiles from level editor
+  customTiles?: any[];
+
   // Skybox
   skybox: THREE.Mesh | null = null;
   skyboxGeometry: THREE.SphereGeometry | null = null;
   skyboxMaterial: any = null;
 
-  constructor(bounds?: Partial<ArenaBounds>) {
+  constructor(bounds?: Partial<ArenaBounds>, customTiles?: any[]) {
     super('arena', 'arena', { x: 0, y: 0 });
     this.bounds = bounds as ArenaBounds || { 
       width: 40, 
@@ -148,6 +151,7 @@ export class Arena extends EntityBase implements ArenaEntity {
       maxY: 20
     };
     this.mesh = new THREE.Group();
+    this.customTiles = customTiles; // Store custom tiles if provided
     
     // Clear materials cache to ensure fresh materials with all variants
     TILE_MATERIALS_CACHE = {};
@@ -160,8 +164,21 @@ export class Arena extends EntityBase implements ArenaEntity {
     this.arenaSize = settings.arenaSize;
     const theme = resolveThemeName(settings.theme || 'tron');
 
-    // 1. Generate Grid
-    const hexes = generateHexGrid(this.arenaSize);
+    // 1. Generate Grid or use custom tiles
+    let hexes: any[];
+    if (this.customTiles && this.customTiles.length > 0) {
+      // Use custom tiles from level editor
+      hexes = this.customTiles.map(t => ({
+        q: t.coord.q,
+        r: t.coord.r,
+        ability: t.ability,
+        height: t.height
+      }));
+      console.log('[Arena] Loaded custom level with', hexes.length, 'tiles');
+    } else {
+      // Generate random grid
+      hexes = generateHexGrid(this.arenaSize);
+    }
 
     // 2. Create Tiles
     const gridSpacing = 8.0;
@@ -194,8 +211,36 @@ export class Arena extends EntityBase implements ArenaEntity {
         const pos = hexToPixel(hex.q, hex.r, gridSpacing);
         const position = { x: pos.x, y: 0, z: pos.z };
 
+        // Determine tile material based on ability
+        let material = this.materials.normal;
+        let tileState: TileState = 'NORMAL';
+        
+        if (hex.ability) {
+          switch(hex.ability) {
+            case 'ICE':
+              material = this.materials.ice;
+              tileState = 'NORMAL'; // ICE tiles are still normal state initially
+              break;
+            case 'PORTAL':
+              material = this.materials.portal;
+              tileState = 'NORMAL';
+              break;
+            case 'BONUS':
+              material = this.materials.bonus;
+              tileState = 'NORMAL';
+              break;
+            case 'WARNING':
+              material = this.materials.warning;
+              tileState = 'WARNING';
+              break;
+            default:
+              material = this.materials.normal;
+              tileState = 'NORMAL';
+          }
+        }
+
         // === PERFORMANCE: Reuse geometry, don't clone ===
-        const mesh = new THREE.Mesh(geometry, this.materials.normal);
+        const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(position.x, position.y, position.z);
         mesh.rotation.y = Math.PI / 6;
         mesh.castShadow = true;
@@ -231,7 +276,7 @@ export class Arena extends EntityBase implements ArenaEntity {
             edges,
             rigidBody,
             collider,
-            state: 'NORMAL',
+            state: tileState,
             timer: 0,
             distanceToCenter: Math.sqrt(position.x ** 2 + position.z ** 2),
             edgeOpacity: 0.5  // More subtle default opacity

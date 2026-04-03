@@ -1,0 +1,26 @@
+{
+  "name": "Test Arena",
+  "description": "My first test level",
+  "tiles": [
+    {
+      "coord": {
+        "q": 0,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 1
+    }
+  ],
+  "theme": "default",
+  "difficulty": "normal",
+  "destructionRate": 0.2,
+  "iceRate": 0.1,
+  "portalRate": 0.05,
+  "bonusRate": 0.1,
+  "symmetry": "none",
+  "boundaryType": "walls",
+  "isPublic": true,
+  "author": "Developer",
+  "id": "level_1775216691678_tahk93y",
+  "lastModified": 1775216691678
+}
