@@ -28,9 +28,9 @@ Add a second game mode: racing with Mario Kart-style track design and ball physi
 
 | Phase | Status | Progress | Notes |
 |-------|--------|----------|-------|
-| 1: Race Mode Fundamentals | Not Started | 0% | Game state, mode selection |
-| 2: Track Design & Physics | Not Started | 0% | Track layout, ball adaptation |
-| 3: UI & Polish | Not Started | 0% | HUD, visual feedback |
+| 7: Race Mode Fundamentals | Not Started | 0% | Game state, mode selection, basic track |
+| 8: Physics & Gameplay Polish | Not Started | 0% | Physics tuning, boost zones, effects |
+| 9: Content & Validation | Not Started | 0% | Track finalization, mobile, UAT |
 
 ## Key Context
 
