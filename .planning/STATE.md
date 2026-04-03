@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v2.1
 milestone_name: Online Multiplayer Fix
 status: Planning
-last_updated: "2026-03-31T13:00:00.000Z"
+last_updated: "2026-04-03T10:30:00.000Z"
 progress:
   total_phases: 0
   completed_phases: 0
@@ -42,6 +42,17 @@ Fix broken online multiplayer so both players can control their own characters.
 - From each client's POV, they use "Player 1 controls" - this is correct
 - Bug: inputs applied to global Player 1, not local client's assigned slot
 - Need to track which slot client is, route inputs to that slot
+
+## Quick Tasks Completed (v2.1 Enhancement)
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260403-tbn | Implement player scores tracking, replay system, and character customization | 2026-04-03 | 518d1c2 | [260403-tbn-scores-replay-customization](./quick/260403-tbn-scores-replay-customization/) |
+
+**What was delivered:**
+- Player scores overlay displayed during gameplay
+- Frame-based replay recording with auto-play falling clip
+- Character customization modal (12 colors × 5 hats) integrated into game flow
 
 ## Blockers & Concerns
 
