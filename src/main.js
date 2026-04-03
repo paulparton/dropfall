@@ -282,8 +282,8 @@ function proceedFromNameEntry() {
     customizationPlayer = 1;
     customizationShown = false;
     
-    // Transition to customization state
-    useGameStore.getState().setGameState('CUSTOMIZATION');
+    // Start the game
+    useGameStore.getState().startGame();
     resetEntities();
     updateHUDNames();
 }
@@ -492,10 +492,17 @@ function setupButtonHandlers() {
                 
                 // Load levels and show level selector
                 const levels = await loadLevels();
-                createLevelButtons(levels, (levelId) => {
-                    selectLevel(levelId);
-                });
-                showLevelSelect();
+                if (levels.length > 0) {
+                    // Levels available - show level select screen
+                    createLevelButtons(levels, (levelId) => {
+                        selectLevel(levelId);
+                    });
+                    showLevelSelect();
+                } else {
+                    // No levels available - skip level select and go straight to name entry
+                    console.log('[Difficulty] No levels found, proceeding to name entry');
+                    showScreen('name-entry');
+                }
             });
         }
     });

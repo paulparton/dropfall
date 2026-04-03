@@ -6,7 +6,14 @@ const LEVEL_API_BASE = 'http://localhost:3001/api';
 
 export async function loadLevels() {
     try {
-        const response = await fetch(`${LEVEL_API_BASE}/levels`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
+        
+        const response = await fetch(`${LEVEL_API_BASE}/levels`, {
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        
         if (!response.ok) throw new Error('Failed to load levels');
         return await response.json();
     } catch (err) {

@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "6d713be1",
+    "label": "Vite Dev Server",
+    "command": "npm run dev",
+    "cwd": "/home/paupl/Workbench/dropfall",
+    "ownerSessionFile": "/home/paupl/.gsd/sessions/--home-paupl-Workbench-dropfall--/2026-04-03T13-29-04-047Z_83cdbc91-3f2c-4a0f-bc0c-af64817e08f5.jsonl",
+    "persistAcrossSessions": false,
+    "startedAt": 1775223101746,
+    "processType": "server",
+    "group": null,
+    "readyPattern": null,
+    "readyPort": 5173,
+    "pid": 11908
+  }
+]
