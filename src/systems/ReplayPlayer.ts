@@ -113,7 +113,7 @@ export class ReplayPlayer {
    */
   getFrameAt(index: number): FrameState | null {
     if (index < 0 || index >= this.buffer.length) return null;
-    return this.buffer[index];
+    return this.buffer[index] ?? null;
   }
 
   /**

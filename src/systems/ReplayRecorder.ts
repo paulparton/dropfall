@@ -96,7 +96,7 @@ export class ReplayRecorder {
     if (index < 0 || index >= this._buffer.length) {
       return null;
     }
-    return this._buffer[index];
+    return this._buffer[index] ?? null;
   }
 
   /**

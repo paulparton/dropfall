@@ -721,3 +721,59 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
     letter-spacing: 1px;
 }
 
+/* Compact Difficulty Button for NAME_ENTRY */
+.difficulty-btn-compact {
+    padding: 0.6rem 0.8rem !important;
+    font-size: 0.85rem !important;
+    min-width: 90px !important;
+}
+
+.difficulty-btn-compact .difficulty-icon {
+    font-size: 1.1rem !important;
+}
+
+.difficulty-btn-compact .difficulty-label {
+    font-size: 0.8rem !important;
+    letter-spacing: 0.5px !important;
+}
+
+/* Updated input styling for compact layout */
+#p1-name-input, #p2-name-input {
+    background: #000 !important;
+    color: #0ff !important;
+    border: 2px solid #0ff !important;
+    padding: 0.6rem 0.8rem !important;
+    font-size: 1.1rem !important;
+    font-family: 'Courier New', monospace !important;
+    text-align: center !important;
+    box-shadow: 0 0 8px #0ff inset, 0 0 8px #0ff !important;
+    outline: none !important;
+}
+
+#p1-name-input:focus, #p2-name-input:focus {
+    border-color: #fff !important;
+    box-shadow: 0 0 12px #fff inset, 0 0 12px #fff !important;
+}
+
+/* Hat select dropdown styling */
+.hat-select {
+    background: #000 !important;
+    color: #0ff !important;
+    border: 2px solid #0ff !important;
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.9rem !important;
+    font-family: 'Courier New', monospace !important;
+    border-radius: 4px !important;
+    outline: none !important;
+    cursor: pointer !important;
+}
+
+.hat-select:focus {
+    box-shadow: 0 0 12px #fff inset, 0 0 12px #fff !important;
+}
+
+.hat-select option {
+    background: #000 !important;
+    color: #0ff !important;
+}
+

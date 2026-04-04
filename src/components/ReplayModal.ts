@@ -52,7 +52,8 @@ export function createReplayModal(
   const player = new ReplayPlayer(buffer);
 
   // Calculate duration
-  const totalDuration = buffer.length > 0 ? buffer[buffer.length - 1].timestamp : 0;
+  const lastFrame = buffer.length > 0 ? buffer[buffer.length - 1] : undefined;
+  const totalDuration = lastFrame ? lastFrame.timestamp : 0;
   const durationSeconds = Math.round(totalDuration / 1000);
 
   modal.innerHTML = `
@@ -185,8 +186,10 @@ export function createReplayModal(
     speedBtn.addEventListener('click', () => {
       speedIndex = (speedIndex + 1) % speeds.length;
       const speed = speeds[speedIndex];
-      player.setSpeed(speed);
-      speedBtn.textContent = `Speed: ${speed}x`;
+      if (speed !== undefined) {
+        player.setSpeed(speed);
+        speedBtn.textContent = `Speed: ${speed}x`;
+      }
     });
   }
 

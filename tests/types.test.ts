@@ -32,7 +32,7 @@ describe('Type System Validation', () => {
       useGameStore.getState().setGameMode('1P');
       let state = useGameStore.getState();
       expect(state.gameMode).toBe('1P');
-      expect(state.gameState).toBe('DIFFICULTY_SELECT');
+      expect(state.gameState).toBe('NAME_ENTRY');
 
       useGameStore.getState().setGameMode('2P');
       state = useGameStore.getState();
