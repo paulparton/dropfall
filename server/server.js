@@ -12,8 +12,15 @@ const MIME_TYPES = {
     '.html': 'text/html',
     '.css': 'text/css',
     '.js': 'application/javascript',
+    '.mjs': 'application/javascript',
     '.json': 'application/json',
     '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.svg': 'image/svg+xml',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+    '.wasm': 'application/wasm',
     '.ico': 'image/x-icon',
 };
 
@@ -113,7 +120,7 @@ class GameServer {
         filePath = join(PUBLIC_DIR, filePath);
 
         if (existsSync(filePath)) {
-            const ext = extname(filePath);
+            const ext = extname(requestPath).toLowerCase();
             const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
             res.writeHead(200, { 'Content-Type': mimeType });
             res.end(readFileSync(filePath));
@@ -128,7 +135,9 @@ class GameServer {
                 }
             }
 
-            res.writeHead(404);
+            const missingExt = extname(requestPath).toLowerCase();
+            const missingMimeType = MIME_TYPES[missingExt] || 'application/octet-stream';
+            res.writeHead(404, { 'Content-Type': missingMimeType });
             res.end('Not Found');
         }
     }
