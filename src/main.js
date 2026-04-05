@@ -8,8 +8,10 @@ import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getG
 import { createInputHandler } from './handlers/InputHandler.js';
 import { replayRecorder, resetReplayRecorder } from './systems/ReplayRecorder.js';
 import { createReplayModal } from './components/ReplayModal.js';
-import { createCharacterPreviewPanel, destroyPreviewPanel } from './components/CharacterPreviewPanel';
-import { loadLevels, getLevel, createLevelButtons, showLevelSelect, hideLevelSelect } from './levelLoader.js';
+import { createCharacterPreviewPanel, destroyPreviewPanel, getSelectedPreviewLevelId } from './components/CharacterPreviewPanel';
+import { createOnlineSetupPanel } from './components/OnlineSetupPanel';
+import { getLevelById } from './levels/levelProvider.js';
+import { hexToPixel } from './utils/math.js';
 
 // Wrapper functions that use InputHandler when available, fallback to legacy input
 function getPlayer1InputUnified() {
@@ -129,6 +131,7 @@ const screens = {
     gameOver: document.getElementById('game-over'),
     onlineConnect: document.getElementById('online-connect'),
     onlineLobby: document.getElementById('online-lobby'),
+    onlineSetup: document.getElementById('online-setup'),
     comingSoon: document.getElementById('coming-soon'),
     countdown: document.getElementById('countdown-display'),
 };
@@ -174,7 +177,7 @@ function populatePowerupsGuide() {
 let player1, player2, arena, particles, lightning, shockwaves, aiController;
 let inputHandler; // InputHandler instance for unified input processing
 let physicsSystem; // PhysicsSystem instance for event-based physics
-let selectedLevelData = null; // Custom level loaded from editor
+let selectedLevelData = useGameStore.getState().selectedLevelData || null; // Custom level selected in preview panel
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
@@ -189,6 +192,180 @@ let replayCountdownPaused = false;
 let roundOverFrozen = false;
 let roundOverTimeoutSet = false;
 let roundOverLogFrames = 0;
+let onlineSetupPanelTeardown = null;
+let opponentDisconnectOverlayEl = null;
+let remotePlayerTargetPosition = null;
+
+const REMOTE_PLAYER_LERP_FACTOR = 0.25;
+
+const HEX_GRID_SPACING = 8.0;
+const TILE_HEIGHT = 4.0;
+const SPAWN_DROP_OFFSET = 2.0;
+
+function getSpawnableTiles(currentArena) {
+    if (!currentArena?.tiles?.length) return [];
+    return currentArena.tiles.filter(tile => tile && tile.mesh && tile.state !== 'FALLING');
+}
+
+function pickUniqueSpawnTiles(currentArena, count = 2) {
+    const spawnableTiles = getSpawnableTiles(currentArena);
+    if (spawnableTiles.length === 0) return [];
+
+    const shuffled = [...spawnableTiles];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+
+    return shuffled.slice(0, Math.min(count, shuffled.length));
+}
+
+function spawnPositionFromTile(tile, sphereRadius) {
+    const { x, z } = hexToPixel(tile.q, tile.r, HEX_GRID_SPACING);
+    const tileTopY = tile.mesh.position.y + TILE_HEIGHT / 2;
+    return { x, y: tileTopY + sphereRadius + SPAWN_DROP_OFFSET, z };
+}
+
+function getPlayerSpawnPositions(currentArena, sphereRadius) {
+    const fallbackSpawns = [
+        { x: -15, y: 4, z: 0 },
+        { x: 15, y: 4, z: 0 }
+    ];
+
+    const tiles = pickUniqueSpawnTiles(currentArena, 2);
+    if (tiles.length < 2) {
+        console.warn('[Spawn] Not enough valid tiles for unique spawn positions, using fallback spawns.');
+        return fallbackSpawns;
+    }
+
+    return tiles.map(tile => spawnPositionFromTile(tile, sphereRadius));
+}
+
+function cleanupOnlineSetupPanel() {
+    if (typeof onlineSetupPanelTeardown === 'function') {
+        onlineSetupPanelTeardown();
+        onlineSetupPanelTeardown = null;
+    }
+}
+
+function mountOnlineSetupPanel() {
+    const container = screens.onlineSetup;
+    if (!container) return;
+
+    cleanupOnlineSetupPanel();
+    const state = useGameStore.getState();
+    const panel = createOnlineSetupPanel(container, online, Boolean(state.online?.isHost));
+    onlineSetupPanelTeardown = panel?.cleanup || null;
+}
+
+function ensureOpponentDisconnectOverlay() {
+    if (opponentDisconnectOverlayEl) return opponentDisconnectOverlayEl;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'opponent-disconnected-overlay';
+    overlay.className = 'hidden';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 250;
+        pointer-events: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.45);
+        color: #ffef99;
+        font-family: 'Courier New', monospace;
+        font-size: clamp(1rem, 2.2vw, 1.8rem);
+        text-shadow: 0 0 12px rgba(255, 239, 153, 0.8);
+        letter-spacing: 1px;
+        text-transform: uppercase;
+    `;
+    overlay.textContent = 'Opponent disconnected. Waiting for reconnect...';
+    document.body.appendChild(overlay);
+    opponentDisconnectOverlayEl = overlay;
+    return overlay;
+}
+
+function setOpponentDisconnectOverlayVisible(visible) {
+    const overlay = ensureOpponentDisconnectOverlay();
+    overlay.classList.toggle('hidden', !visible);
+}
+
+function getDefaultOnlineServerUrl() {
+    const onlineCtor = online?.constructor;
+    if (onlineCtor && typeof onlineCtor.getDefaultServerUrl === 'function') {
+        return onlineCtor.getDefaultServerUrl();
+    }
+
+    return window.location.origin
+        .replace(/^https:\/\//i, 'wss://')
+        .replace(/^http:\/\//i, 'ws://');
+}
+
+function getOnlineClientRemotePlayer(state) {
+    if (state.gameMode !== 'ONLINE' || state.online.isHost) return null;
+    const mySlot = state.online?.playerSlot;
+    return mySlot === 2 ? player1 : player2;
+}
+
+function applyOnlineClientRemoteInterpolation(state) {
+    const remotePlayer = getOnlineClientRemotePlayer(state);
+    if (!remotePlayer?.rigidBody || !remotePlayerTargetPosition) return;
+
+    const current = remotePlayer.rigidBody.translation();
+    const currentVec = new THREE.Vector3(current.x, current.y, current.z);
+    currentVec.lerp(remotePlayerTargetPosition, REMOTE_PLAYER_LERP_FACTOR);
+
+    remotePlayer.rigidBody.setTranslation(
+        { x: currentVec.x, y: currentVec.y, z: currentVec.z },
+        true,
+    );
+}
+
+function enterOnlineSetupState({ resetSetup = true } = {}) {
+    const state = useGameStore.getState();
+    if (state.gameMode !== 'ONLINE') return;
+
+    if (resetSetup) {
+        state.resetOnlineSetupState?.();
+    }
+
+    useGameStore.setState({ gameState: 'ONLINE_SETUP' });
+}
+
+function maybeAutoConnectOnline() {
+    const serverInput = document.getElementById('online-server-input');
+    const statusEl = document.getElementById('online-connect-status');
+    const errorEl = document.getElementById('online-connect-error');
+    const nameInput = document.getElementById('online-name-input');
+    const defaultServerUrl = getDefaultOnlineServerUrl();
+
+    if (serverInput && !serverInput.value.trim()) {
+        serverInput.value = defaultServerUrl;
+    }
+
+    if (nameInput && !nameInput.value.trim()) {
+        nameInput.value = (localStorage.getItem('dropfall_p1name') || 'Player').slice(0, 20);
+    }
+
+    const sameOriginServer = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+    const params = new URLSearchParams(window.location.search);
+    const autoConnectRequested = params.get('autoconnect') === '1' || params.get('online') === '1';
+    const shouldAutoConnect = sameOriginServer || autoConnectRequested;
+
+    if (!shouldAutoConnect) return;
+
+    const state = useGameStore.getState();
+    if (state.online?.connected) return;
+    if (online.ws && (online.ws.readyState === WebSocket.OPEN || online.ws.readyState === WebSocket.CONNECTING)) return;
+
+    if (statusEl) statusEl.textContent = 'Auto-connecting to server...';
+    if (errorEl) errorEl.textContent = '';
+    online.connect(defaultServerUrl);
+}
 
 // ============================================
 // CHARACTER PREVIEW STATE
@@ -242,22 +419,6 @@ window.POWER_UP_EFFECTS = POWER_UP_EFFECTS;
 // GAME FUNCTIONS
 // ============================================
 
-/**
- * Select a custom level from the editor
- */
-async function selectLevel(levelId) {
-    console.log('[Game] Loading level:', levelId);
-    const levelData = await getLevel(levelId);
-    if (levelData) {
-        selectedLevelData = levelData;
-        console.log('[Game] Level loaded:', levelData.name, 'with', levelData.tiles?.length, 'tiles');
-        hideLevelSelect();
-        showScreen('name-entry');
-    } else {
-        console.error('[Game] Failed to load level');
-    }
-}
-
 function startGame(skipNameEntry = false) {
     console.log('[Game] startGame called, initializing audio...');
     initAudio();
@@ -283,7 +444,7 @@ function doStartGame() {
     updateHUDNames();
 }
 
-function proceedFromNameEntry() {
+async function proceedFromNameEntry() {
     console.log('[Proceed] Starting name entry flow');
     const state = useGameStore.getState();
     const isOnePlayer = state.gameMode === '1P';
@@ -299,6 +460,27 @@ function proceedFromNameEntry() {
     }
     
     useGameStore.getState().setPlayerNames(p1Name, p2Name);
+
+    // Persist level selection from the preview panel so restarts reuse the same arena.
+    let levelId = getSelectedPreviewLevelId();
+    let levelData = null;
+
+    if (levelId) {
+        try {
+            levelData = await getLevelById(levelId);
+            if (!levelData) {
+                levelId = null;
+            }
+        } catch (error) {
+            console.error('[Proceed] Failed to load selected level, falling back to default arena:', error);
+            levelId = null;
+            levelData = null;
+        }
+    }
+
+    useGameStore.getState().setSelectedLevel(levelId, levelData);
+    selectedLevelData = levelData;
+
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
     
     // Start the game
@@ -330,20 +512,24 @@ function resetEntities() {
 
     const state = useGameStore.getState();
     const isOnePlayer = state.gameMode === '1P';
+    selectedLevelData = state.selectedLevelData || null;
     
     // AI Controller for 1P mode
     aiController = isOnePlayer ? new AIController(state.difficulty || 'normal') : null;
 
-    // Players - use unified input handler and store colors
-    player1 = new Player('player1', state.p1Color || 0xff4444, { x: -15, y: 4, z: 0 }, getPlayer1InputUnified);
-    player2 = new Player('player2', state.p2Color || 0x4444ff, { x: 15, y: 4, z: 0 }, 
-        isOnePlayer ? () => aiController.getInput() : getPlayer2InputUnified);
-    
-    // Effects
-    arena = new Arena(undefined, selectedLevelData?.tiles);
+    // Effects / arena first so spawn positions can be derived from valid tiles.
+    arena = new Arena(selectedLevelData?.tiles);
     particles = new ParticleSystem();
     lightning = new LightningSystem();
     shockwaves = new ShockwaveSystem();
+
+    const sphereRadius = state.settings?.sphereSize ?? 2;
+    const [p1Spawn, p2Spawn] = getPlayerSpawnPositions(arena, sphereRadius);
+
+    // Players - use unified input handler and store colors
+    player1 = new Player('player1', state.p1Color || 0xff4444, p1Spawn, getPlayer1InputUnified);
+    player2 = new Player('player2', state.p2Color || 0x4444ff, p2Spawn,
+        isOnePlayer ? () => aiController.getInput() : getPlayer2InputUnified);
 
     // Camera
     camera.position.set(0, 32, 32);
@@ -363,33 +549,50 @@ function resetOnlineEntities() {
     shockwaves?.cleanup();
 
     const state = useGameStore.getState();
+    remotePlayerTargetPosition = null;
     const mySlot = state.online?.playerSlot;
-    
-    const hostPos = { x: -15, y: 4, z: 0 };
-    const clientPos = { x: 15, y: 4, z: 0 };
+    const p1Color = state.p1Color || 0xff4444;
+    const p2Color = state.p2Color || 0x4444ff;
+    const p1Hat = state.p1Hat || 'none';
+    const p2Hat = state.p2Hat || 'none';
+    const p1Name = state.p1Name || 'Player 1';
+    const p2Name = state.p2Name || 'Player 2';
+
+    console.log('[resetOnlineEntities] Using customization:', {
+        p1Color,
+        p2Color,
+        p1Hat,
+        p2Hat,
+        p1Name,
+        p2Name,
+        mySlot,
+    });
+
+    arena = new Arena();
+    particles = new ParticleSystem();
+    lightning = new LightningSystem();
+    shockwaves = new ShockwaveSystem();
+
+    const sphereRadius = state.settings?.sphereSize ?? 2;
+    const [hostPos, clientPos] = getPlayerSpawnPositions(arena, sphereRadius);
     
     const defaultInput = { forward: false, backward: false, left: false, right: false, boost: false };
     
     // Player input mapping: local player uses their controls, opponent uses synced input
     if (mySlot === 1) {
         // I'm the host (player 1) on the left
-        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
-        player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
+        player1 = new Player('player1', p1Color, hostPos, getPlayer1InputUnified);
+        player2 = new Player('player2', p2Color, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
     } else if (mySlot === 2) {
         // I'm the client (player 2) on the right, but I use player 2 controls (arrows)
         // The visual player1/player2 display doesn't change - it's about my slot
-        player1 = new Player('player1', 0xff4444, hostPos, () => useGameStore.getState().online.opponentInput || defaultInput);
-        player2 = new Player('player2', 0x4444ff, clientPos, getPlayer2InputUnified);
+        player1 = new Player('player1', p1Color, hostPos, () => useGameStore.getState().online.opponentInput || defaultInput);
+        player2 = new Player('player2', p2Color, clientPos, getPlayer2InputUnified);
     } else {
         // Fallback: assume we're host if slot is unknown
-        player1 = new Player('player1', 0xff4444, hostPos, getPlayer1InputUnified);
-        player2 = new Player('player2', 0x4444ff, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
+        player1 = new Player('player1', p1Color, hostPos, getPlayer1InputUnified);
+        player2 = new Player('player2', p2Color, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
     }
-    
-    arena = new Arena();
-    particles = new ParticleSystem();
-    lightning = new LightningSystem();
-    shockwaves = new ShockwaveSystem();
 
     camera.position.set(0, 32, 32);
     camera.lookAt(0, 0, 0);
@@ -411,6 +614,7 @@ function returnToMenu() {
     
     player1 = null;
     player2 = null;
+    remotePlayerTargetPosition = null;
     arena = new Arena();
     particles = new ParticleSystem();
     lightning = new LightningSystem();
@@ -516,6 +720,7 @@ function setupButtonHandlers() {
         console.log('[Button] Online clicked!');
         useGameStore.getState().setGameMode('ONLINE');
         showScreen('onlineConnect');
+        maybeAutoConnectOnline();
     });
 
     // Settings
@@ -547,6 +752,7 @@ function setupButtonHandlers() {
         console.log('[Click] ONLINE clicked');
         useGameStore.getState().setGameMode('ONLINE');
         showScreen('onlineConnect');
+        maybeAutoConnectOnline();
         console.log('[Click] Screen shown, new state:', useGameStore.getState());
     });
 
@@ -555,32 +761,12 @@ function setupButtonHandlers() {
         const btn = document.getElementById(`difficulty-${diff}-btn`);
         const radio = document.getElementById(`difficulty-${diff}-radio`);
         if (btn && radio) {
-            btn.addEventListener('click', async () => {
+            btn.addEventListener('click', () => {
                 console.log('[Button] Difficulty', diff, 'clicked!');
                 radio.checked = true;
                 useGameStore.getState().setDifficulty(diff);
-                
-                // Load levels and show level selector
-                const levels = await loadLevels();
-                if (levels.length > 0) {
-                    // Levels available - show level select screen
-                    createLevelButtons(levels, (levelId) => {
-                        selectLevel(levelId);
-                    });
-                    showLevelSelect();
-                } else {
-                    // No levels available - skip level select and go straight to name entry
-                    console.log('[Difficulty] No levels found, proceeding to name entry');
-                    showScreen('name-entry');
-                }
             });
         }
-    });
-
-    // Level Select Screen
-    document.getElementById('level-select-back-btn')?.addEventListener('click', () => {
-        hideLevelSelect();
-        showScreen('menu');
     });
 
     // Coming Soon
@@ -608,6 +794,21 @@ function setupButtonHandlers() {
 
     // Game Over
     document.getElementById('restart-btn')?.addEventListener('click', () => {
+        const currentState = useGameStore.getState();
+
+        if (currentState.gameState === 'GAME_OVER' && currentState.gameMode === 'ONLINE') {
+            if (!currentState.online.rematchRequested) {
+                online.sendRematchRequest();
+                const restartBtn = document.getElementById('restart-btn');
+                if (restartBtn) {
+                    restartBtn.textContent = 'Rematch Requested';
+                    restartBtn.disabled = true;
+                    restartBtn.style.opacity = '0.6';
+                }
+            }
+            return;
+        }
+
         if (useGameStore.getState().gameState === 'ROUND_OVER') {
             // Between rounds - just start the next round.
             roundOverTimeoutSet = false;
@@ -650,13 +851,9 @@ function setupButtonHandlers() {
         showScreen('menu');
     });
     document.getElementById('online-connect-btn')?.addEventListener('click', () => {
-        const serverUrl = document.getElementById('online-server-input')?.value.trim();
+        const serverUrl = document.getElementById('online-server-input')?.value.trim() || getDefaultOnlineServerUrl();
         const playerName = document.getElementById('online-name-input')?.value.trim();
         
-        if (!serverUrl) {
-            document.getElementById('online-connect-error').textContent = 'Please enter a server address';
-            return;
-        }
         if (!playerName) {
             document.getElementById('online-connect-error').textContent = 'Please enter your name';
             return;
@@ -701,8 +898,8 @@ function setupButtonHandlers() {
     const startBtn = document.getElementById('online-start-btn');
     console.log('[Setup] Start button found:', !!startBtn, startBtn);
     startBtn?.addEventListener('click', () => {
-        console.log('[Start Btn] Clicked!');
-        online.startGame();
+        console.log('[Start Btn] Entering online setup flow');
+        enterOnlineSetupState();
     });
     document.getElementById('online-leave-btn')?.addEventListener('click', () => {
         online.leaveGame();
@@ -1033,10 +1230,12 @@ function setupOnlineHandlers() {
         document.getElementById('online-my-game')?.classList.remove('hidden');
         document.getElementById('online-game-info').innerHTML = '<p>Waiting for players...</p>';
         document.getElementById('online-start-btn')?.classList.add('hidden');
+        enterOnlineSetupState();
     });
 
     online.on('gameJoined', () => {
         document.getElementById('online-my-game')?.classList.add('hidden');
+        enterOnlineSetupState();
     });
 
     online.on('leftGame', () => {
@@ -1083,9 +1282,31 @@ function setupOnlineHandlers() {
     online.on('gameStarting', (data) => {
         console.log('[gameStarting] Received game_starting event, countdown:', data.countdown);
         console.log('[gameStarting] isHost:', useGameStore.getState().online.isHost, 'playerSlot:', useGameStore.getState().online.playerSlot);
+
+        if (Array.isArray(data.players) && data.players.length > 0) {
+            const p1 = data.players.find((player) => player?.slot === 1);
+            const p2 = data.players.find((player) => player?.slot === 2);
+            if (p1 || p2) {
+                useGameStore.getState().setPlayerNames(
+                    p1?.name || useGameStore.getState().p1Name,
+                    p2?.name || useGameStore.getState().p2Name,
+                );
+                useGameStore.getState().setPlayerColors(
+                    p1?.color ?? useGameStore.getState().p1Color,
+                    p2?.color ?? useGameStore.getState().p2Color,
+                );
+                useGameStore.getState().setPlayerHats(
+                    p1?.hat || useGameStore.getState().p1Hat,
+                    p2?.hat || useGameStore.getState().p2Hat,
+                );
+            }
+        }
+
         Object.entries(data.settings).forEach(([key, val]) => {
             useGameStore.getState().updateSetting(key, val);
         });
+
+        startOnlineGame();
         hideAllScreens();
         screens.hud.classList.remove('hidden');
         screens.countdown.classList.remove('hidden');
@@ -1098,10 +1319,14 @@ function setupOnlineHandlers() {
         console.log('[gameStarted] Received game_started event');
         console.log('[gameStarted] isHost:', useGameStore.getState().online.isHost, 'playerSlot:', useGameStore.getState().online.playerSlot);
         useGameStore.getState().setPlaying();
-        startOnlineGame();
         if (!useGameStore.getState().online.isHost) {
             setTimeout(() => online.requestSync(), 100);
         }
+    });
+
+    online.on('rematchStart', () => {
+        useGameStore.getState().resetOnlineSetupState?.();
+        enterOnlineSetupState({ resetSetup: false });
     });
 
     online.on('fullState', (data) => {
@@ -1128,13 +1353,37 @@ function setupOnlineHandlers() {
             useGameStore.getState().setOnlineOpponentInput(data.input);
         }
         if (data.type === 'game_state_update' && data.state && player1 && player2) {
-            if (data.state.p1Pos) {
-                player1.rigidBody.setTranslation(data.state.p1Pos, true);
-                player1.rigidBody.setLinvel(data.state.p1Vel, true);
-            }
-            if (data.state.p2Pos) {
-                player2.rigidBody.setTranslation(data.state.p2Pos, true);
-                player2.rigidBody.setLinvel(data.state.p2Vel, true);
+            const state = useGameStore.getState();
+            const isOnlineClient = state.gameMode === 'ONLINE' && !state.online.isHost;
+
+            if (!isOnlineClient) {
+                if (data.state.p1Pos) {
+                    player1.rigidBody.setTranslation(data.state.p1Pos, true);
+                    player1.rigidBody.setLinvel(data.state.p1Vel, true);
+                }
+                if (data.state.p2Pos) {
+                    player2.rigidBody.setTranslation(data.state.p2Pos, true);
+                    player2.rigidBody.setLinvel(data.state.p2Vel, true);
+                }
+            } else {
+                const mySlot = state.online?.playerSlot;
+                const remotePos = mySlot === 2 ? data.state.p1Pos : data.state.p2Pos;
+                const localPos = mySlot === 2 ? data.state.p2Pos : data.state.p1Pos;
+                const localVel = mySlot === 2 ? data.state.p2Vel : data.state.p1Vel;
+                const remotePlayer = getOnlineClientRemotePlayer(state);
+
+                if (localPos) {
+                    const localPlayer = mySlot === 2 ? player2 : player1;
+                    localPlayer?.rigidBody?.setTranslation(localPos, true);
+                    localPlayer?.rigidBody?.setLinvel(localVel, true);
+                }
+
+                if (remotePos) {
+                    if (!remotePlayerTargetPosition) {
+                        remotePlayer?.rigidBody?.setTranslation(remotePos, true);
+                    }
+                    remotePlayerTargetPosition = new THREE.Vector3(remotePos.x, remotePos.y, remotePos.z);
+                }
             }
             
             // Sync tile states from host
@@ -1180,6 +1429,12 @@ function animate() {
 
     // Game states
     if (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING') {
+        const isOnlineClient = state.gameMode === 'ONLINE' && !state.online.isHost;
+
+        if (isOnlineClient) {
+            applyOnlineClientRemoteInterpolation(state);
+        }
+
         // Always update player visuals (mesh sync, tile interactions, power-ups)
         player1?.update(delta, arena, particles);
         player2?.update(delta, arena, particles);
@@ -1200,7 +1455,6 @@ function animate() {
         
         // Only run physics for host and local games, not for online clients
         // Online clients receive positions from host via gameUpdate handler
-        const isOnlineClient = state.gameMode === 'ONLINE' && !state.online.isHost;
         if (!isOnlineClient) {
             physicsSystem.step(delta);
         }
@@ -1319,23 +1573,28 @@ function animate() {
                 const input = (state.online.playerSlot === 1 ? getPlayer1InputUnified : getPlayer2InputUnified)();
                 online.sendInput({ ...input });
                 if (state.online.isHost && player1 && player2) {
-                    const p1Vel = player1.rigidBody.linvel();
-                    const p2Vel = player2.rigidBody.linvel();
-                    
-                    // Serialize tile states for sync
-                    const tileStates = arena?.tiles?.map(t => ({
-                        q: t.q,
-                        r: t.r,
-                        state: t.state,
-                        timer: t.timer
-                    })) || [];
-                    
-                    online.sendGameState({
-                        p1Score: state.p1Score, p2Score: state.p2Score,
-                        p1Pos: player1.mesh.position, p1Vel: { x: p1Vel.x, y: p1Vel.y, z: p1Vel.z },
-                        p2Pos: player2.mesh.position, p2Vel: { x: p2Vel.x, y: p2Vel.y, z: p2Vel.z },
-                        tileStates: tileStates
-                    });
+                    if (online.shouldSendStateUpdate()) {
+                        const p1Vel = player1.rigidBody.linvel();
+                        const p2Vel = player2.rigidBody.linvel();
+
+                        const tileStates = arena?.tiles?.map(t => ({
+                            q: t.q,
+                            r: t.r,
+                            state: t.state,
+                            timer: t.timer
+                        })) || [];
+
+                        online.sendGameState({
+                            p1Score: state.p1Score,
+                            p2Score: state.p2Score,
+                            p1Pos: player1.mesh.position,
+                            p1Vel: { x: p1Vel.x, y: p1Vel.y, z: p1Vel.z },
+                            p2Pos: player2.mesh.position,
+                            p2Vel: { x: p2Vel.x, y: p2Vel.y, z: p2Vel.z },
+                            tileStates: tileStates
+                        });
+                        online.markStateSent();
+                    }
                 }
             }
         }
@@ -1431,6 +1690,30 @@ function startNextRound() {
     roundOverFrozen = false;
     roundOverLogFrames = 0;
     const st = useGameStore.getState();
+
+    if (st.gameMode === 'ONLINE') {
+        countdownTimer = 3.0;
+
+        // Both peers enter round state, but host remains the authoritative simulator.
+        useGameStore.getState().startRound();
+        resetOnlineEntities();
+        updateHUDNames();
+
+        if (st.online.isHost) {
+            setTimeout(() => {
+                if (online.isConnected) {
+                    online.sendGameState({
+                        p1Score: useGameStore.getState().p1Score,
+                        p2Score: useGameStore.getState().p2Score
+                    });
+                }
+            }, 50);
+        } else {
+            setTimeout(() => online.requestSync(), 120);
+        }
+        return;
+    }
+
     setMusicSpeed(0.6 + (st.p1Score + st.p2Score) * 0.1);
     countdownTimer = 3.0;
     useGameStore.getState().startRound();
@@ -1443,6 +1726,13 @@ function startNextRound() {
 // ============================================
 function setupStoreSubscription() {
     useGameStore.subscribe((state, prevState) => {
+        if (prevState.gameState === 'ONLINE_SETUP' && state.gameState !== 'ONLINE_SETUP') {
+            cleanupOnlineSetupPanel();
+            if (screens.onlineSetup) {
+                screens.onlineSetup.innerHTML = '';
+            }
+        }
+
         // Screen transitions
         if (state.gameState !== prevState.gameState) {
             console.log('[Store Sub] gameState changed:', prevState.gameState, '->', state.gameState);
@@ -1467,6 +1757,10 @@ function setupStoreSubscription() {
                     break;
                 case 'ONLINE':
                     screens.onlineLobby.classList.remove('hidden');
+                    break;
+                case 'ONLINE_SETUP':
+                    screens.onlineSetup.classList.remove('hidden');
+                    mountOnlineSetupPanel();
                     break;
                 case 'NAME_ENTRY':
                     console.log('[Preview] NAME_ENTRY case matched - initializing new character preview');
@@ -1540,6 +1834,8 @@ function setupStoreSubscription() {
                                     const winnerText = state.winner === 'Draw' ? 'Draw!' : `${state.winner === 'Player 1' ? state.p1Name : state.p2Name} wins the round!`;
                                     document.getElementById('winner-text').textContent = winnerText;
                                     document.getElementById('restart-btn').textContent = 'Next Round';
+                                    document.getElementById('restart-btn').disabled = false;
+                                    document.getElementById('restart-btn').style.opacity = '1';
                                     screens.gameOver.classList.remove('hidden');
                                     // Start countdown with replay option if we have replay data
                                     if (replayRecorder.buffer.length > 0) {
@@ -1554,7 +1850,21 @@ function setupStoreSubscription() {
                     screens.gameOver.classList.remove('hidden');
                     document.getElementById('winner-text').textContent = 
                         state.winner === 'Draw' ? 'Draw!' : `${state.winner === 'Player 1' ? state.p1Name : state.p2Name} Wins!`;
-                    document.getElementById('restart-btn').textContent = 'Play Again';
+                    if (state.gameMode === 'ONLINE') {
+                        const rematchRequested = Boolean(state.online?.rematchRequested);
+                        const opponentRematchRequested = Boolean(state.online?.opponentRematchRequested);
+                        document.getElementById('restart-btn').textContent = rematchRequested ? 'Rematch Requested' : 'Rematch';
+                        document.getElementById('restart-btn').disabled = rematchRequested;
+                        document.getElementById('restart-btn').style.opacity = rematchRequested ? '0.6' : '1';
+                        if (opponentRematchRequested) {
+                            const winnerEl = document.getElementById('winner-text');
+                            winnerEl.textContent = `${winnerEl.textContent} Opponent wants a rematch.`;
+                        }
+                    } else {
+                        document.getElementById('restart-btn').textContent = 'Play Again';
+                        document.getElementById('restart-btn').disabled = false;
+                        document.getElementById('restart-btn').style.opacity = '1';
+                    }
                     if (state.settings.autoRestart) {
                         setTimeout(() => {
                             if (useGameStore.getState().gameState === 'GAME_OVER') {
@@ -1567,6 +1877,14 @@ function setupStoreSubscription() {
             }
         }
 
+
+        const disconnectedChanged = state.online?.opponentDisconnected !== prevState.online?.opponentDisconnected;
+        const onlineContextChanged = state.gameMode !== prevState.gameMode || state.gameState !== prevState.gameState;
+        if (disconnectedChanged || onlineContextChanged) {
+            const inOnlineSession = state.gameMode === 'ONLINE' && state.gameState !== 'MENU';
+            const showOverlay = inOnlineSession && Boolean(state.online?.opponentDisconnected);
+            setOpponentDisconnectOverlayVisible(showOverlay);
+        }
         // Update HUD
         document.getElementById('p1-score').textContent = state.p1Score;
         document.getElementById('p2-score').textContent = state.p2Score;
@@ -1654,6 +1972,17 @@ async function init() {
         setupOnlineHandlers();
         setupStoreSubscription();
         populatePowerupsGuide();
+
+        const serverInput = document.getElementById('online-server-input');
+        if (serverInput && !serverInput.value.trim()) {
+            serverInput.value = getDefaultOnlineServerUrl();
+        }
+
+        const onlineNameInput = document.getElementById('online-name-input');
+        if (onlineNameInput && !onlineNameInput.value.trim()) {
+            onlineNameInput.value = (localStorage.getItem('dropfall_p1name') || 'Player').slice(0, 20);
+        }
+        ensureOpponentDisconnectOverlay();
         
         showScreen('menu');
         animate();

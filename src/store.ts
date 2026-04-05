@@ -64,8 +64,16 @@ export interface OnlineState {
   playerSlot: number | null;
   opponentConnected: boolean;
   opponentInput: InputPayload | null;
-  opponentName: string;
+  opponentColor: number | string | null;
+  opponentHat: string | null;
+  opponentName: string | null;
   myName: string;
+  myReady: boolean;
+  opponentReady: boolean;
+  allReady: boolean;
+  opponentDisconnected: boolean;
+  rematchRequested: boolean;
+  opponentRematchRequested: boolean;
 }
 
 /**
@@ -84,7 +92,7 @@ export interface TileEffect {
  */
 export interface GameStoreState {
   // Core game state
-  gameState: string; // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'CUSTOMIZATION', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE'
+  gameState: string; // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'CUSTOMIZATION', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE', 'ONLINE_SETUP'
   gameMode: GameMode | string; // '1P', '2P', 'ONLINE', 'AI'
   difficulty: Difficulty | string;
   winner: string | null;
@@ -99,6 +107,8 @@ export interface GameStoreState {
   p2Hat: string;
   p1Color: number | string;
   p2Color: number | string;
+  selectedLevelId: string | null;
+  selectedLevelData: Record<string, any> | null;
 
   // Online state
   online: OnlineState;
@@ -121,6 +131,7 @@ export interface StoreActions {
   setPlayerNames(p1Name: string, p2Name: string): void;
   setPlayerHats(p1Hat: string, p2Hat: string): void;
   setPlayerColors(p1Color: number | string, p2Color: number | string): void;
+  setSelectedLevel(id: string | null, data: Record<string, any> | null): void;
   setGameState(state: string): void;
   setGameMode(mode: GameMode | string): void;
   setDifficulty(diff: Difficulty | string): void;
@@ -144,8 +155,16 @@ export interface StoreActions {
   setOnlinePlayerSlot(slot: number | null): void;
   setOnlineOpponentConnected(connected: boolean): void;
   setOnlineOpponentInput(input: InputPayload | null): void;
-  setOnlineOpponentName(name: string): void;
+  setOnlineOpponentName(name: string | null): void;
+  setOnlineOpponentCustomization(color: number | string | null, hat: string | null, name: string | null): void;
   setOnlineMyName(name: string): void;
+  setOnlineReady(ready: boolean): void;
+  setOnlineOpponentReady(ready: boolean): void;
+  setOnlineAllReady(allReady: boolean): void;
+  setOpponentDisconnected(disconnected: boolean): void;
+  setRematchRequested(requested: boolean): void;
+  setOpponentRematchRequested(requested: boolean): void;
+  resetOnlineSetupState(): void;
   enterOnlineLobby(): void;
   setOnlineName(name: string): void;
   resetOnlineState(): void;
@@ -228,6 +247,18 @@ const p2Color: number | string = savedP2Color.startsWith('pattern:')
   ? savedP2Color
   : parseInt(savedP2Color.replace(/^0x/, ''), 16);
 
+const defaultOnlineSetupState = {
+  opponentColor: null,
+  opponentHat: null,
+  opponentName: null,
+  myReady: false,
+  opponentReady: false,
+  allReady: false,
+  opponentDisconnected: false,
+  rematchRequested: false,
+  opponentRematchRequested: false,
+} as const;
+
 /**
  * Zustand store for all game and UI state
  * Uses persist middleware to save settings and selections to localStorage
@@ -251,6 +282,8 @@ export const useGameStore = create<GameStore>()(
       p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
       p1Color,
       p2Color,
+      selectedLevelId: null,
+      selectedLevelData: null,
 
       // Online state
       online: {
@@ -263,8 +296,9 @@ export const useGameStore = create<GameStore>()(
         playerSlot: null,
         opponentConnected: false,
         opponentInput: null,
-        opponentName: '',
+        opponentName: null,
         myName: '',
+        ...defaultOnlineSetupState,
       },
 
       // Settings
@@ -303,6 +337,10 @@ export const useGameStore = create<GameStore>()(
         return set({ p1Color, p2Color });
       },
 
+      setSelectedLevel: (id: string | null, data: Record<string, any> | null) => {
+        return set({ selectedLevelId: id, selectedLevelData: data });
+      },
+
       setGameState: (gameState: string) => {
         return set({ gameState });
       },
@@ -313,6 +351,13 @@ export const useGameStore = create<GameStore>()(
           localStorage.setItem('dropfall_gamemode', mode);
           // For all modes, go directly to NAME_ENTRY (game settings) where difficulty is selected for 1P
           const nextState = 'NAME_ENTRY';
+          if (mode !== 'ONLINE') {
+            return {
+              gameMode: mode,
+              gameState: nextState,
+              online: { ...state.online, ...defaultOnlineSetupState },
+            };
+          }
           return { gameMode: mode, gameState: nextState };
         }),
 
@@ -361,6 +406,20 @@ export const useGameStore = create<GameStore>()(
           player1Boost: 0,
           player2Boost: 0,
           activeTileEffects: [],
+          online: {
+            connected: false,
+            serverUrl: '',
+            playerId: null,
+            currentGame: null,
+            games: [],
+            isHost: false,
+            playerSlot: null,
+            opponentConnected: false,
+            opponentInput: null,
+            opponentName: null,
+            myName: '',
+            ...defaultOnlineSetupState,
+          },
         }),
 
       endRound: (winner: string) =>
@@ -446,14 +505,59 @@ export const useGameStore = create<GameStore>()(
           online: { ...state.online, opponentInput: input },
         })),
 
-      setOnlineOpponentName: (name: string) =>
+      setOnlineOpponentName: (name: string | null) =>
         set((state) => ({
           online: { ...state.online, opponentName: name },
+        })),
+
+      setOnlineOpponentCustomization: (color: number | string | null, hat: string | null, name: string | null) =>
+        set((state) => ({
+          online: {
+            ...state.online,
+            opponentColor: color,
+            opponentHat: hat,
+            opponentName: name,
+          },
         })),
 
       setOnlineMyName: (name: string) =>
         set((state) => ({
           online: { ...state.online, myName: name },
+        })),
+
+      setOnlineReady: (ready: boolean) =>
+        set((state) => ({
+          online: { ...state.online, myReady: ready },
+        })),
+
+      setOnlineOpponentReady: (ready: boolean) =>
+        set((state) => ({
+          online: { ...state.online, opponentReady: ready },
+        })),
+
+      setOnlineAllReady: (allReady: boolean) =>
+        set((state) => ({
+          online: { ...state.online, allReady },
+        })),
+
+      setOpponentDisconnected: (disconnected: boolean) =>
+        set((state) => ({
+          online: { ...state.online, opponentDisconnected: disconnected },
+        })),
+
+      setRematchRequested: (requested: boolean) =>
+        set((state) => ({
+          online: { ...state.online, rematchRequested: requested },
+        })),
+
+      setOpponentRematchRequested: (requested: boolean) =>
+        set((state) => ({
+          online: { ...state.online, opponentRematchRequested: requested },
+        })),
+
+      resetOnlineSetupState: () =>
+        set((state) => ({
+          online: { ...state.online, ...defaultOnlineSetupState },
         })),
 
       enterOnlineLobby: () => set({ gameState: 'ONLINE' }),
@@ -475,8 +579,9 @@ export const useGameStore = create<GameStore>()(
             playerSlot: null,
             opponentConnected: false,
             opponentInput: null,
-            opponentName: '',
+            opponentName: null,
             myName: '',
+            ...defaultOnlineSetupState,
           },
         })),
     }),

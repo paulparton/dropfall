@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { createHatMesh, disposeHatGroup, HatResult, SantaSegment } from '../utils/hatFactory.js';
 import { updateHatPhysics, createHatPhysicsState, HatPhysicsState } from '../utils/hatPhysics.js';
 import { createBallMaterial, createSwatchCanvas, getPatternEmissiveColor } from '../utils/materialFactory.js';
+import { createLevelThumbnailCanvas, type LevelTile } from '../utils/levelThumbnail.js';
 import { useGameStore } from '../store.js';
 
 export interface PreviewPlayerState {
@@ -41,6 +42,27 @@ interface PreviewInstance {
   rotationY: number;
 }
 
+interface LevelSummary {
+  id: string;
+  name: string;
+  description: string;
+  difficulty: string;
+  tileCount: number;
+  isDemo: boolean;
+}
+
+interface LevelDetails extends LevelSummary {
+  tiles?: LevelTile[];
+}
+
+type LevelSelectFactory =
+  ((options: {
+    levels: LevelSummary[];
+    currentLevelId: string | null;
+    onSelect: (levelId: string | null) => void;
+  }) => unknown)
+  | ((levels: LevelSummary[], currentLevelId: string | null, onSelect: (levelId: string | null) => void) => unknown);
+
 const HAT_LABELS: Record<string, string> = {
   none: 'None',
   santa: 'Santa',
@@ -53,6 +75,48 @@ const HAT_LABELS: Record<string, string> = {
 const HAT_VALUES = ['none', 'santa', 'cowboy', 'afro', 'crown', 'dunce'];
 
 export const previewInstances: Map<'player1' | 'player2', PreviewInstance> = new Map();
+
+let selectedPreviewLevelId: string | null = null;
+
+export function getSelectedPreviewLevelId(): string | null {
+  return selectedPreviewLevelId;
+}
+
+let cachedLevelSummaries: LevelSummary[] | null = null;
+
+async function loadLevelProvider(): Promise<{
+  getAllLevels: () => Promise<LevelSummary[]>;
+  getLevelById: (id: string) => Promise<LevelDetails | null>;
+} | null> {
+  try {
+    const providerModulePath = '../levels/' + 'levelProvider.js';
+    const module = await import(providerModulePath) as {
+      getAllLevels?: () => Promise<LevelSummary[]>;
+      getLevelById?: (id: string) => Promise<LevelDetails | null>;
+    };
+
+    if (!module.getAllLevels || !module.getLevelById) {
+      return null;
+    }
+
+    return {
+      getAllLevels: module.getAllLevels,
+      getLevelById: module.getLevelById,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadLevelSelectFactory(): Promise<LevelSelectFactory | null> {
+  try {
+    const modalModulePath = './' + 'LevelSelectModal.js';
+    const module = await import(modalModulePath) as { createLevelSelectModal?: LevelSelectFactory };
+    return module.createLevelSelectModal ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function numToHexCss(hex: number): string {
   return '#' + hex.toString(16).padStart(6, '0');
@@ -170,7 +234,230 @@ export function createCharacterPreviewPanel(
     container.appendChild(difficultySection);
   }
 
-  // ===== MIDDLE: DUAL PLAYER CARDS =====
+  // ===== MIDDLE: LEVEL SELECTOR STRIP =====
+  const levelSection = document.createElement('div');
+  levelSection.style.cssText = `
+    width: 100%;
+    max-width: 600px;
+    padding: 0.8rem;
+    background: rgba(0, 255, 255, 0.05);
+    border: 2px solid #0ff;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    box-sizing: border-box;
+  `;
+
+  const levelLabel = document.createElement('h3');
+  levelLabel.textContent = 'ARENA';
+  levelLabel.style.cssText = `
+    color: #0ff;
+    margin: 0;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+    white-space: nowrap;
+  `;
+  levelSection.appendChild(levelLabel);
+
+  const levelInfo = document.createElement('div');
+  levelInfo.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    flex: 1;
+  `;
+
+  const levelThumbnailWrap = document.createElement('div');
+  levelThumbnailWrap.style.cssText = `
+    width: 72px;
+    height: 44px;
+    border: 1px solid rgba(0, 255, 255, 0.35);
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+  `;
+
+  const levelName = document.createElement('div');
+  levelName.textContent = 'Default Arena';
+  levelName.title = 'Default Arena';
+  levelName.style.cssText = `
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: bold;
+    letter-spacing: 0.4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  `;
+
+  const levelFallbackText = document.createElement('span');
+  levelFallbackText.textContent = 'NO PREVIEW';
+  levelFallbackText.style.cssText = `
+    color: rgba(0, 255, 255, 0.6);
+    font-size: 0.55rem;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  `;
+  levelThumbnailWrap.appendChild(levelFallbackText);
+
+  levelInfo.append(levelThumbnailWrap, levelName);
+  levelSection.appendChild(levelInfo);
+
+  const levelButton = document.createElement('button');
+  levelButton.type = 'button';
+  levelButton.textContent = 'SELECT';
+  levelButton.style.cssText = `
+    padding: 0.45rem 0.8rem;
+    background: rgba(0, 255, 255, 0.2);
+    color: #0ff;
+    border: 1px solid #0ff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: bold;
+    text-transform: uppercase;
+    transition: all 0.2s;
+    flex-shrink: 0;
+  `;
+  levelButton.onmouseover = () => {
+    if (!levelButton.disabled) {
+      levelButton.style.background = 'rgba(0, 255, 255, 0.3)';
+    }
+  };
+  levelButton.onmouseout = () => {
+    if (!levelButton.disabled) {
+      levelButton.style.background = 'rgba(0, 255, 255, 0.2)';
+    }
+  };
+  levelSection.appendChild(levelButton);
+
+  container.appendChild(levelSection);
+
+  const setThumbnail = (tiles?: LevelTile[]) => {
+    levelThumbnailWrap.innerHTML = '';
+
+    if (!tiles || tiles.length === 0) {
+      levelThumbnailWrap.appendChild(levelFallbackText);
+      return;
+    }
+
+    const thumbnailCanvas = createLevelThumbnailCanvas(tiles, 72, 44);
+    thumbnailCanvas.style.cssText = 'width: 100%; height: 100%; display: block;';
+    levelThumbnailWrap.appendChild(thumbnailCanvas);
+  };
+
+  const updateLevelStrip = async (nextLevelId: string | null, availableLevels: LevelSummary[], providerAvailable: boolean) => {
+    selectedPreviewLevelId = nextLevelId;
+
+    if (!nextLevelId) {
+      levelName.textContent = 'Default Arena';
+      levelName.title = 'Default Arena';
+      setThumbnail(undefined);
+      return;
+    }
+
+    const level = availableLevels.find((candidate) => candidate.id === nextLevelId);
+    if (!level) {
+      levelName.textContent = 'Default Arena';
+      levelName.title = 'Default Arena';
+      setThumbnail(undefined);
+      return;
+    }
+
+    levelName.textContent = level.name;
+    levelName.title = level.name;
+
+    if (!providerAvailable) {
+      setThumbnail(undefined);
+      return;
+    }
+
+    const provider = await loadLevelProvider();
+    if (!provider) {
+      setThumbnail(undefined);
+      return;
+    }
+
+    const levelDetails = await provider.getLevelById(level.id);
+    setThumbnail(levelDetails?.tiles);
+  };
+
+  let levelList: LevelSummary[] = [];
+  let hasLevelProvider = false;
+
+  const initializeLevels = async () => {
+    const provider = await loadLevelProvider();
+    hasLevelProvider = Boolean(provider);
+
+    if (!provider) {
+      levelButton.disabled = true;
+      levelButton.textContent = 'UNAVAILABLE';
+      levelButton.style.opacity = '0.55';
+      levelButton.style.cursor = 'not-allowed';
+      return;
+    }
+
+    if (!cachedLevelSummaries) {
+      cachedLevelSummaries = await provider.getAllLevels();
+    }
+    levelList = cachedLevelSummaries;
+
+    if (levelList.length === 0) {
+      levelButton.disabled = true;
+      levelButton.textContent = 'NO LEVELS';
+      levelButton.style.opacity = '0.55';
+      levelButton.style.cursor = 'not-allowed';
+      return;
+    }
+
+    await updateLevelStrip(selectedPreviewLevelId, levelList, hasLevelProvider);
+  };
+
+  void initializeLevels();
+
+  levelButton.onclick = async () => {
+    if (levelButton.disabled) {
+      return;
+    }
+
+    if (levelList.length === 0) {
+      return;
+    }
+
+    const modalFactory = await loadLevelSelectFactory();
+    if (!modalFactory) {
+      return;
+    }
+
+    const handleSelection = (levelId: string | null) => {
+      void updateLevelStrip(levelId, levelList, hasLevelProvider);
+    };
+
+    try {
+      modalFactory({
+        levels: levelList,
+        currentLevelId: selectedPreviewLevelId,
+        onSelect: handleSelection,
+      });
+    } catch {
+      const fallbackFactory = modalFactory as (
+        levels: LevelSummary[],
+        currentLevelId: string | null,
+        onSelect: (levelId: string | null) => void,
+      ) => unknown;
+      fallbackFactory(levelList, selectedPreviewLevelId, handleSelection);
+    }
+  };
+
+  // ===== BOTTOM: DUAL PLAYER CARDS =====
   const playersContainer = document.createElement('div');
   playersContainer.style.cssText = `
     display: flex;

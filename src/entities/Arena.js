@@ -72,7 +72,7 @@ function getTileMaterials(theme, edgeColor, baseColor, iceColor) {
 }
 
 export class Arena {
-    constructor() {        console.log('[Arena] Constructor called');        // Clear materials cache to ensure fresh materials with all variants
+    constructor(customTiles) {        console.log('[Arena] Constructor called');        // Clear materials cache to ensure fresh materials with all variants
         TILE_MATERIALS_CACHE = {};
         
         this.tiles = [];
@@ -86,8 +86,29 @@ export class Arena {
         this.arenaSize = settings.arenaSize;
         const theme = settings.theme || 'default';
 
+        const hasCustomTiles = Array.isArray(customTiles);
+        const normalizeAbility = (ability) => {
+            const normalizedAbility = (typeof ability === 'string' ? ability.toUpperCase() : 'NORMAL');
+            if (normalizedAbility === 'ICE' || normalizedAbility === 'PORTAL' || normalizedAbility === 'BONUS' || normalizedAbility === 'NORMAL') {
+                return normalizedAbility;
+            }
+            return 'NORMAL';
+        };
+
         // 1. Generate Grid
-        const hexes = generateHexGrid(this.arenaSize);
+        const hexes = hasCustomTiles
+            ? customTiles.map(tile => ({
+                q: tile?.coord?.q,
+                r: tile?.coord?.r,
+                ability: normalizeAbility(tile?.ability),
+                height: Number.isFinite(tile?.height) ? tile.height : 0
+            })).filter(tile => Number.isFinite(tile.q) && Number.isFinite(tile.r))
+            : generateHexGrid(this.arenaSize).map(hex => ({
+                q: hex.q,
+                r: hex.r,
+                ability: 'NORMAL',
+                height: 0
+            }));
 
         // 2. Create Tiles
         const gridSpacing = 8.0;
@@ -143,7 +164,8 @@ export class Arena {
         let tileCount = 0;
         hexes.forEach(hex => {
             const pos = hexToPixel(hex.q, hex.r, gridSpacing);
-            const position = { x: pos.x, y: 0, z: pos.z };
+            const initialState = hex.ability || 'NORMAL';
+            const position = { x: pos.x, y: hex.height, z: pos.z };
 
             // === Use shader-based material for each tile (cloned for independent uniforms) ===
             const tileMaterial = this.basePlatformMaterial.clone();
@@ -155,6 +177,9 @@ export class Arena {
             
             // Track uniforms for state updates
             const uniforms = tileMaterial.uniforms;
+            if (uniforms?.uState) {
+                uniforms.uState.value = STATE_MAP[initialState] || 0;
+            }
             
             // Glowing Edges with simpler material
             const edgesMat = new THREE.LineBasicMaterial({ 
@@ -186,11 +211,15 @@ export class Arena {
                 uniforms,
                 rigidBody,
                 collider,
-                state: 'NORMAL',
-                timer: 0,
+                state: initialState,
+                timer: initialState === 'ICE' ? Number.POSITIVE_INFINITY : 0,
                 distanceToCenter: Math.sqrt(position.x ** 2 + position.z ** 2),
                 edgeOpacity: 0.5  // More subtle default opacity
             });
+
+            if (initialState === 'ICE') {
+                collider.setFriction(0.0);
+            }
         });
     }
 

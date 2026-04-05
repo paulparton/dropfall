@@ -1,0 +1,162 @@
+{
+  "id": "demo_tiny_duel",
+  "name": "Tiny Duel",
+  "description": "Compact radius-2 arena for quick close-quarters rounds.",
+  "difficulty": "easy",
+  "theme": "default",
+  "isDemo": true,
+  "tiles": [
+    {
+      "coord": {
+        "q": -2,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    }
+  ]
+}

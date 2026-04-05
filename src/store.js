@@ -48,9 +48,21 @@ if (savedSettings.theme === 'cracked_stone') savedSettings.theme = 'temple';
 // Ensure all new settings have values (fill in defaults for any missing)
 const mergedSettings = { ...defaultSettings, ...savedSettings };
 
+const defaultOnlineSetupState = {
+    opponentColor: null,
+    opponentHat: null,
+    opponentName: null,
+    myReady: false,
+    opponentReady: false,
+    allReady: false,
+    opponentDisconnected: false,
+    rematchRequested: false,
+    opponentRematchRequested: false,
+};
+
 export const useGameStore = createStore((set) => ({
     // State
-    gameState: 'MENU', // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE'
+    gameState: 'MENU', // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE', 'ONLINE_SETUP'
     gameMode: localStorage.getItem('dropfall_gamemode') || '2P', // '1P', '2P', or 'ONLINE'
     difficulty: localStorage.getItem('dropfall_difficulty') || 'normal', // 'easy', 'normal', 'hard'
     winner: null,
@@ -67,6 +79,8 @@ export const useGameStore = createStore((set) => ({
     p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
     p1Color: parseInt(localStorage.getItem('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
     p2Color: parseInt(localStorage.getItem('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
+    selectedLevelId: null,
+    selectedLevelData: null,
 
     // Online Multiplayer State
     online: {
@@ -79,8 +93,9 @@ export const useGameStore = createStore((set) => ({
         playerSlot: null,
         opponentConnected: false,
         opponentInput: null,
-        opponentName: '',
+        opponentName: null,
         myName: '',
+        ...defaultOnlineSetupState,
     },
 
     // Settings
@@ -116,11 +131,23 @@ export const useGameStore = createStore((set) => ({
         return { p1Color, p2Color };
     }),
 
+    setSelectedLevel: (id, data) => set(() => ({
+        selectedLevelId: id,
+        selectedLevelData: data
+    })),
+
     setGameMode: (mode) => set((state) => {
         localStorage.setItem('dropfall_gamemode', mode);
         // All modes go directly to NAME_ENTRY (game settings)
         // For 1P, difficulty selection appears within game settings
         const nextState = 'NAME_ENTRY';
+        if (mode !== 'ONLINE') {
+            return {
+                gameMode: mode,
+                gameState: nextState,
+                online: { ...state.online, ...defaultOnlineSetupState },
+            };
+        }
         return { gameMode: mode, gameState: nextState };
     }),
 
@@ -167,7 +194,21 @@ export const useGameStore = createStore((set) => ({
         p2SessionWins: 0,
         player1Boost: 0,
         player2Boost: 0,
-        activeTileEffects: []
+        activeTileEffects: [],
+        online: {
+            connected: false,
+            serverUrl: '',
+            playerId: null,
+            currentGame: null,
+            games: [],
+            isHost: false,
+            playerSlot: null,
+            opponentConnected: false,
+            opponentInput: null,
+            opponentName: null,
+            myName: '',
+            ...defaultOnlineSetupState,
+        }
     }),
 
     endRound: (winner) => set((state) => {
@@ -245,6 +286,43 @@ export const useGameStore = createStore((set) => ({
         online: { ...state.online, opponentName: name }
     })),
 
+    setOnlineOpponentCustomization: (color, hat, name) => set((state) => ({
+        online: {
+            ...state.online,
+            opponentColor: color,
+            opponentHat: hat,
+            opponentName: name,
+        }
+    })),
+
+    setOnlineReady: (ready) => set((state) => ({
+        online: { ...state.online, myReady: ready }
+    })),
+
+    setOnlineOpponentReady: (ready) => set((state) => ({
+        online: { ...state.online, opponentReady: ready }
+    })),
+
+    setOnlineAllReady: (allReady) => set((state) => ({
+        online: { ...state.online, allReady }
+    })),
+
+    setOpponentDisconnected: (disconnected) => set((state) => ({
+        online: { ...state.online, opponentDisconnected: disconnected }
+    })),
+
+    setRematchRequested: (requested) => set((state) => ({
+        online: { ...state.online, rematchRequested: requested }
+    })),
+
+    setOpponentRematchRequested: (requested) => set((state) => ({
+        online: { ...state.online, opponentRematchRequested: requested }
+    })),
+
+    resetOnlineSetupState: () => set((state) => ({
+        online: { ...state.online, ...defaultOnlineSetupState }
+    })),
+
     setOnlineMyName: (name) => set((state) => ({
         online: { ...state.online, myName: name }
     })),
@@ -266,8 +344,9 @@ export const useGameStore = createStore((set) => ({
             playerSlot: null,
             opponentConnected: false,
             opponentInput: null,
-            opponentName: '',
+            opponentName: null,
             myName: '',
+            ...defaultOnlineSetupState,
         }
     }))
 }));
