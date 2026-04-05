@@ -1,5 +1,12 @@
 import { useGameStore } from './store.js';
 
+function normalizeServerSlot(slot) {
+    if (slot === 0 || slot === 1) {
+        return slot + 1;
+    }
+    return slot;
+}
+
 class OnlineManager {
     constructor() {
         this.ws = null;
@@ -295,8 +302,13 @@ class OnlineManager {
 
             case 'game_starting':
                 if (Array.isArray(msg.players) && msg.players.length > 0) {
-                    const p1 = msg.players.find((player) => player?.slot === 1);
-                    const p2 = msg.players.find((player) => player?.slot === 2);
+                    const hasZeroBasedSlots = msg.players.some((player) => player?.slot === 0);
+                    const players = msg.players.map((player) => ({
+                        ...player,
+                        slot: hasZeroBasedSlots ? normalizeServerSlot(player?.slot) : player?.slot,
+                    }));
+                    const p1 = players.find((player) => player?.slot === 1);
+                    const p2 = players.find((player) => player?.slot === 2);
 
                     const p1Name = p1?.name || state.p1Name;
                     const p2Name = p2?.name || state.p2Name;
@@ -313,7 +325,7 @@ class OnlineManager {
                         );
                     }
 
-                    const opponent = msg.players.find((player) => player?.slot && player.slot !== mySlot);
+                    const opponent = players.find((player) => player?.slot && player.slot !== mySlot);
                     state.setOnlineOpponentCustomization?.(
                         opponent?.color ?? null,
                         opponent?.hat ?? null,
@@ -345,7 +357,8 @@ class OnlineManager {
                 break;
 
             case 'player_customization': {
-                const isOpponent = mySlot != null && msg.slot !== mySlot;
+                const gameSlot = normalizeServerSlot(msg.slot);
+                const isOpponent = mySlot != null && gameSlot !== mySlot;
                 if (isOpponent) {
                     state.setOnlineOpponentCustomization?.(
                         msg.color ?? null,
@@ -354,13 +367,13 @@ class OnlineManager {
                     );
                 }
 
-                if (msg.slot === 1 || msg.slot === 2) {
-                    const p1Color = msg.slot === 1 && msg.color !== undefined ? msg.color : state.p1Color;
-                    const p2Color = msg.slot === 2 && msg.color !== undefined ? msg.color : state.p2Color;
-                    const p1Hat = msg.slot === 1 && msg.hat !== undefined ? msg.hat : state.p1Hat;
-                    const p2Hat = msg.slot === 2 && msg.hat !== undefined ? msg.hat : state.p2Hat;
-                    const p1Name = msg.slot === 1 && msg.name ? msg.name : state.p1Name;
-                    const p2Name = msg.slot === 2 && msg.name ? msg.name : state.p2Name;
+                if (gameSlot === 1 || gameSlot === 2) {
+                    const p1Color = gameSlot === 1 && msg.color !== undefined ? msg.color : state.p1Color;
+                    const p2Color = gameSlot === 2 && msg.color !== undefined ? msg.color : state.p2Color;
+                    const p1Hat = gameSlot === 1 && msg.hat !== undefined ? msg.hat : state.p1Hat;
+                    const p2Hat = gameSlot === 2 && msg.hat !== undefined ? msg.hat : state.p2Hat;
+                    const p1Name = gameSlot === 1 && msg.name ? msg.name : state.p1Name;
+                    const p2Name = gameSlot === 2 && msg.name ? msg.name : state.p2Name;
 
                     state.setPlayerColors?.(p1Color, p2Color);
                     state.setPlayerHats?.(p1Hat, p2Hat);
@@ -370,7 +383,8 @@ class OnlineManager {
             }
 
             case 'ready_state': {
-                const isMe = mySlot != null && msg.slot === mySlot;
+                const gameSlot = normalizeServerSlot(msg.slot);
+                const isMe = mySlot != null && gameSlot === mySlot;
                 if (isMe) {
                     state.setOnlineReady?.(Boolean(msg.ready));
                 } else {
@@ -392,7 +406,8 @@ class OnlineManager {
                 break;
 
             case 'rematch_requested': {
-                const isOpponent = mySlot != null && msg.slot !== mySlot;
+                const gameSlot = normalizeServerSlot(msg.slot);
+                const isOpponent = mySlot != null && gameSlot !== mySlot;
                 if (isOpponent) {
                     state.setOpponentRematchRequested?.(true);
                 }

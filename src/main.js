@@ -1299,8 +1299,15 @@ function setupOnlineHandlers() {
         console.log('[gameStarting] isHost:', useGameStore.getState().online.isHost, 'playerSlot:', useGameStore.getState().online.playerSlot);
 
         if (Array.isArray(data.players) && data.players.length > 0) {
-            const p1 = data.players.find((player) => player?.slot === 1);
-            const p2 = data.players.find((player) => player?.slot === 2);
+            const hasZeroBasedSlots = data.players.some((player) => player?.slot === 0);
+            const players = data.players.map((player) => ({
+                ...player,
+                slot: hasZeroBasedSlots && (player?.slot === 0 || player?.slot === 1)
+                    ? player.slot + 1
+                    : player?.slot,
+            }));
+            const p1 = players.find((player) => player?.slot === 1);
+            const p2 = players.find((player) => player?.slot === 2);
             if (p1 || p2) {
                 const current = useGameStore.getState();
                 const p1Name = p1?.name ?? current.p1Name;
