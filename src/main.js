@@ -551,12 +551,27 @@ function resetOnlineEntities() {
     const state = useGameStore.getState();
     remotePlayerTargetPosition = null;
     const mySlot = state.online?.playerSlot;
-    const p1Color = state.p1Color || 0xff4444;
-    const p2Color = state.p2Color || 0x4444ff;
-    const p1Hat = state.p1Hat || 'none';
-    const p2Hat = state.p2Hat || 'none';
-    const p1Name = state.p1Name || 'Player 1';
-    const p2Name = state.p2Name || 'Player 2';
+
+    // Read customization from the latest store snapshot right before creating entities.
+    const customizationState = useGameStore.getState();
+    const rawP1Color = customizationState.p1Color;
+    const rawP2Color = customizationState.p2Color;
+    const p1Color = rawP1Color ?? 0xff4444;
+    const p2Color = rawP2Color ?? 0x4444ff;
+    const p1Hat = customizationState.p1Hat || 'none';
+    const p2Hat = customizationState.p2Hat || 'none';
+    const p1Name = customizationState.p1Name || 'Player 1';
+    const p2Name = customizationState.p2Name || 'Player 2';
+
+    if (rawP1Color == null || rawP2Color == null) {
+        console.warn('[resetOnlineEntities] Missing player color(s), using fallback defaults.', {
+            rawP1Color,
+            rawP2Color,
+            fallbackP1Color: 0xff4444,
+            fallbackP2Color: 0x4444ff,
+            mySlot,
+        });
+    }
 
     console.log('[resetOnlineEntities] Using customization:', {
         p1Color,
@@ -573,7 +588,8 @@ function resetOnlineEntities() {
     lightning = new LightningSystem();
     shockwaves = new ShockwaveSystem();
 
-    const sphereRadius = state.settings?.sphereSize ?? 2;
+    const latestState = useGameStore.getState();
+    const sphereRadius = latestState.settings?.sphereSize ?? 2;
     const [hostPos, clientPos] = getPlayerSpawnPositions(arena, sphereRadius);
     
     const defaultInput = { forward: false, backward: false, left: false, right: false, boost: false };
@@ -584,10 +600,9 @@ function resetOnlineEntities() {
         player1 = new Player('player1', p1Color, hostPos, getPlayer1InputUnified);
         player2 = new Player('player2', p2Color, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
     } else if (mySlot === 2) {
-        // I'm the client (player 2) on the right, but I use player 2 controls (arrows)
-        // The visual player1/player2 display doesn't change - it's about my slot
+        // I'm the client (player 2) on the right, but local controls should still use P1 bindings (WASD).
         player1 = new Player('player1', p1Color, hostPos, () => useGameStore.getState().online.opponentInput || defaultInput);
-        player2 = new Player('player2', p2Color, clientPos, getPlayer2InputUnified);
+        player2 = new Player('player2', p2Color, clientPos, getPlayer1InputUnified);
     } else {
         // Fallback: assume we're host if slot is unknown
         player1 = new Player('player1', p1Color, hostPos, getPlayer1InputUnified);
@@ -1287,18 +1302,26 @@ function setupOnlineHandlers() {
             const p1 = data.players.find((player) => player?.slot === 1);
             const p2 = data.players.find((player) => player?.slot === 2);
             if (p1 || p2) {
-                useGameStore.getState().setPlayerNames(
-                    p1?.name || useGameStore.getState().p1Name,
-                    p2?.name || useGameStore.getState().p2Name,
-                );
-                useGameStore.getState().setPlayerColors(
-                    p1?.color ?? useGameStore.getState().p1Color,
-                    p2?.color ?? useGameStore.getState().p2Color,
-                );
-                useGameStore.getState().setPlayerHats(
-                    p1?.hat || useGameStore.getState().p1Hat,
-                    p2?.hat || useGameStore.getState().p2Hat,
-                );
+                const current = useGameStore.getState();
+                const p1Name = p1?.name ?? current.p1Name;
+                const p2Name = p2?.name ?? current.p2Name;
+                const p1Color = p1?.color ?? current.p1Color;
+                const p2Color = p2?.color ?? current.p2Color;
+                const p1Hat = p1?.hat ?? current.p1Hat;
+                const p2Hat = p2?.hat ?? current.p2Hat;
+
+                current.setPlayerNames(p1Name, p2Name);
+                current.setPlayerColors(p1Color, p2Color);
+                current.setPlayerHats(p1Hat, p2Hat);
+
+                console.log('[gameStarting] Applied server customization before resetOnlineEntities:', {
+                    p1Name,
+                    p2Name,
+                    p1Color,
+                    p2Color,
+                    p1Hat,
+                    p2Hat,
+                });
             }
         }
 
@@ -1521,6 +1544,23 @@ function animate() {
             }
         }
 
+        if (player1 && player2 && !player1.isDead && !player2.isDead && isOnlineClient) {
+            const p1Pos = player1.mesh.position;
+            const p2Pos = player2.mesh.position;
+            const centerPos = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
+            const distance = p1Pos.distanceTo(p2Pos);
+
+            // Match host camera behavior while ensuring the online client tracks active gameplay.
+            const camOffset = Math.max(24, distance * 0.96);
+            const targetCamPos = new THREE.Vector3(centerPos.x, camOffset, centerPos.z + camOffset);
+            const camSpeed = 0.08;
+            camera.position.lerp(targetCamPos, camSpeed);
+
+            if (!camera.userData.lookAtTarget) camera.userData.lookAtTarget = centerPos.clone();
+            camera.userData.lookAtTarget.lerp(centerPos, camSpeed);
+            camera.lookAt(camera.userData.lookAtTarget);
+        }
+
         // Countdown
         if (state.gameState === 'COUNTDOWN') {
             countdownTimer -= delta;
@@ -1570,7 +1610,7 @@ function animate() {
 
             // Online sync
             if (state.gameMode === 'ONLINE' && state.online.connected) {
-                const input = (state.online.playerSlot === 1 ? getPlayer1InputUnified : getPlayer2InputUnified)();
+                const input = getPlayer1InputUnified();
                 online.sendInput({ ...input });
                 if (state.online.isHost && player1 && player2) {
                     if (online.shouldSendStateUpdate()) {
