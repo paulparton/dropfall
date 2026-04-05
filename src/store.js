@@ -21,7 +21,7 @@ const defaultSettings = {
     playerAuraOpacity: 0.4,
     playerGlowIntensity: 3.0,
     playerGlowRange: 30,
-    autoRestart: true,
+    autoRestart: false,
     controls: {
         p1: { up: 'KeyW', down: 'KeyS', left: 'KeyA', right: 'KeyD', boost: 'ShiftLeft' },
         p2: { up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight', boost: 'ShiftRight' }
@@ -56,6 +56,8 @@ export const useGameStore = createStore((set) => ({
     winner: null,
     p1Score: 0,
     p2Score: 0,
+    p1SessionWins: 0,
+    p2SessionWins: 0,
     player1Boost: 0,
     player2Boost: 0,
     activeTileEffects: [],
@@ -63,6 +65,8 @@ export const useGameStore = createStore((set) => ({
     p2Name: localStorage.getItem('dropfall_p2name') || 'Player 2',
     p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
     p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
+    p1Color: parseInt(localStorage.getItem('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
+    p2Color: parseInt(localStorage.getItem('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
 
     // Online Multiplayer State
     online: {
@@ -104,6 +108,12 @@ export const useGameStore = createStore((set) => ({
         localStorage.setItem('dropfall_p1hat', p1Hat);
         localStorage.setItem('dropfall_p2hat', p2Hat);
         return { p1Hat, p2Hat };
+    }),
+
+    setPlayerColors: (p1Color, p2Color) => set(() => {
+        localStorage.setItem('dropfall_p1color', p1Color.toString(16));
+        localStorage.setItem('dropfall_p2color', p2Color.toString(16));
+        return { p1Color, p2Color };
     }),
 
     setGameMode: (mode) => set((state) => {
@@ -153,6 +163,8 @@ export const useGameStore = createStore((set) => ({
         winner: null,
         p1Score: 0,
         p2Score: 0,
+        p1SessionWins: 0,
+        p2SessionWins: 0,
         player1Boost: 0,
         player2Boost: 0,
         activeTileEffects: []
@@ -170,7 +182,9 @@ export const useGameStore = createStore((set) => ({
                 gameState: 'GAME_OVER',
                 winner: newP1Score >= 3 ? 'Player 1' : 'Player 2',
                 p1Score: newP1Score,
-                p2Score: newP2Score
+                p2Score: newP2Score,
+                p1SessionWins: newP1Score >= 3 ? state.p1SessionWins + 1 : state.p1SessionWins,
+                p2SessionWins: newP2Score >= 3 ? state.p2SessionWins + 1 : state.p2SessionWins
             };
         }
 

@@ -97,8 +97,8 @@ export interface GameStoreState {
   p2Name: string;
   p1Hat: string;
   p2Hat: string;
-  p1Color: number;
-  p2Color: number;
+  p1Color: number | string;
+  p2Color: number | string;
 
   // Online state
   online: OnlineState;
@@ -120,7 +120,7 @@ export interface StoreActions {
   resetSettings(): void;
   setPlayerNames(p1Name: string, p2Name: string): void;
   setPlayerHats(p1Hat: string, p2Hat: string): void;
-  setPlayerColors(p1Color: number, p2Color: number): void;
+  setPlayerColors(p1Color: number | string, p2Color: number | string): void;
   setGameState(state: string): void;
   setGameMode(mode: GameMode | string): void;
   setDifficulty(diff: Difficulty | string): void;
@@ -182,8 +182,8 @@ const defaultSettings: GameSettings = {
   autoRestart: false,
   p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
   p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
-  p1Color: parseInt(localStorage.getItem('dropfall_p1color') || '0xff0000', 16),
-  p2Color: parseInt(localStorage.getItem('dropfall_p2color') || '0x0000ff', 16),
+  p1Color: parseInt(localStorage.getItem('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
+  p2Color: parseInt(localStorage.getItem('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
   powerUpWeights: {
     ACCELERATION_BOOST: 50,
     SIZE_REDUCTION: 50,
@@ -218,6 +218,16 @@ const savedSettings = (() => {
 
 const mergedSettings: GameSettings = { ...defaultSettings, ...savedSettings };
 
+const savedP1Color = localStorage.getItem('dropfall_p1color') || 'ff0000';
+const p1Color: number | string = savedP1Color.startsWith('pattern:')
+  ? savedP1Color
+  : parseInt(savedP1Color.replace(/^0x/, ''), 16);
+
+const savedP2Color = localStorage.getItem('dropfall_p2color') || '0000ff';
+const p2Color: number | string = savedP2Color.startsWith('pattern:')
+  ? savedP2Color
+  : parseInt(savedP2Color.replace(/^0x/, ''), 16);
+
 /**
  * Zustand store for all game and UI state
  * Uses persist middleware to save settings and selections to localStorage
@@ -239,8 +249,8 @@ export const useGameStore = create<GameStore>()(
       p2Name: localStorage.getItem('dropfall_p2name') || 'Player 2',
       p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
       p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
-      p1Color: parseInt(localStorage.getItem('dropfall_p1color') || '0xff0000', 16),
-      p2Color: parseInt(localStorage.getItem('dropfall_p2color') || '0x0000ff', 16),
+      p1Color,
+      p2Color,
 
       // Online state
       online: {
@@ -287,9 +297,9 @@ export const useGameStore = create<GameStore>()(
         }));
       },
 
-      setPlayerColors: (p1Color: number, p2Color: number) => {
-        localStorage.setItem('dropfall_p1color', p1Color.toString(16));
-        localStorage.setItem('dropfall_p2color', p2Color.toString(16));
+      setPlayerColors: (p1Color: number | string, p2Color: number | string) => {
+        localStorage.setItem('dropfall_p1color', typeof p1Color === 'string' ? p1Color : p1Color.toString(16));
+        localStorage.setItem('dropfall_p2color', typeof p2Color === 'string' ? p2Color : p2Color.toString(16));
         return set({ p1Color, p2Color });
       },
 

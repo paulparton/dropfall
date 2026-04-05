@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { getPhysicsSystem } from '../systems/PhysicsSystem.js';
 import { scene } from '../renderer.js';
 import { getThemeMaterials } from '../utils/themeTextures.js';
+import { createBallMaterial, getPatternEmissiveColor } from '../utils/materialFactory.js';
+import { isPatternId, getDisplayColor } from '../components/ColorPalette.js';
 import { useGameStore } from '../store.js';
 import { pixelToHex } from '../utils/math.js';
 import { setBoostSound } from '../audio.js';
@@ -155,6 +157,7 @@ export class Player {
         this.frictionMultiplier = 1.0;
         this.isInvulnerable = false;
         this.powerUpColor = null;
+        this.tempOverrideMaterial = null;
 
         const settings = useGameStore.getState().settings;
         this.sphereSize = settings.sphereSize;
@@ -166,25 +169,35 @@ export class Player {
         // 1. Three.js Mesh
         const geometry = new THREE.SphereGeometry(this.sphereSize, 16, 16); // PERFORMANCE: Reduced from 32, 32
         const { sphereMaterialParams } = getThemeMaterials(theme);
+        const isPattern = isPatternId(this.color);
+        const playerDisplayColor = typeof this.color === 'number' ? this.color : getDisplayColor(this.color);
         
-        // If default theme, use the player's color. Otherwise, use the theme's color (usually white)
-        this.baseMaterialColor = theme === 'default' ? this.color : (sphereMaterialParams.color || 0xffffff);
         this.iceColor = theme === 'beach' ? 0x0000ff : 0x00ffff;
-        
-        const material = new THREE.MeshStandardMaterial({
-            ...sphereMaterialParams,
-            color: this.baseMaterialColor,
-            emissive: this.color,
-            emissiveIntensity: 0.2  // PERFORMANCE: Glow via emissive instead of light
-        });
-        this.mesh = new THREE.Mesh(geometry, material);
+
+        if (isPattern && theme === 'default') {
+            const material = createBallMaterial(this.color, this.sphereSize);
+            this.mesh = new THREE.Mesh(geometry, material);
+            this.baseMaterial = material;
+            this.baseMaterialColor = getDisplayColor(this.color);
+        } else {
+            this.baseMaterialColor = theme === 'default' ? this.color : (sphereMaterialParams.color || 0xffffff);
+            const material = new THREE.MeshStandardMaterial({
+                ...sphereMaterialParams,
+                color: this.baseMaterialColor,
+                emissive: typeof this.color === 'number' ? this.color : getPatternEmissiveColor(this.color),
+                emissiveIntensity: 0.2  // PERFORMANCE: Glow via emissive instead of light
+            });
+            this.mesh = new THREE.Mesh(geometry, material);
+            this.baseMaterial = material;
+        }
+
         this.mesh.castShadow = true;
         this.mesh.receiveShadow = true;
         scene.add(this.mesh);
 
         // 2. Dynamic Light (Glow) - Keep but reduce intensity
         // PERFORMANCE: Reduced from full intensity to minimal levels
-        const glowColor = theme === 'default' ? this.color : this.color;
+        const glowColor = playerDisplayColor;
         const glowIntensity = 0.5; // PERFORMANCE: Reduced significantly
         const glowRange = 15; // PERFORMANCE: Reduced from 30
         this.glow = new THREE.PointLight(glowColor, glowIntensity, glowRange);
@@ -192,8 +205,9 @@ export class Player {
 
         // 3. Create glowing aura mesh around the player
         const auraGeometry = new THREE.SphereGeometry(this.sphereSize * settings.playerAuraSize, 12, 12); // PERFORMANCE: Reduced from 32, 32
+        const auraColorHex = typeof this.color === 'number' ? this.color : getDisplayColor(this.color);
         const auraMaterial = new THREE.MeshBasicMaterial({
-            color: this.color,
+            color: auraColorHex,
             transparent: true,
             opacity: settings.playerAuraOpacity,
             depthWrite: false,
@@ -355,9 +369,19 @@ export class Player {
             if (this.freezeTimer > 0) {
                 this.rigidBody.setLinearDamping(0.0); // Maintain velocity
                 this.rigidBody.setAngularDamping(0.0);
-                
-                // Turn player blue
-                this.mesh.material.color.setHex(this.iceColor);
+
+                if (!this.tempOverrideMaterial || this.tempOverrideMaterial._overrideType !== 'ice') {
+                    if (this.tempOverrideMaterial) this.tempOverrideMaterial.dispose();
+                    this.tempOverrideMaterial = new THREE.MeshStandardMaterial({
+                        color: this.iceColor,
+                        emissive: this.iceColor,
+                        emissiveIntensity: 0.3,
+                        metalness: 0.1,
+                        roughness: 0.3
+                    });
+                    this.tempOverrideMaterial._overrideType = 'ice';
+                    this.mesh.material = this.tempOverrideMaterial;
+                }
                 this.glow.color.setHex(this.iceColor);
                 
                 // Ice trail effect
@@ -368,14 +392,28 @@ export class Player {
             } else {
                 this.rigidBody.setLinearDamping(0.0); // Unlimited speed
                 this.rigidBody.setAngularDamping(0.0);
-                
+
                 // Revert color if no power-ups active
                 if (this.activePowerUps.length === 0) {
-                    this.mesh.material.color.setHex(this.baseMaterialColor);
-                    this.glow.color.setHex(this.color);
+                    if (this.tempOverrideMaterial) {
+                        this.tempOverrideMaterial.dispose();
+                        this.tempOverrideMaterial = null;
+                    }
+                    this.mesh.material = this.baseMaterial;
+                    const glowHex = typeof this.color === 'number' ? this.color : getDisplayColor(this.color);
+                    this.glow.color.setHex(glowHex);
                 } else if (this.powerUpColor) {
-                    // Show power-up color
-                    this.mesh.material.color.setHex(this.powerUpColor);
+                    if (!this.tempOverrideMaterial || this.tempOverrideMaterial._overrideType !== 'powerup' || this.tempOverrideMaterial._overrideColor !== this.powerUpColor) {
+                        if (this.tempOverrideMaterial) this.tempOverrideMaterial.dispose();
+                        this.tempOverrideMaterial = new THREE.MeshStandardMaterial({
+                            color: this.powerUpColor,
+                            emissive: this.powerUpColor,
+                            emissiveIntensity: 0.3
+                        });
+                        this.tempOverrideMaterial._overrideType = 'powerup';
+                        this.tempOverrideMaterial._overrideColor = this.powerUpColor;
+                        this.mesh.material = this.tempOverrideMaterial;
+                    }
                     this.glow.color.setHex(this.powerUpColor);
                 }
             }
@@ -494,8 +532,15 @@ export class Player {
             });
             this.hatGroup = null;
         }
+        if (this.tempOverrideMaterial) {
+            this.tempOverrideMaterial.dispose();
+            this.tempOverrideMaterial = null;
+        }
         this.mesh.geometry.dispose();
-        this.mesh.material.dispose();
+        if (this.baseMaterial) {
+            this.baseMaterial.dispose();
+            this.baseMaterial = null;
+        }
         this.auraMesh.geometry.dispose();
         this.auraMesh.material.dispose();
         setBoostSound(this.id, false);
@@ -511,7 +556,8 @@ export class Player {
         canvas.width = 256;
         canvas.height = 64;
         const ctx = canvas.getContext('2d');
-        const hexColor = '#' + this.color.toString(16).padStart(6, '0');
+        const labelColorHex = typeof this.color === 'number' ? this.color : getDisplayColor(this.color);
+        const hexColor = '#' + labelColorHex.toString(16).padStart(6, '0');
         ctx.font = 'bold 38px "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -536,7 +582,8 @@ export class Player {
         canvas.width = 256;
         canvas.height = 64;
         const ctx = canvas.getContext('2d');
-        const hexColor = '#' + this.color.toString(16).padStart(6, '0');
+        const labelColorHex = typeof this.color === 'number' ? this.color : getDisplayColor(this.color);
+        const hexColor = '#' + labelColorHex.toString(16).padStart(6, '0');
         ctx.font = 'bold 38px "Courier New", monospace';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';

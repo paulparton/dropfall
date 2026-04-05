@@ -3,17 +3,19 @@
  */
 
 import { getAllColors, hexToString } from './ColorPalette.js';
+import { getAllPatterns, isPatternId, getDisplayColor, PatternOption } from './ColorPalette.js';
+import { createSwatchCanvas } from '../utils/materialFactory.js';
 import type * as THREE from 'three';
 
 export interface CustomizationResult {
-  color: number;
+  color: number | string;
   hat: string;
 }
 
 export interface CustomizationOptions {
   onConfirm?: (result: CustomizationResult) => void;
   onCancel?: () => void;
-  initialColor?: number;
+  initialColor?: number | string;
   initialHat?: string;
 }
 
@@ -32,6 +34,7 @@ export function createCustomizationModal(
   const { onConfirm, onCancel, initialColor = 0xff0000, initialHat = 'none' } = options;
 
   const colors = getAllColors();
+  const patterns: PatternOption[] = getAllPatterns();
   const modal = document.createElement('div');
   modal.id = 'customization-modal';
   modal.style.cssText = `
@@ -61,7 +64,7 @@ export function createCustomizationModal(
   colors.forEach((color) => {
     const isSelected = color.hex === selectedColor ? 'border: 4px solid #ffff00; transform: scale(1.1);' : 'border: 2px solid rgba(255, 255, 255, 0.3);';
     colorSwatchesHTML += `
-      <div class="color-swatch" data-color="${color.hex}" 
+      <div class="appearance-swatch" data-type="solid" data-value="${color.hex}" 
         style="
           width: 70px;
           height: 70px;
@@ -85,6 +88,35 @@ export function createCustomizationModal(
     `;
   });
   colorSwatchesHTML += '</div>';
+
+  let patternSwatchesHTML = '<div id="pattern-swatches" style="display: grid; grid-template-columns: repeat(6, 70px); gap: 12px; margin: 12px auto 20px auto; justify-content: center;">';
+  patterns.forEach((pattern) => {
+    const swatchCanvas = createSwatchCanvas(pattern.id, 128);
+    const swatchUrl = swatchCanvas.toDataURL();
+    const isSelected = pattern.id === selectedColor ? 'border: 4px solid #ffff00; transform: scale(1.1);' : 'border: 2px solid rgba(255, 255, 255, 0.3);';
+    patternSwatchesHTML += `
+      <div class="appearance-swatch" data-type="pattern" data-value="${pattern.id}"
+        style="
+          width: 70px;
+          height: 70px;
+          background-image: url('${swatchUrl}');
+          background-size: cover;
+          background-position: center;
+          background-color: rgba(0, 0, 0, 0.35);
+          ${isSelected}
+          border-radius: 50%;
+          cursor: pointer;
+          transition: all 0.3s;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          opacity: 0.95;
+        "
+        title="${pattern.name}"
+      ></div>
+    `;
+  });
+  patternSwatchesHTML += '</div>';
 
   // Build hat options
   let hatHTML = '<div id="hat-options" style="display: flex; gap: 15px; margin: 20px auto; justify-content: center; flex-wrap: wrap;">';
@@ -128,6 +160,12 @@ export function createCustomizationModal(
     </h3>
     ${colorSwatchesHTML}
 
+    <div style="margin: 16px auto 8px auto; width: min(500px, 90%); display: flex; align-items: center; gap: 10px; color: rgba(255, 255, 255, 0.8); font-size: 11px; letter-spacing: 2px; text-transform: uppercase;">
+      <span style="opacity: 0.75;">PATTERNS</span>
+      <div style="height: 1px; flex: 1; background: linear-gradient(90deg, rgba(255, 255, 0, 0.6), rgba(0, 255, 255, 0.15));"></div>
+    </div>
+    ${patternSwatchesHTML}
+
     <h3 style="margin: 30px 0 15px 0; color: #ffff00;">
       Select Hat Style
     </h3>
@@ -167,24 +205,31 @@ export function createCustomizationModal(
 
   document.body.appendChild(modal);
 
-  // Event listeners for color selection
-  const colorSwatches = modal.querySelectorAll('.color-swatch');
-  colorSwatches.forEach((swatch) => {
-    const colorStr = (swatch as HTMLElement).dataset.color || '0xff0000';
-    (swatch as HTMLElement).addEventListener('click', () => {
-      selectedColor = parseInt(colorStr, 10);
+  // Event listeners for color/pattern selection
+  const appearanceSwatches = modal.querySelectorAll('.appearance-swatch');
 
-      // Update visual state
-      colorSwatches.forEach((s) => {
-        if ((s as HTMLElement).dataset.color === colorStr) {
-          (s as HTMLElement).style.border = '4px solid #ffff00';
-          (s as HTMLElement).style.transform = 'scale(1.1)';
-        } else {
-          (s as HTMLElement).style.border = '2px solid rgba(255, 255, 255, 0.3)';
-          (s as HTMLElement).style.transform = 'scale(1)';
-        }
-      });
+  function updateSwatchSelection(): void {
+    appearanceSwatches.forEach((swatch) => {
+      const element = swatch as HTMLElement;
+      const swatchType = element.dataset.type;
+      const swatchValue = element.dataset.value || '';
+      const isSelected = swatchType === 'pattern'
+        ? swatchValue === selectedColor
+        : Number.parseInt(swatchValue, 10) === selectedColor;
 
+      element.style.border = isSelected ? '4px solid #ffff00' : '2px solid rgba(255, 255, 255, 0.3)';
+      element.style.transform = isSelected ? 'scale(1.1)' : 'scale(1)';
+    });
+  }
+
+  appearanceSwatches.forEach((swatch) => {
+    const element = swatch as HTMLElement;
+    const swatchType = element.dataset.type;
+    const swatchValue = element.dataset.value || '';
+
+    element.addEventListener('click', () => {
+      selectedColor = swatchType === 'pattern' ? swatchValue : Number.parseInt(swatchValue, 10);
+      updateSwatchSelection();
       updatePreview();
     });
   });
@@ -212,10 +257,11 @@ export function createCustomizationModal(
     const previewContainer = modal.querySelector('#preview-container') as HTMLElement;
     if (!previewContainer) return;
 
-    // Show color swatch with hat indicator
-    const r = (selectedColor >> 16) & 255;
-    const g = (selectedColor >> 8) & 255;
-    const b = selectedColor & 255;
+    // Show color/pattern swatch with hat indicator
+    const previewColor = getDisplayColor(selectedColor);
+    const r = (previewColor >> 16) & 255;
+    const g = (previewColor >> 8) & 255;
+    const b = previewColor & 255;
     const rgbColor = `rgb(${r}, ${g}, ${b})`;
 
     previewContainer.style.background = `
@@ -225,7 +271,7 @@ export function createCustomizationModal(
     previewContainer.innerHTML = `
       <div style="text-align: center;">
         <div style="font-size: 40px; color: white; text-shadow: 0 0 10px rgba(0,0,0,0.8); margin-bottom: 8px;">●</div>
-        <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); text-transform: capitalize;">${selectedHat}</div>
+        <div style="font-size: 12px; color: rgba(255, 255, 255, 0.8); text-transform: capitalize;">${selectedHat}${isPatternId(selectedColor) ? ' • Pattern' : ''}</div>
       </div>
     `;
   }

@@ -1,1 +1,16 @@
-[]
+[
+  {
+    "id": "da24d203",
+    "label": "cd /Users/paulparton/Workbench/dropfall && npm run dev",
+    "command": "cd /Users/paulparton/Workbench/dropfall && npm run dev",
+    "cwd": "/Users/paulparton/Workbench/dropfall",
+    "ownerSessionFile": "/Users/paulparton/.gsd/sessions/--Users-paulparton-Workbench-dropfall--/2026-04-04T04-42-28-179Z_2e05fc52-fddd-4455-b442-287bee20abd4.jsonl",
+    "persistAcrossSessions": false,
+    "startedAt": 1775279204956,
+    "processType": "server",
+    "group": null,
+    "readyPattern": null,
+    "readyPort": 5173,
+    "pid": 30377
+  }
+]
