@@ -201,6 +201,22 @@ export function createCharacterPreviewPanel(
       justify-content: center;
     `;
 
+    let selectedDifficulty = String(useGameStore.getState().difficulty ?? 'normal');
+    const setDifficultyButtonInactive = (btn: HTMLButtonElement): void => {
+      btn.style.background = 'rgba(0, 255, 255, 0.2)';
+      btn.style.color = '#0ff';
+      btn.style.borderColor = '#0ff';
+      btn.style.boxShadow = 'none';
+      btn.style.textShadow = 'none';
+    };
+    const setDifficultyButtonActive = (btn: HTMLButtonElement): void => {
+      btn.style.background = '#0ff';
+      btn.style.color = '#000';
+      btn.style.borderColor = '#00ffff';
+      btn.style.boxShadow = '0 0 30px #0ff, inset 0 0 20px rgba(255, 255, 255, 0.5)';
+      btn.style.textShadow = '0 0 10px rgba(0, 255, 255, 0.8)';
+    };
+
     ['easy', 'normal', 'hard'].forEach((diff) => {
       const btn = document.createElement('button');
       btn.dataset.difficulty = diff;
@@ -218,14 +234,33 @@ export function createCharacterPreviewPanel(
         text-transform: uppercase;
         transition: all 0.2s;
       `;
+
+      if (diff === selectedDifficulty) {
+        setDifficultyButtonActive(btn);
+      }
+
       btn.onmouseover = () => {
+        if (btn.dataset.difficulty === selectedDifficulty) {
+          return;
+        }
         btn.style.background = 'rgba(0, 255, 255, 0.3)';
       };
       btn.onmouseout = () => {
-        btn.style.background = 'rgba(0, 255, 255, 0.2)';
+        if (btn.dataset.difficulty === selectedDifficulty) {
+          setDifficultyButtonActive(btn);
+          return;
+        }
+        setDifficultyButtonInactive(btn);
       };
       btn.onclick = () => {
         onPlayerStateChange?.('player1', { difficulty: diff });
+        selectedDifficulty = diff;
+        Array.from(diffButtons.children).forEach((child) => {
+          if (child instanceof HTMLButtonElement) {
+            setDifficultyButtonInactive(child);
+          }
+        });
+        setDifficultyButtonActive(btn);
       };
       diffButtons.appendChild(btn);
     });

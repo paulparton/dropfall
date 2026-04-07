@@ -1,183 +1,181 @@
 {
-  "name": "My Arena",
-  "description": "",
-  "difficulty": "normal",
+  "id": "demo_race_track",
+  "name": "Race Track",
+  "description": "A wide oval circuit with icy corners and bonus straights.",
+  "difficulty": "medium",
   "theme": "default",
+  "mode": "race",
+  "raceConfig": {
+    "laps": 3,
+    "checkpoints": [
+      {
+        "id": 0,
+        "tiles": [
+          {
+            "q": -2,
+            "r": 6
+          },
+          {
+            "q": -1,
+            "r": 5
+          },
+          {
+            "q": 0,
+            "r": 5
+          }
+        ]
+      },
+      {
+        "id": 1,
+        "tiles": [
+          {
+            "q": 6,
+            "r": -1
+          },
+          {
+            "q": 6,
+            "r": -2
+          },
+          {
+            "q": 5,
+            "r": -1
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "tiles": [
+          {
+            "q": 2,
+            "r": -6
+          },
+          {
+            "q": 3,
+            "r": -6
+          },
+          {
+            "q": 4,
+            "r": -6
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "tiles": [
+          {
+            "q": -7,
+            "r": 3
+          },
+          {
+            "q": -6,
+            "r": 3
+          },
+          {
+            "q": -6,
+            "r": 4
+          }
+        ]
+      }
+    ],
+    "spawnTiles": [
+      {
+        "q": -1,
+        "r": 5
+      },
+      {
+        "q": 0,
+        "r": 5
+      }
+    ]
+  },
+  "isDemo": true,
   "tiles": [
     {
       "coord": {
-        "q": 1,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 2,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 3,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 3,
-        "r": 0
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 0,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -1,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -2,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 0,
-        "r": -3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 2,
-        "r": -3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 0,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -2,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -3,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -1,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 2,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 2,
-        "r": 0
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 1,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 1,
-        "r": -3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 1,
+        "q": -7,
         "r": 2
       },
-      "ability": "NORMAL",
+      "ability": "ICE",
       "height": 4
     },
     {
       "coord": {
-        "q": 2,
+        "q": -7,
+        "r": 3
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -7,
+        "r": 4
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -7,
+        "r": 5
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -6,
+        "r": 0
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -6,
         "r": 1
       },
-      "ability": "NORMAL",
+      "ability": "ICE",
       "height": 4
     },
     {
       "coord": {
-        "q": 3,
-        "r": -2
+        "q": -6,
+        "r": 2
       },
-      "ability": "NORMAL",
+      "ability": "ICE",
       "height": 4
     },
     {
       "coord": {
-        "q": 3,
-        "r": -3
+        "q": -6,
+        "r": 3
       },
-      "ability": "NORMAL",
+      "ability": "ICE",
       "height": 4
     },
     {
       "coord": {
-        "q": -1,
-        "r": -3
+        "q": -6,
+        "r": 4
       },
-      "ability": "NORMAL",
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -6,
+        "r": 5
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -6,
+        "r": 6
+      },
+      "ability": "ICE",
       "height": 4
     },
     {
@@ -190,55 +188,7 @@
     },
     {
       "coord": {
-        "q": -2,
-        "r": -3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -3,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -4,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -3,
-        "r": -3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -6,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -8,
-        "r": 1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -7,
+        "q": -5,
         "r": 0
       },
       "ability": "NORMAL",
@@ -246,15 +196,7 @@
     },
     {
       "coord": {
-        "q": -8,
-        "r": 2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -7,
+        "q": -5,
         "r": 1
       },
       "ability": "NORMAL",
@@ -262,23 +204,7 @@
     },
     {
       "coord": {
-        "q": -4,
-        "r": -3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
         "q": -5,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -7,
         "r": 2
       },
       "ability": "NORMAL",
@@ -286,304 +212,8 @@
     },
     {
       "coord": {
-        "q": -7,
-        "r": 3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -8,
-        "r": 3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -7,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -8,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -4,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -3,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -2,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 1,
-        "r": 3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -1,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 2,
-        "r": 2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 3,
-        "r": 1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 2,
-        "r": 3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 1,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 0,
-        "r": 4
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -8,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -7,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -6,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
         "q": -5,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -4,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -3,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -2,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -1,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 0,
-        "r": 5
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 0,
         "r": 3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -7,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -6,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -8,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -5,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -4,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -3,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -2,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -1,
-        "r": 6
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 3,
-        "r": 2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 4,
-        "r": 0
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 4,
-        "r": -1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 4,
-        "r": -3
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 4,
-        "r": -2
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": -6,
-        "r": 4
       },
       "ability": "NORMAL",
       "height": 4
@@ -599,7 +229,23 @@
     {
       "coord": {
         "q": -5,
-        "r": 0
+        "r": 5
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -5,
+        "r": 6
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -4,
+        "r": -2
       },
       "ability": "NORMAL",
       "height": 4
@@ -614,7 +260,7 @@
     },
     {
       "coord": {
-        "q": -6,
+        "q": -4,
         "r": 0
       },
       "ability": "NORMAL",
@@ -622,48 +268,136 @@
     },
     {
       "coord": {
-        "q": -6,
-        "r": 1
+        "q": -4,
+        "r": 4
       },
       "ability": "NORMAL",
       "height": 4
     },
     {
       "coord": {
-        "q": -6,
-        "r": 3
+        "q": -4,
+        "r": 5
       },
       "ability": "NORMAL",
       "height": 4
     },
     {
       "coord": {
-        "q": -6,
-        "r": 2
+        "q": -4,
+        "r": 6
       },
       "ability": "NORMAL",
       "height": 4
     },
     {
       "coord": {
-        "q": 1,
-        "r": 0
+        "q": -3,
+        "r": -3
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": -2
       },
       "ability": "NORMAL",
       "height": 4
     },
     {
       "coord": {
-        "q": 1,
-        "r": 1
+        "q": -3,
+        "r": -1
       },
       "ability": "NORMAL",
       "height": 4
     },
     {
       "coord": {
-        "q": 0,
-        "r": 2
+        "q": -3,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": 5
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": 6
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": -4
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 5
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 6
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": -4
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": -3
       },
       "ability": "NORMAL",
       "height": 4
@@ -671,7 +405,215 @@
     {
       "coord": {
         "q": -1,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 5
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -5
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 5
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -5
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
         "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 4
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -6
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -5
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 4
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -6
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -5
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": 3
+      },
+      "ability": "BONUS",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -6
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -5
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": 1
       },
       "ability": "NORMAL",
       "height": 4
@@ -686,8 +628,56 @@
     },
     {
       "coord": {
-        "q": 4,
-        "r": 1
+        "q": 5,
+        "r": -6
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 5,
+        "r": -5
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 5,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 5,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 5,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 5,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 5,
+        "r": 0
       },
       "ability": "NORMAL",
       "height": 4
@@ -696,14 +686,6 @@
       "coord": {
         "q": 5,
         "r": 1
-      },
-      "ability": "NORMAL",
-      "height": 4
-    },
-    {
-      "coord": {
-        "q": 5,
-        "r": 2
       },
       "ability": "NORMAL",
       "height": 4
@@ -711,20 +693,90 @@
     {
       "coord": {
         "q": 6,
-        "r": 1
+        "r": -6
       },
-      "ability": "NORMAL",
+      "ability": "ICE",
       "height": 4
     },
     {
       "coord": {
-        "q": 4,
-        "r": 3
+        "q": 6,
+        "r": -5
       },
-      "ability": "NORMAL",
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 6,
+        "r": -4
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 6,
+        "r": -3
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 6,
+        "r": -2
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 6,
+        "r": -1
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 6,
+        "r": 0
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 7,
+        "r": -5
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 7,
+        "r": -4
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 7,
+        "r": -3
+      },
+      "ability": "ICE",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 7,
+        "r": -2
+      },
+      "ability": "ICE",
       "height": 4
     }
-  ],
-  "author": "Editor",
-  "id": "level_1775218531628_fa53f431"
+  ]
 }

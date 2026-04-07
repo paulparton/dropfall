@@ -1,5 +1,5 @@
 import { getLevel, loadLevels } from '../levelLoader.js';
-import { demoLevels, type DemoLevel, type LevelTile } from './demoLevels';
+import { demoLevels, type DemoLevel, type LevelMode, type LevelTile, type RaceConfig } from './demoLevels';
 
 export type LevelData =
   | DemoLevel
@@ -9,6 +9,8 @@ export type LevelData =
       description: string;
       difficulty: string;
       theme?: string;
+      mode?: LevelMode;
+      raceConfig?: RaceConfig;
       tiles: LevelTile[];
       isDemo?: false;
     };
@@ -18,6 +20,7 @@ export type LevelSummary = {
   name: string;
   description: string;
   difficulty: string;
+  mode: LevelMode;
   tileCount: number;
   isDemo: boolean;
 };
@@ -27,6 +30,7 @@ const DEFAULT_LEVEL_SUMMARY: LevelSummary = {
   name: 'Default Arena',
   description: 'Standard procedural hex grid',
   difficulty: 'normal',
+  mode: 'battle',
   tileCount: 0,
   isDemo: false,
 };
@@ -37,6 +41,7 @@ function toDemoSummary(level: DemoLevel): LevelSummary {
     name: level.name,
     description: level.description,
     difficulty: level.difficulty,
+    mode: level.mode,
     tileCount: level.tiles.length,
     isDemo: true,
   };
@@ -58,6 +63,7 @@ function toServerSummary(level: unknown): LevelSummary | null {
     name: typeof candidate.name === 'string' ? candidate.name : candidate.id,
     description: typeof candidate.description === 'string' ? candidate.description : '',
     difficulty: typeof candidate.difficulty === 'string' ? candidate.difficulty : 'normal',
+    mode: candidate.mode === 'race' ? 'race' : 'battle',
     tileCount: typeof candidate.tileCount === 'number' ? candidate.tileCount : 0,
     isDemo: false,
   };
@@ -102,5 +108,20 @@ export async function getLevelById(id: string): Promise<LevelData | null> {
   }
 
   const serverLevel = await getLevel(id);
-  return serverLevel as LevelData | null;
+  if (!serverLevel || typeof serverLevel !== 'object') {
+    return serverLevel as LevelData | null;
+  }
+
+  const candidate = serverLevel as Record<string, unknown>;
+  const mode: LevelMode = candidate.mode === 'race' ? 'race' : 'battle';
+  const levelData = {
+    ...(candidate as LevelData),
+    mode,
+  } as LevelData;
+
+  if (candidate.raceConfig && typeof candidate.raceConfig === 'object') {
+    levelData.raceConfig = candidate.raceConfig as RaceConfig;
+  }
+
+  return levelData;
 }

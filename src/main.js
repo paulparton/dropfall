@@ -1,5 +1,6 @@
 import './style.css';
 import * as THREE from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
 import { useGameStore } from './store.js';
 import { initPhysics, world as physicsWorld } from './physics.js';
 import { getPhysicsSystem } from './systems/PhysicsSystem.js';
@@ -195,6 +196,7 @@ let roundOverLogFrames = 0;
 let onlineSetupPanelTeardown = null;
 let opponentDisconnectOverlayEl = null;
 let remotePlayerTargetPosition = null;
+let lastSentTileStates = new Map();
 
 const REMOTE_PLAYER_LERP_FACTOR = 0.25;
 
@@ -226,11 +228,55 @@ function spawnPositionFromTile(tile, sphereRadius) {
     return { x, y: tileTopY + sphereRadius + SPAWN_DROP_OFFSET, z };
 }
 
-function getPlayerSpawnPositions(currentArena, sphereRadius) {
+function getTileWorldX(tile) {
+    return hexToPixel(tile.q, tile.r, HEX_GRID_SPACING).x;
+}
+
+function getPlayerSpawnPositions(currentArena, sphereRadius, options = {}) {
+    const { preferSideSplit = false } = options;
     const fallbackSpawns = [
         { x: -15, y: 4, z: 0 },
         { x: 15, y: 4, z: 0 }
     ];
+
+    if (preferSideSplit) {
+        const spawnableTiles = getSpawnableTiles(currentArena);
+        if (spawnableTiles.length < 2) {
+            console.warn('[Spawn] Not enough valid tiles for side-split spawns, using fallback spawns.');
+            return fallbackSpawns;
+        }
+
+        const tilesWithX = spawnableTiles.map(tile => ({ tile, x: getTileWorldX(tile) }));
+        const leftTiles = tilesWithX.filter(entry => entry.x < 0);
+        const rightTiles = tilesWithX.filter(entry => entry.x > 0);
+
+        let selectedTiles = null;
+        if (leftTiles.length > 0 && rightTiles.length > 0) {
+            const leftTile = leftTiles[Math.floor(Math.random() * leftTiles.length)].tile;
+            const rightTile = rightTiles[Math.floor(Math.random() * rightTiles.length)].tile;
+            selectedTiles = [leftTile, rightTile];
+        } else {
+            const sortedTiles = [...tilesWithX].sort((a, b) => a.x - b.x);
+            const leftMost = sortedTiles[0];
+            const rightMost = sortedTiles[sortedTiles.length - 1];
+
+            if (leftMost.x >= rightMost.x) {
+                console.warn('[Spawn] Could not find ordered side-split tiles, using fallback spawns.');
+                return fallbackSpawns;
+            }
+
+            selectedTiles = [leftMost.tile, rightMost.tile];
+        }
+
+        const p1Spawn = spawnPositionFromTile(selectedTiles[0], sphereRadius);
+        const p2Spawn = spawnPositionFromTile(selectedTiles[1], sphereRadius);
+        if (p1Spawn.x >= p2Spawn.x) {
+            console.warn('[Spawn] Side-split tile ordering failed, using fallback spawns.');
+            return fallbackSpawns;
+        }
+
+        return [p1Spawn, p2Spawn];
+    }
 
     const tiles = pickUniqueSpawnTiles(currentArena, 2);
     if (tiles.length < 2) {
@@ -319,9 +365,8 @@ function applyOnlineClientRemoteInterpolation(state) {
     const currentVec = new THREE.Vector3(current.x, current.y, current.z);
     currentVec.lerp(remotePlayerTargetPosition, REMOTE_PLAYER_LERP_FACTOR);
 
-    remotePlayer.rigidBody.setTranslation(
-        { x: currentVec.x, y: currentVec.y, z: currentVec.z },
-        true,
+    remotePlayer.rigidBody.setNextKinematicTranslation(
+        { x: currentVec.x, y: currentVec.y, z: currentVec.z }
     );
 }
 
@@ -524,7 +569,9 @@ function resetEntities() {
     shockwaves = new ShockwaveSystem();
 
     const sphereRadius = state.settings?.sphereSize ?? 2;
-    const [p1Spawn, p2Spawn] = getPlayerSpawnPositions(arena, sphereRadius);
+    const [p1Spawn, p2Spawn] = getPlayerSpawnPositions(arena, sphereRadius, {
+        preferSideSplit: state.gameMode === '2P'
+    });
 
     // Players - use unified input handler and store colors
     player1 = new Player('player1', state.p1Color || 0xff4444, p1Spawn, getPlayer1InputUnified);
@@ -550,6 +597,7 @@ function resetOnlineEntities() {
 
     const state = useGameStore.getState();
     remotePlayerTargetPosition = null;
+    lastSentTileStates = new Map();
     const mySlot = state.online?.playerSlot;
 
     // Read customization from the latest store snapshot right before creating entities.
@@ -607,6 +655,12 @@ function resetOnlineEntities() {
         // Fallback: assume we're host if slot is unknown
         player1 = new Player('player1', p1Color, hostPos, getPlayer1InputUnified);
         player2 = new Player('player2', p2Color, clientPos, () => useGameStore.getState().online.opponentInput || defaultInput);
+    }
+
+    // Set remote player to kinematic - only interpolation should move it
+    const remotePlayer = mySlot === 2 ? player1 : player2;
+    if (remotePlayer?.rigidBody) {
+        remotePlayer.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
     }
 
     camera.position.set(0, 32, 32);
@@ -1378,7 +1432,6 @@ function setupOnlineHandlers() {
     });
 
     online.on('gameUpdate', (data) => {
-        console.log('[gameUpdate] Received:', data.type);
         if (data.type === 'opponent_input' && data.input) {
             useGameStore.getState().setOnlineOpponentInput(data.input);
         }
@@ -1398,15 +1451,7 @@ function setupOnlineHandlers() {
             } else {
                 const mySlot = state.online?.playerSlot;
                 const remotePos = mySlot === 2 ? data.state.p1Pos : data.state.p2Pos;
-                const localPos = mySlot === 2 ? data.state.p2Pos : data.state.p1Pos;
-                const localVel = mySlot === 2 ? data.state.p2Vel : data.state.p1Vel;
                 const remotePlayer = getOnlineClientRemotePlayer(state);
-
-                if (localPos) {
-                    const localPlayer = mySlot === 2 ? player2 : player1;
-                    localPlayer?.rigidBody?.setTranslation(localPos, true);
-                    localPlayer?.rigidBody?.setLinvel(localVel, true);
-                }
 
                 if (remotePos) {
                     if (!remotePlayerTargetPosition) {
@@ -1421,8 +1466,12 @@ function setupOnlineHandlers() {
                 data.state.tileStates.forEach(tileUpdate => {
                     const tile = arena.getTileAt(tileUpdate.q, tileUpdate.r);
                     if (tile) {
+                        const wasFalling = tile.state === 'FALLING';
                         tile.state = tileUpdate.state;
                         tile.timer = tileUpdate.timer;
+                        if (tileUpdate.state === 'FALLING' && !wasFalling) {
+                            arena.hideTile(tileUpdate.q, tileUpdate.r);
+                        }
                     }
                 });
             }
@@ -1471,23 +1520,26 @@ function animate() {
         
         if (aiController && player1 && player2) {
             const arenaRadius = (state.settings.arenaSize + 1) * 8.0;
+            const activeTiles = arena?.getActiveTileSet() ?? null;
+            const warnedTiles = arena?.getWarnedTileSet() ?? null;
             aiController.update(
                 player1.mesh.position, player2.mesh.position,
                 player1.rigidBody?.linvel(), player2.rigidBody?.linvel(),
-                new THREE.Vector3(0, 0, 0), arenaRadius, delta, state
+                new THREE.Vector3(0, 0, 0), arenaRadius, delta, state,
+                activeTiles, warnedTiles
             );
         }
         
-        arena?.update(delta);
+        if (isOnlineClient) {
+            arena?.update(delta, { isOnlineClient: true });
+        } else {
+            arena?.update(delta);
+        }
         particles?.update(delta);
         lightning?.update(delta);
         shockwaves?.update(delta);
-        
-        // Only run physics for host and local games, not for online clients
-        // Online clients receive positions from host via gameUpdate handler
-        if (!isOnlineClient) {
-            physicsSystem.step(delta);
-        }
+
+        physicsSystem.step(delta);
 
         // Power-up displays
         document.getElementById('p1-powerups').innerHTML = player1?.activePowerUps.map(pu => 
@@ -1581,7 +1633,9 @@ function animate() {
 
         // Win check
         if (state.gameState === 'PLAYING') {
-            checkWinConditions(delta);
+            if (!isOnlineClient) {
+                checkWinConditions(delta);
+            }
             
             // Record frame for replay
             if (player1 && player2) {
@@ -1621,22 +1675,29 @@ function animate() {
                 online.sendInput({ ...input });
                 if (state.online.isHost && player1 && player2) {
                     if (online.shouldSendStateUpdate()) {
+                        const p1Pos = player1.rigidBody.translation();
                         const p1Vel = player1.rigidBody.linvel();
+                        const p2Pos = player2.rigidBody.translation();
                         const p2Vel = player2.rigidBody.linvel();
-
-                        const tileStates = arena?.tiles?.map(t => ({
-                            q: t.q,
-                            r: t.r,
-                            state: t.state,
-                            timer: t.timer
-                        })) || [];
+                        const tileStates = [];
+                        if (arena?.tiles?.length) {
+                            for (const t of arena.tiles) {
+                                const key = `${t.q},${t.r}`;
+                                const prev = lastSentTileStates.get(key);
+                                const next = { state: t.state, timer: t.timer };
+                                if (!prev || prev.state !== next.state || Math.abs(prev.timer - next.timer) > 0.1) {
+                                    tileStates.push({ q: t.q, r: t.r, state: next.state, timer: next.timer });
+                                    lastSentTileStates.set(key, next);
+                                }
+                            }
+                        }
 
                         online.sendGameState({
                             p1Score: state.p1Score,
                             p2Score: state.p2Score,
-                            p1Pos: player1.mesh.position,
+                            p1Pos: { x: p1Pos.x, y: p1Pos.y, z: p1Pos.z },
                             p1Vel: { x: p1Vel.x, y: p1Vel.y, z: p1Vel.z },
-                            p2Pos: player2.mesh.position,
+                            p2Pos: { x: p2Pos.x, y: p2Pos.y, z: p2Pos.z },
                             p2Vel: { x: p2Vel.x, y: p2Vel.y, z: p2Vel.z },
                             tileStates: tileStates
                         });

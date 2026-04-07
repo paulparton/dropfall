@@ -227,7 +227,7 @@ export class Arena {
         return this.tiles.find(t => t.q === q && t.r === r);
     }
 
-    update(delta) {
+    update(delta, { isOnlineClient = false } = {}) {
         const storeState = useGameStore.getState();
         if (storeState.gameState === 'PLAYING') {
             this.dropTimer += delta;
@@ -244,28 +244,30 @@ export class Arena {
         const portalRate = settings.portalRate || 8.0;
         const bonusRate = settings.bonusRate || 6.0;
 
-        // 1. Handle The Drop
-        if (this.dropTimer >= destructionRate) {
-            this.dropTimer = 0;
-            this.triggerDrop();
-        }
+        if (!isOnlineClient) {
+            // 1. Handle The Drop
+            if (this.dropTimer >= destructionRate) {
+                this.dropTimer = 0;
+                this.triggerDrop();
+            }
 
-        // 2. Handle Ice Tiles
-        if (this.iceTimer >= iceRate) {
-            this.iceTimer = 0;
-            this.triggerIce();
-        }
+            // 2. Handle Ice Tiles
+            if (this.iceTimer >= iceRate) {
+                this.iceTimer = 0;
+                this.triggerIce();
+            }
 
-        // 3. Handle Portal Tiles
-        if (this.portalTimer >= portalRate) {
-            this.portalTimer = 0;
-            this.triggerPortal();
-        }
+            // 3. Handle Portal Tiles
+            if (this.portalTimer >= portalRate) {
+                this.portalTimer = 0;
+                this.triggerPortal();
+            }
 
-        // 4. Handle Bonus Tiles
-        if (this.bonusTimer >= bonusRate) {
-            this.bonusTimer = 0;
-            this.triggerBonus();
+            // 4. Handle Bonus Tiles
+            if (this.bonusTimer >= bonusRate) {
+                this.bonusTimer = 0;
+                this.triggerBonus();
+            }
         }
 
         // === PERFORMANCE: Accumulate time for shader uniforms ===
@@ -308,8 +310,17 @@ export class Arena {
                 if (tile.timer <= 0) {
                     tile.state = 'FALLING';
                     tile.uniforms.uState.value = STATE_MAP.FALLING;
-                    tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-                    tile.mesh.scale.set(0.95, 1, 0.95);
+                    if (isOnlineClient) {
+                        tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+                        tile.mesh.visible = false;
+                        tile.mesh.scale.set(0.95, 1, 0.95);
+                        if (tile.edges) {
+                            tile.edges.visible = false;
+                        }
+                    } else {
+                        tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+                        tile.mesh.scale.set(0.95, 1, 0.95);
+                    }
                 }
             } else if (tile.state === 'ICE') {
                 tile.timer -= delta;
@@ -320,16 +331,35 @@ export class Arena {
                     tile.edges.material.color.setHex(this.edgeColor);
                 }
             } else if (tile.state === 'FALLING') {
-                const position = tile.rigidBody.translation();
-                const rotation = tile.rigidBody.rotation();
-                tile.mesh.position.copy(position);
-                tile.mesh.quaternion.copy(rotation);
+                if (isOnlineClient) {
+                    tile.mesh.visible = false;
+                    if (tile.edges) {
+                        tile.edges.visible = false;
+                    }
+                } else {
+                    const position = tile.rigidBody.translation();
+                    const rotation = tile.rigidBody.rotation();
+                    tile.mesh.position.copy(position);
+                    tile.mesh.quaternion.copy(rotation);
+                }
             }
         });
 
         // Update skybox material uniforms
         if (this.skyboxMaterial && this.skyboxMaterial.uniforms) {
             this.skyboxMaterial.uniforms.uTime.value = this.pulseTime;
+        }
+    }
+
+    hideTile(q, r) {
+        const tile = this.getTileAt(q, r);
+        if (!tile) return;
+
+        tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+        tile.mesh.visible = false;
+        tile.mesh.scale.set(0.95, 1, 0.95);
+        if (tile.edges) {
+            tile.edges.visible = false;
         }
     }
 
@@ -387,6 +417,26 @@ export class Arena {
         tile.state = 'NORMAL';
         tile.mesh.material = this.materials.normal;
         tile.edges.material.color.setHex(this.edgeColor);
+    }
+
+    getActiveTileSet() {
+        const activeTiles = new Set();
+        for (const tile of this.tiles) {
+            if (tile.state !== 'FALLING' && tile.state !== 'WARNING') {
+                activeTiles.add(`${tile.q},${tile.r}`);
+            }
+        }
+        return activeTiles;
+    }
+
+    getWarnedTileSet() {
+        const warnedTiles = new Set();
+        for (const tile of this.tiles) {
+            if (tile.state === 'WARNING') {
+                warnedTiles.add(`${tile.q},${tile.r}`);
+            }
+        }
+        return warnedTiles;
     }
 
     cleanup() {

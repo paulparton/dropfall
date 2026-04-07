@@ -60,7 +60,40 @@ const defaultOnlineSetupState = {
     opponentRematchRequested: false,
 };
 
-export const useGameStore = createStore((set) => ({
+const createDefaultPlayerRaceState = () => ({
+    currentLap: 0,
+    lastCheckpointId: -1,
+    checkpointsBitmask: 0,
+    lapTimes: [],
+    finished: false,
+    finishTime: null,
+});
+
+const createRaceState = (totalLaps, checkpointCount) => ({
+    active: true,
+    totalLaps,
+    checkpointCount,
+    raceStartTime: Date.now(),
+    elapsedTime: 0,
+    player1: createDefaultPlayerRaceState(),
+    player2: createDefaultPlayerRaceState(),
+    winner: null,
+});
+
+const createDefaultRaceModePlayerState = () => ({
+    currentCheckpoint: 0,
+    lap: 0,
+    checkpointsPassed: [],
+    finished: false,
+    finishTime: null,
+});
+
+const createDefaultRaceModeState = () => ({
+    p1: createDefaultRaceModePlayerState(),
+    p2: createDefaultRaceModePlayerState(),
+});
+
+export const useGameStore = createStore((set, get) => ({
     // State
     gameState: 'MENU', // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE', 'ONLINE_SETUP'
     gameMode: localStorage.getItem('dropfall_gamemode') || '2P', // '1P', '2P', or 'ONLINE'
@@ -81,6 +114,12 @@ export const useGameStore = createStore((set) => ({
     p2Color: parseInt(localStorage.getItem('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
     selectedLevelId: null,
     selectedLevelData: null,
+    race: null,
+    raceMode: false,
+    raceLaps: 3,
+    raceState: createDefaultRaceModeState(),
+    raceStartTime: null,
+    raceWinner: null,
 
     // Online Multiplayer State
     online: {
@@ -158,15 +197,19 @@ export const useGameStore = createStore((set) => ({
 
     enterNameEntry: () => set({ gameState: 'NAME_ENTRY' }),
 
-    startGame: () => set({
-        gameState: 'COUNTDOWN',
-        winner: null,
-        p1Score: 0,
-        p2Score: 0,
-        player1Boost: 0,
-        player2Boost: 0,
-        activeTileEffects: []
-    }),
+    startGame: () => {
+        get().resetRace();
+        get().resetRaceState();
+        set({
+            gameState: 'COUNTDOWN',
+            winner: null,
+            p1Score: 0,
+            p2Score: 0,
+            player1Boost: 0,
+            player2Boost: 0,
+            activeTileEffects: [],
+        });
+    },
 
     startRound: () => set({
         gameState: 'COUNTDOWN',
@@ -174,42 +217,50 @@ export const useGameStore = createStore((set) => ({
         activeTileEffects: []
     }),
 
-    resetScores: () => set({
-        p1Score: 0,
-        p2Score: 0,
-        player1Boost: 0,
-        player2Boost: 0
-    }),
+    resetScores: () => {
+        get().resetRace();
+        get().resetRaceState();
+        set({
+            p1Score: 0,
+            p2Score: 0,
+            player1Boost: 0,
+            player2Boost: 0,
+        });
+    },
 
     setPlaying: () => set({
         gameState: 'PLAYING'
     }),
 
-    returnToMenu: () => set({
-        gameState: 'MENU',
-        winner: null,
-        p1Score: 0,
-        p2Score: 0,
-        p1SessionWins: 0,
-        p2SessionWins: 0,
-        player1Boost: 0,
-        player2Boost: 0,
-        activeTileEffects: [],
-        online: {
-            connected: false,
-            serverUrl: '',
-            playerId: null,
-            currentGame: null,
-            games: [],
-            isHost: false,
-            playerSlot: null,
-            opponentConnected: false,
-            opponentInput: null,
-            opponentName: null,
-            myName: '',
-            ...defaultOnlineSetupState,
-        }
-    }),
+    returnToMenu: () => {
+        get().resetRace();
+        get().resetRaceState();
+        set({
+            gameState: 'MENU',
+            winner: null,
+            p1Score: 0,
+            p2Score: 0,
+            p1SessionWins: 0,
+            p2SessionWins: 0,
+            player1Boost: 0,
+            player2Boost: 0,
+            activeTileEffects: [],
+            online: {
+                connected: false,
+                serverUrl: '',
+                playerId: null,
+                currentGame: null,
+                games: [],
+                isHost: false,
+                playerSlot: null,
+                opponentConnected: false,
+                opponentInput: null,
+                opponentName: null,
+                myName: '',
+                ...defaultOnlineSetupState,
+            }
+        });
+    },
 
     endRound: (winner) => set((state) => {
         let newP1Score = state.p1Score;
@@ -248,6 +299,163 @@ export const useGameStore = createStore((set) => ({
     removeTileEffect: (effectId) => set((state) => ({
         activeTileEffects: state.activeTileEffects.filter(e => e.id !== effectId)
     })),
+
+    initRace: (totalLaps, checkpointCount) => set({
+        race: createRaceState(totalLaps, checkpointCount)
+    }),
+
+    updatePlayerCheckpoint: (playerId, checkpointId) => set((state) => {
+        if (!state.race) return {};
+        const playerState = state.race[playerId];
+        const checkpointBit = 1 << checkpointId;
+        return {
+            race: {
+                ...state.race,
+                [playerId]: {
+                    ...playerState,
+                    lastCheckpointId: checkpointId,
+                    checkpointsBitmask: playerState.checkpointsBitmask | checkpointBit,
+                },
+            },
+        };
+    }),
+
+    completePlayerLap: (playerId, lapTime) => set((state) => {
+        if (!state.race) return {};
+        const playerState = state.race[playerId];
+        return {
+            race: {
+                ...state.race,
+                [playerId]: {
+                    ...playerState,
+                    currentLap: playerState.currentLap + 1,
+                    lapTimes: [...playerState.lapTimes, lapTime],
+                    checkpointsBitmask: 0,
+                    lastCheckpointId: -1,
+                },
+            },
+        };
+    }),
+
+    finishPlayerRace: (playerId, finishTime) => set((state) => {
+        if (!state.race) return {};
+        const playerState = state.race[playerId];
+        return {
+            race: {
+                ...state.race,
+                [playerId]: {
+                    ...playerState,
+                    finished: true,
+                    finishTime,
+                },
+            },
+        };
+    }),
+
+    updateRaceTime: (elapsed) => set((state) => ({
+        race: state.race
+            ? {
+                ...state.race,
+                elapsedTime: elapsed,
+            }
+            : null,
+    })),
+
+    endRace: (winner) => set((state) => ({
+        race: state.race
+            ? {
+                ...state.race,
+                winner,
+                active: false,
+            }
+            : null,
+    })),
+
+    resetRace: () => set({ race: null }),
+
+    setRaceMode: (enabled, laps = 3) => {
+        const safeLaps = Number.isFinite(laps) ? Math.max(1, Math.floor(laps)) : 3;
+        set({
+            raceMode: enabled,
+            raceLaps: safeLaps,
+            raceState: createDefaultRaceModeState(),
+            raceStartTime: null,
+            raceWinner: null,
+        });
+    },
+
+    passCheckpoint: (player, checkpointId, totalCheckpoints) => set((state) => {
+        if (!state.raceMode || state.raceWinner) return {};
+
+        const playerState = state.raceState[player];
+        if (!playerState || playerState.finished) return {};
+
+        const checkpointCount = Number.isFinite(totalCheckpoints)
+            ? Math.max(1, Math.floor(totalCheckpoints))
+            : 1;
+        const maxCheckpointId = checkpointCount - 1;
+
+        if (!Number.isFinite(checkpointId) || checkpointId < 0 || checkpointId > maxCheckpointId) {
+            return {};
+        }
+
+        if (checkpointId === 0) {
+            const requiredCount = Math.max(0, checkpointCount - 1);
+            const lapReady = requiredCount === 0
+                ? playerState.currentCheckpoint === 0
+                : playerState.currentCheckpoint === maxCheckpointId
+                    && playerState.checkpointsPassed.length === requiredCount;
+
+            if (!lapReady) return {};
+
+            const now = Date.now();
+            const newLap = playerState.lap + 1;
+            const finished = newLap >= state.raceLaps;
+
+            return {
+                raceStartTime: state.raceStartTime ?? now,
+                raceWinner: !state.raceWinner && finished ? player : state.raceWinner,
+                raceState: {
+                    ...state.raceState,
+                    [player]: {
+                        ...playerState,
+                        currentCheckpoint: 0,
+                        lap: newLap,
+                        checkpointsPassed: [],
+                        finished,
+                        finishTime: finished ? now : null,
+                    },
+                },
+            };
+        }
+
+        const expectedCheckpoint = playerState.currentCheckpoint === 0
+            ? 1
+            : playerState.currentCheckpoint + 1;
+
+        if (checkpointId !== expectedCheckpoint || playerState.checkpointsPassed.includes(checkpointId)) {
+            return {};
+        }
+
+        const now = Date.now();
+        return {
+            raceStartTime: state.raceStartTime ?? now,
+            raceState: {
+                ...state.raceState,
+                [player]: {
+                    ...playerState,
+                    currentCheckpoint: checkpointId,
+                    checkpointsPassed: [...playerState.checkpointsPassed, checkpointId],
+                },
+            },
+        };
+    }),
+
+    resetRaceState: () => set({
+        raceState: createDefaultRaceModeState(),
+        raceStartTime: null,
+        raceWinner: null,
+    }),
 
     // Online Multiplayer Actions
     setOnlineConnected: (connected, serverUrl = '') => set((state) => ({
