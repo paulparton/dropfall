@@ -1,5 +1,12 @@
 import { getLevel, loadLevels } from '../levelLoader.js';
-import { demoLevels, type DemoLevel, type LevelMode, type LevelTile, type RaceConfig } from './demoLevels';
+import {
+  demoLevels,
+  type DemoLevel,
+  type LevelMode,
+  type LevelTheme,
+  type LevelTile,
+  type RaceConfig,
+} from './demoLevels';
 
 export type LevelData =
   | DemoLevel
@@ -8,10 +15,32 @@ export type LevelData =
       name: string;
       description: string;
       difficulty: string;
-      theme?: string;
+      theme?: LevelTheme;
       mode?: LevelMode;
       raceConfig?: RaceConfig;
       tiles: LevelTile[];
+      sphereSize?: number;
+      sphereWeight?: number;
+      sphereAccel?: number;
+      collisionBounce?: number;
+      arenaSize?: number;
+      destructionRate?: number;
+      iceRate?: number;
+      portalRate?: number;
+      portalCooldown?: number;
+      bonusRate?: number;
+      bonusDuration?: number;
+      boostRegenSpeed?: number;
+      boostDrainRate?: number;
+      bloomLevel?: number;
+      playerAuraSize?: number;
+      playerAuraOpacity?: number;
+      playerGlowIntensity?: number;
+      playerGlowRange?: number;
+      defaultP1Color?: number;
+      defaultP2Color?: number;
+      defaultP1Hat?: string;
+      defaultP2Hat?: string;
       isDemo?: false;
     };
 

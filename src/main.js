@@ -179,6 +179,7 @@ let player1, player2, arena, particles, lightning, shockwaves, aiController;
 let inputHandler; // InputHandler instance for unified input processing
 let physicsSystem; // PhysicsSystem instance for event-based physics
 let selectedLevelData = useGameStore.getState().selectedLevelData || null; // Custom level selected in preview panel
+let preOverrideSettings = null;
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
@@ -203,6 +204,72 @@ const REMOTE_PLAYER_LERP_FACTOR = 0.25;
 const HEX_GRID_SPACING = 8.0;
 const TILE_HEIGHT = 4.0;
 const SPAWN_DROP_OFFSET = 2.0;
+
+const LEVEL_OVERRIDE_SETTING_KEYS = [
+    'sphereSize',
+    'sphereWeight',
+    'sphereAccel',
+    'collisionBounce',
+    'arenaSize',
+    'destructionRate',
+    'iceRate',
+    'portalRate',
+    'portalCooldown',
+    'bonusRate',
+    'bonusDuration',
+    'boostRegenSpeed',
+    'boostDrainRate',
+    'bloomLevel',
+    'playerAuraSize',
+    'playerAuraOpacity',
+    'playerGlowIntensity',
+    'playerGlowRange',
+    'theme',
+];
+
+function applyLevelSettingsOverrides(levelData) {
+    if (!levelData || typeof levelData !== 'object') {
+        return false;
+    }
+
+    const state = useGameStore.getState();
+    const overrides = [];
+
+    LEVEL_OVERRIDE_SETTING_KEYS.forEach((key) => {
+        if (levelData[key] !== undefined) {
+            overrides.push([key, levelData[key]]);
+        }
+    });
+
+    if (overrides.length === 0) {
+        return false;
+    }
+
+    if (!preOverrideSettings) {
+        preOverrideSettings = {};
+        LEVEL_OVERRIDE_SETTING_KEYS.forEach((key) => {
+            preOverrideSettings[key] = state.settings[key];
+        });
+    }
+
+    overrides.forEach(([key, value]) => {
+        useGameStore.getState().updateSetting(key, value);
+    });
+
+    return true;
+}
+
+function restorePreOverrideSettings() {
+    if (!preOverrideSettings) {
+        return;
+    }
+
+    Object.entries(preOverrideSettings).forEach(([key, value]) => {
+        useGameStore.getState().updateSetting(key, value);
+    });
+
+    preOverrideSettings = null;
+}
 
 function getSpawnableTiles(currentArena) {
     if (!currentArena?.tiles?.length) return [];
@@ -483,6 +550,9 @@ function startGame(skipNameEntry = false) {
 
 function doStartGame() {
     const state = useGameStore.getState();
+    if (state.gameMode !== 'ONLINE') {
+        applyLevelSettingsOverrides(state.selectedLevelData || null);
+    }
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
     useGameStore.getState().startGame();
     resetEntities();
@@ -525,6 +595,7 @@ async function proceedFromNameEntry() {
 
     useGameStore.getState().setSelectedLevel(levelId, levelData);
     selectedLevelData = levelData;
+    applyLevelSettingsOverrides(levelData);
 
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
     
@@ -558,6 +629,29 @@ function resetEntities() {
     const state = useGameStore.getState();
     const isOnePlayer = state.gameMode === '1P';
     selectedLevelData = state.selectedLevelData || null;
+
+    const userHasP1ColorPref = localStorage.getItem('dropfall_p1color') !== null;
+    const userHasP2ColorPref = localStorage.getItem('dropfall_p2color') !== null;
+    const userHasP1HatPref = localStorage.getItem('dropfall_p1hat') !== null;
+    const userHasP2HatPref = localStorage.getItem('dropfall_p2hat') !== null;
+
+    const effectiveP1Color = userHasP1ColorPref
+        ? state.p1Color
+        : (selectedLevelData?.defaultP1Color ?? state.p1Color);
+    const effectiveP2Color = userHasP2ColorPref
+        ? state.p2Color
+        : (selectedLevelData?.defaultP2Color ?? state.p2Color);
+    const effectiveP1Hat = userHasP1HatPref
+        ? (state.p1Hat || 'none')
+        : (selectedLevelData?.defaultP1Hat ?? state.p1Hat ?? 'none');
+    const effectiveP2Hat = userHasP2HatPref
+        ? (state.p2Hat || 'none')
+        : (selectedLevelData?.defaultP2Hat ?? state.p2Hat ?? 'none');
+
+    useGameStore.setState({
+        p1Hat: effectiveP1Hat,
+        p2Hat: effectiveP2Hat,
+    });
     
     // AI Controller for 1P mode
     aiController = isOnePlayer ? new AIController(state.difficulty || 'normal') : null;
@@ -574,8 +668,8 @@ function resetEntities() {
     });
 
     // Players - use unified input handler and store colors
-    player1 = new Player('player1', state.p1Color || 0xff4444, p1Spawn, getPlayer1InputUnified);
-    player2 = new Player('player2', state.p2Color || 0x4444ff, p2Spawn,
+    player1 = new Player('player1', effectiveP1Color || 0xff4444, p1Spawn, getPlayer1InputUnified);
+    player2 = new Player('player2', effectiveP2Color || 0x4444ff, p2Spawn,
         isOnePlayer ? () => aiController.getInput() : getPlayer2InputUnified);
 
     // Camera
@@ -671,6 +765,7 @@ function returnToMenu() {
     clearReplayCountdown();
     const replayModal = document.getElementById('replay-modal');
     if (replayModal) replayModal.remove();
+    restorePreOverrideSettings();
     useGameStore.getState().returnToMenu();
     setMusicSpeed(0.5);
     
@@ -917,6 +1012,7 @@ function setupButtonHandlers() {
     // Online Connect
     document.getElementById('online-connect-back-btn')?.addEventListener('click', () => {
         online.disconnect();
+        restorePreOverrideSettings();
         showScreen('menu');
     });
     document.getElementById('online-connect-btn')?.addEventListener('click', () => {
@@ -940,12 +1036,33 @@ function setupButtonHandlers() {
     });
     document.getElementById('online-lobby-back-btn')?.addEventListener('click', () => {
         online.disconnect();
+        restorePreOverrideSettings();
         showScreen('menu');
     });
     document.getElementById('online-refresh-btn')?.addEventListener('click', () => {
         online.listGames();
     });
-    document.getElementById('online-create-game-btn')?.addEventListener('click', () => {
+    document.getElementById('online-create-game-btn')?.addEventListener('click', async () => {
+        const current = useGameStore.getState();
+
+        let levelData = current.selectedLevelData || null;
+        if (!levelData) {
+            const levelId = getSelectedPreviewLevelId();
+            if (levelId) {
+                try {
+                    levelData = await getLevelById(levelId);
+                    if (levelData) {
+                        useGameStore.getState().setSelectedLevel(levelId, levelData);
+                        selectedLevelData = levelData;
+                    }
+                } catch (error) {
+                    console.warn('[Online] Failed to load selected level overrides before createGame:', error);
+                }
+            }
+        }
+
+        applyLevelSettingsOverrides(levelData);
+
         const settings = useGameStore.getState().settings;
         online.createGame({
             theme: settings.theme,

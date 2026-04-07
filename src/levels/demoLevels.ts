@@ -12,6 +12,7 @@ export interface LevelTile {
 }
 
 export type LevelMode = 'battle' | 'race';
+export type LevelTheme = 'tron' | 'beach' | 'temple' | 'arctic' | 'inferno' | 'default';
 
 export interface RaceCheckpoint {
   id: number;
@@ -30,12 +31,37 @@ export interface RaceConfig {
   spawnPoints?: RaceSpawnPoint[];
 }
 
-export interface DemoLevel {
+export interface LevelOverrides {
+  sphereSize?: number;
+  sphereWeight?: number;
+  sphereAccel?: number;
+  collisionBounce?: number;
+  arenaSize?: number;
+  destructionRate?: number;
+  iceRate?: number;
+  portalRate?: number;
+  portalCooldown?: number;
+  bonusRate?: number;
+  bonusDuration?: number;
+  boostRegenSpeed?: number;
+  boostDrainRate?: number;
+  bloomLevel?: number;
+  playerAuraSize?: number;
+  playerAuraOpacity?: number;
+  playerGlowIntensity?: number;
+  playerGlowRange?: number;
+  theme?: LevelTheme;
+  defaultP1Color?: number;
+  defaultP2Color?: number;
+  defaultP1Hat?: string;
+  defaultP2Hat?: string;
+}
+
+export interface DemoLevel extends LevelOverrides {
   id: string;
   name: string;
   description: string;
   difficulty: string;
-  theme: string;
   mode: LevelMode;
   raceConfig?: RaceConfig;
   isDemo: true;

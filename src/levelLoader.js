@@ -9,8 +9,9 @@ export async function loadLevels() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 2000); // 2 second timeout
         
-        const response = await fetch(`${LEVEL_API_BASE}/levels`, {
-            signal: controller.signal
+        const response = await fetch(`${LEVEL_API_BASE}/levels?t=${Date.now()}`, {
+            signal: controller.signal,
+            cache: 'no-store'
         });
         clearTimeout(timeoutId);
         
@@ -24,7 +25,9 @@ export async function loadLevels() {
 
 export async function getLevel(levelId) {
     try {
-        const response = await fetch(`${LEVEL_API_BASE}/levels/${levelId}`);
+        const response = await fetch(`${LEVEL_API_BASE}/levels/${levelId}?t=${Date.now()}`, {
+            cache: 'no-store'
+        });
         if (!response.ok) throw new Error('Failed to load level');
         return await response.json();
     } catch (err) {

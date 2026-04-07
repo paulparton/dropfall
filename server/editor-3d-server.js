@@ -106,6 +106,7 @@ class Level3DEditorServer {
     }
 
     handleLevelAPI(req, res) {
+        res.setHeader('Cache-Control', 'no-store');
         const url = new URL(req.url, 'http://localhost');
         const pathname = url.pathname;
 

@@ -1,21 +1,21 @@
 {
-  "name": "DanimoDanimo",
+  "name": "Imported king Danimo",
   "description": "Outer ring is slippery ice while the center stays stable.",
   "difficulty": "normal",
   "theme": "default",
-  "sphereSize": 2,
-  "sphereWeight": 200,
-  "sphereAccel": 2000,
-  "collisionBounce": 0.9,
-  "arenaSize": 4,
+  "sphereSize": 1.1,
+  "sphereWeight": 140,
+  "sphereAccel": 4300,
+  "collisionBounce": 1.7,
+  "arenaSize": 19,
   "destructionRate": 3,
   "iceRate": 2,
   "portalRate": 8,
   "portalCooldown": 2,
   "bonusRate": 6,
   "bonusDuration": 4,
-  "boostRegenSpeed": 1.5,
-  "boostDrainRate": 20,
+  "boostRegenSpeed": 5,
+  "boostDrainRate": 9,
   "bloomLevel": 0,
   "playerAuraSize": 1.4,
   "playerAuraOpacity": 0.4,
@@ -1380,5 +1380,5 @@
     }
   ],
   "author": "Editor",
-  "id": "demo_ice_ring"
+  "id": "level_1775557027284_959d0ada"
 }

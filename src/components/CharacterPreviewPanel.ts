@@ -89,8 +89,7 @@ async function loadLevelProvider(): Promise<{
   getLevelById: (id: string) => Promise<LevelDetails | null>;
 } | null> {
   try {
-    const providerModulePath = '../levels/' + 'levelProvider.js';
-    const module = await import(providerModulePath) as {
+    const module = await import('../levels/levelProvider.js') as {
       getAllLevels?: () => Promise<LevelSummary[]>;
       getLevelById?: (id: string) => Promise<LevelDetails | null>;
     };
@@ -110,8 +109,7 @@ async function loadLevelProvider(): Promise<{
 
 async function loadLevelSelectFactory(): Promise<LevelSelectFactory | null> {
   try {
-    const modalModulePath = './' + 'LevelSelectModal.js';
-    const module = await import(modalModulePath) as { createLevelSelectModal?: LevelSelectFactory };
+    const module = await import('./LevelSelectModal.js') as { createLevelSelectModal?: LevelSelectFactory };
     return module.createLevelSelectModal ?? null;
   } catch {
     return null;
@@ -1123,6 +1121,8 @@ export function updatePreviewHat(instance: PreviewInstance, hatType: string): vo
 }
 
 export function destroyPreviewPanel(): void {
+  cachedLevelSummaries = null;
+
   for (const [, instance] of previewInstances) {
     if (instance.animationId) {
       cancelAnimationFrame(instance.animationId);

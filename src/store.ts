@@ -415,6 +415,8 @@ export const useGameStore = create<GameStore>()(
         localStorage.setItem('dropfall_p1hat', p1Hat);
         localStorage.setItem('dropfall_p2hat', p2Hat);
         return set((state: GameStore) => ({ 
+          p1Hat,
+          p2Hat,
           settings: { ...state.settings, p1Hat, p2Hat }
         }));
       },

@@ -162,6 +162,122 @@
             background: #0a1a0a;
             border: 1px dashed #00aa00;
         }
+
+        .collapsible-panel {
+            margin-top: 8px;
+            border: 1px solid #00aa00;
+            background: #0d1233;
+        }
+
+        .collapsible-panel summary {
+            list-style: none;
+            cursor: pointer;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            color: #00dd00;
+            padding: 8px;
+            border-bottom: 1px solid transparent;
+            user-select: none;
+        }
+
+        .collapsible-panel summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .collapsible-panel summary::before {
+            content: '▶';
+            display: inline-block;
+            margin-right: 6px;
+            color: #00ff00;
+        }
+
+        .collapsible-panel[open] summary {
+            border-bottom-color: #00aa00;
+        }
+
+        .collapsible-panel[open] summary::before {
+            content: '▼';
+        }
+
+        .settings-group {
+            padding: 8px;
+        }
+
+        .setting-row {
+            margin-bottom: 10px;
+        }
+
+        .setting-pair {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .setting-pair input[type="range"] {
+            flex: 1;
+            margin-bottom: 0;
+        }
+
+        .setting-pair input[type="number"] {
+            width: 72px;
+            margin-bottom: 0;
+        }
+
+        input[type="color"] {
+            padding: 3px;
+            height: 30px;
+        }
+
+        .import-dialog {
+            border: 1px solid #00ff00;
+            background: #0a0e27;
+            color: #00ff00;
+            padding: 0;
+            width: min(700px, 92vw);
+        }
+
+        .import-dialog::backdrop {
+            background: rgba(0, 0, 0, 0.75);
+        }
+
+        .import-dialog-content {
+            padding: 14px;
+        }
+
+        .import-dialog textarea {
+            width: 100%;
+            min-height: 260px;
+            resize: vertical;
+            margin-top: 8px;
+            margin-bottom: 10px;
+            padding: 8px;
+            background: #1a1a3e;
+            border: 1px solid #00aa00;
+            color: #00ff00;
+            font-family: monospace;
+            font-size: 11px;
+        }
+
+        .import-dialog-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .import-dialog-actions button {
+            margin-bottom: 0;
+        }
+
+        .secondary-btn {
+            background: #1a1a3e;
+            color: #00ff00;
+            border-color: #00aa00;
+        }
+
+        .secondary-btn:hover {
+            background: #2a2a5e;
+            border-color: #00ff00;
+        }
     </style>
 </head>
 <body>
@@ -174,6 +290,7 @@
                     <strong>Controls:</strong><br>
                     • Left Mouse: Rotate<br>
                     • Scroll: Zoom<br>
+                    • Arrow Keys: Pan camera<br>
                     • Right click: Place tile
                 </div>
             </div>
@@ -198,6 +315,73 @@
             </div>
 
             <div class="panel">
+                <details class="collapsible-panel" open>
+                    <summary>Theme</summary>
+                    <div class="settings-group">
+                        <label>Theme</label>
+                        <select id="theme">
+                            <option value="default" selected>TRON (Default Mapping)</option>
+                            <option value="tron">TRON (Cyber)</option>
+                            <option value="beach">Beach</option>
+                            <option value="temple">Temple (Aztec)</option>
+                            <option value="arctic">Arctic</option>
+                            <option value="inferno">Inferno</option>
+                        </select>
+                    </div>
+                </details>
+
+                <details class="collapsible-panel">
+                    <summary>Physics Settings</summary>
+                    <div class="settings-group">
+                        <div class="setting-row"><label>Sphere Size</label><div class="setting-pair"><input id="sphereSizeRange" type="range" min="0.5" max="5.0" step="0.1"><input id="sphereSize" type="number" min="0.5" max="5.0" step="0.1"></div></div>
+                        <div class="setting-row"><label>Sphere Weight</label><div class="setting-pair"><input id="sphereWeightRange" type="range" min="10" max="1000" step="10"><input id="sphereWeight" type="number" min="10" max="1000" step="10"></div></div>
+                        <div class="setting-row"><label>Sphere Accel</label><div class="setting-pair"><input id="sphereAccelRange" type="range" min="200" max="5000" step="100"><input id="sphereAccel" type="number" min="200" max="5000" step="100"></div></div>
+                        <div class="setting-row"><label>Collision Bounce</label><div class="setting-pair"><input id="collisionBounceRange" type="range" min="0" max="2.0" step="0.1"><input id="collisionBounce" type="number" min="0" max="2.0" step="0.1"></div></div>
+                        <div class="setting-row"><label>Arena Size</label><div class="setting-pair"><input id="arenaSizeRange" type="range" min="2" max="32" step="1"><input id="arenaSize" type="number" min="2" max="32" step="1"></div></div>
+                    </div>
+                </details>
+
+                <details class="collapsible-panel">
+                    <summary>Game Rates</summary>
+                    <div class="settings-group">
+                        <div class="setting-row"><label>Destruction Rate</label><div class="setting-pair"><input id="destructionRateRange" type="range" min="0.1" max="15.0" step="0.1"><input id="destructionRate" type="number" min="0.1" max="15.0" step="0.1"></div></div>
+                        <div class="setting-row"><label>Ice Rate</label><div class="setting-pair"><input id="iceRateRange" type="range" min="0.1" max="10.0" step="0.1"><input id="iceRate" type="number" min="0.1" max="10.0" step="0.1"></div></div>
+                        <div class="setting-row"><label>Portal Rate</label><div class="setting-pair"><input id="portalRateRange" type="range" min="0.5" max="20.0" step="0.5"><input id="portalRate" type="number" min="0.5" max="20.0" step="0.5"></div></div>
+                        <div class="setting-row"><label>Portal Cooldown</label><div class="setting-pair"><input id="portalCooldownRange" type="range" min="0.5" max="10.0" step="0.5"><input id="portalCooldown" type="number" min="0.5" max="10.0" step="0.5"></div></div>
+                        <div class="setting-row"><label>Bonus Rate</label><div class="setting-pair"><input id="bonusRateRange" type="range" min="0.5" max="20.0" step="0.5"><input id="bonusRate" type="number" min="0.5" max="20.0" step="0.5"></div></div>
+                        <div class="setting-row"><label>Bonus Duration</label><div class="setting-pair"><input id="bonusDurationRange" type="range" min="1.0" max="15.0" step="0.5"><input id="bonusDuration" type="number" min="1.0" max="15.0" step="0.5"></div></div>
+                        <div class="setting-row"><label>Boost Regen Speed</label><div class="setting-pair"><input id="boostRegenSpeedRange" type="range" min="0.1" max="5.0" step="0.1"><input id="boostRegenSpeed" type="number" min="0.1" max="5.0" step="0.1"></div></div>
+                        <div class="setting-row"><label>Boost Drain Rate</label><div class="setting-pair"><input id="boostDrainRateRange" type="range" min="1" max="50" step="1"><input id="boostDrainRate" type="number" min="1" max="50" step="1"></div></div>
+                    </div>
+                </details>
+
+                <details class="collapsible-panel">
+                    <summary>Visual Settings</summary>
+                    <div class="settings-group">
+                        <div class="setting-row"><label>Bloom Level</label><div class="setting-pair"><input id="bloomLevelRange" type="range" min="0" max="3" step="0.1"><input id="bloomLevel" type="number" min="0" max="3" step="0.1"></div></div>
+                        <div class="setting-row"><label>Player Aura Size</label><div class="setting-pair"><input id="playerAuraSizeRange" type="range" min="0" max="5" step="0.1"><input id="playerAuraSize" type="number" min="0" max="5" step="0.1"></div></div>
+                        <div class="setting-row"><label>Player Aura Opacity</label><div class="setting-pair"><input id="playerAuraOpacityRange" type="range" min="0" max="1" step="0.05"><input id="playerAuraOpacity" type="number" min="0" max="1" step="0.05"></div></div>
+                        <div class="setting-row"><label>Player Glow Intensity</label><div class="setting-pair"><input id="playerGlowIntensityRange" type="range" min="0" max="10" step="0.5"><input id="playerGlowIntensity" type="number" min="0" max="10" step="0.5"></div></div>
+                        <div class="setting-row"><label>Player Glow Range</label><div class="setting-pair"><input id="playerGlowRangeRange" type="range" min="0" max="20" step="1"><input id="playerGlowRange" type="number" min="0" max="20" step="1"></div></div>
+                    </div>
+                </details>
+
+                <details class="collapsible-panel">
+                    <summary>Default Player Settings</summary>
+                    <div class="settings-group">
+                        <label>P1 Default Color</label>
+                        <input id="p1Color" type="color" value="#ff0000">
+                        <label>P2 Default Color</label>
+                        <input id="p2Color" type="color" value="#0000ff">
+                        <label>P1 Default Hat</label>
+                        <select id="p1Hat"><option value="none">none</option><option value="santa">santa</option><option value="cowboy">cowboy</option><option value="afro">afro</option><option value="crown">crown</option><option value="dunce">dunce</option></select>
+                        <label>P2 Default Hat</label>
+                        <select id="p2Hat"><option value="none">none</option><option value="santa">santa</option><option value="cowboy">cowboy</option><option value="afro">afro</option><option value="crown">crown</option><option value="dunce">dunce</option></select>
+                    </div>
+                </details>
+            </div>
+
+            <div class="panel">
                 <h2>Tile Type</h2>
                 <button class="tile-button active" onclick="editor.setTileType(event, 'NORMAL')">🟢 NORMAL</button>
                 <button class="tile-button" onclick="editor.setTileType(event, 'ICE')">🔵 ICE</button>
@@ -210,6 +394,7 @@
                 <h2>Save/Load</h2>
                 <button onclick="editor.saveLevel()">💾 SAVE</button>
                 <button onclick="editor.exportJSON()">📥 EXPORT</button>
+                <button onclick="editor.openImportDialog()">📤 IMPORT</button>
 
                 <h2>Levels</h2>
                 <div id="levelsList"></div>
@@ -221,6 +406,18 @@
         </div>
     </div>
 
+    <dialog id="importDialog" class="import-dialog">
+        <div class="import-dialog-content">
+            <h2>Import Level JSON</h2>
+            <div class="info">Paste exported level JSON below. Import only updates the editor and does not save to the server until you click Save.</div>
+            <textarea id="importJsonInput" placeholder="{\n  \"name\": \"My Level\",\n  \"tiles\": []\n}"></textarea>
+            <div class="import-dialog-actions">
+                <button onclick="editor.importJSONFromDialog()">Import Level</button>
+                <button class="secondary-btn" onclick="editor.closeImportDialog()">Cancel</button>
+            </div>
+        </div>
+    </dialog>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         // Simple camera controller
@@ -230,11 +427,64 @@
                 this.domElement = domElement;
                 this.isDragging = false;
                 this.previousMousePosition = { x: 0, y: 0 };
+                this.target = new THREE.Vector3(0, 0, 0);
+                this.pressedKeys = new Set();
+                this.panSpeed = 0.4;
 
                 domElement.addEventListener('mousedown', (e) => this.onMouseDown(e));
                 domElement.addEventListener('mousemove', (e) => this.onMouseMove(e));
                 domElement.addEventListener('mouseup', (e) => this.onMouseUp(e));
                 domElement.addEventListener('wheel', (e) => this.onMouseWheel(e));
+                window.addEventListener('keydown', (e) => this.onKeyDown(e));
+                window.addEventListener('keyup', (e) => this.onKeyUp(e));
+                window.addEventListener('blur', () => this.pressedKeys.clear());
+            }
+
+            isTextInputFocused() {
+                const active = document.activeElement;
+                if (!active) return false;
+                if (active.isContentEditable) return true;
+                return ['INPUT', 'SELECT', 'TEXTAREA'].includes(active.tagName);
+            }
+
+            onKeyDown(e) {
+                if (!e.key.startsWith('Arrow')) return;
+                if (this.isTextInputFocused()) return;
+                this.pressedKeys.add(e.key);
+                e.preventDefault();
+            }
+
+            onKeyUp(e) {
+                if (!e.key.startsWith('Arrow')) return;
+                this.pressedKeys.delete(e.key);
+            }
+
+            panByKeyboard() {
+                if (this.pressedKeys.size === 0) return;
+
+                const forward = new THREE.Vector3();
+                this.camera.getWorldDirection(forward);
+                forward.y = 0;
+                if (forward.lengthSq() < 0.0001) {
+                    forward.set(0, 0, -1);
+                } else {
+                    forward.normalize();
+                }
+
+                const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+                const movement = new THREE.Vector3();
+
+                if (this.pressedKeys.has('ArrowUp')) movement.add(forward);
+                if (this.pressedKeys.has('ArrowDown')) movement.sub(forward);
+                if (this.pressedKeys.has('ArrowRight')) movement.add(right);
+                if (this.pressedKeys.has('ArrowLeft')) movement.sub(right);
+
+                if (movement.lengthSq() > 0) {
+                    movement.normalize().multiplyScalar(this.panSpeed);
+                    this.camera.position.add(movement);
+                    this.target.add(movement);
+                    this.camera.lookAt(this.target);
+                }
             }
 
             onMouseDown(e) {
@@ -249,17 +499,18 @@
                     const deltaX = e.clientX - this.previousMousePosition.x;
                     const deltaY = e.clientY - this.previousMousePosition.y;
 
-                    const quat = new THREE.Quaternion();
-                    quat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), deltaX * 0.005);
-                    this.camera.position.applyQuaternion(quat);
+                    const offset = this.camera.position.clone().sub(this.target);
+                    const horizontalQuat = new THREE.Quaternion();
+                    horizontalQuat.setFromAxisAngle(new THREE.Vector3(0, 1, 0), deltaX * 0.005);
+                    offset.applyQuaternion(horizontalQuat);
 
-                    const right = new THREE.Vector3();
-                    this.camera.getWorldDirection(right);
-                    right.cross(this.camera.up).normalize();
-                    quat.setFromAxisAngle(right, deltaY * 0.005);
-                    this.camera.position.applyQuaternion(quat);
+                    const right = new THREE.Vector3().crossVectors(offset, this.camera.up).normalize();
+                    const verticalQuat = new THREE.Quaternion();
+                    verticalQuat.setFromAxisAngle(right, deltaY * 0.005);
+                    offset.applyQuaternion(verticalQuat);
 
-                    this.camera.lookAt(0, 0, 0);
+                    this.camera.position.copy(this.target.clone().add(offset));
+                    this.camera.lookAt(this.target);
                     this.previousMousePosition = { x: e.clientX, y: e.clientY };
                 }
             }
@@ -270,13 +521,17 @@
 
             onMouseWheel(e) {
                 e.preventDefault();
-                const direction = this.camera.position.clone().normalize();
-                const distance = this.camera.position.length();
+                const offset = this.camera.position.clone().sub(this.target);
+                const direction = offset.clone().normalize();
+                const distance = offset.length();
                 const newDistance = Math.max(5, Math.min(200, distance + e.deltaY * 0.05));
-                this.camera.position.copy(direction.multiplyScalar(newDistance));
+                this.camera.position.copy(this.target.clone().add(direction.multiplyScalar(newDistance)));
+                this.camera.lookAt(this.target);
             }
 
-            update() {}
+            update() {
+                this.panByKeyboard();
+            }
         }
 
         const API_BASE = 'http://localhost:3001/api';
@@ -290,9 +545,134 @@
                 this.tileRadius = 7;
                 this.tileHeight = 4;
 
+                this.defaultLevelSettings = {
+                    theme: 'default',
+                    sphereSize: 2.0,
+                    sphereWeight: 200,
+                    sphereAccel: 2000,
+                    collisionBounce: 0.9,
+                    arenaSize: 4,
+                    destructionRate: 3.0,
+                    iceRate: 2.0,
+                    portalRate: 8.0,
+                    portalCooldown: 2.0,
+                    bonusRate: 6.0,
+                    bonusDuration: 4.0,
+                    boostRegenSpeed: 1.5,
+                    boostDrainRate: 20,
+                    bloomLevel: 0,
+                    playerAuraSize: 1.4,
+                    playerAuraOpacity: 0.4,
+                    playerGlowIntensity: 3.0,
+                    playerGlowRange: 20,
+                    p1Color: 0xff0000,
+                    p2Color: 0x0000ff,
+                    p1Hat: 'none',
+                    p2Hat: 'none'
+                };
+
+                this.rangeSettingIds = [
+                    'sphereSize', 'sphereWeight', 'sphereAccel', 'collisionBounce', 'arenaSize',
+                    'destructionRate', 'iceRate', 'portalRate', 'portalCooldown', 'bonusRate',
+                    'bonusDuration', 'boostRegenSpeed', 'boostDrainRate', 'bloomLevel',
+                    'playerAuraSize', 'playerAuraOpacity', 'playerGlowIntensity', 'playerGlowRange'
+                ];
+
                 this.initThreeJS();
+                this.bindSettingInputs();
+                this.resetSettingsToDefaults();
                 this.loadLevels();
                 this.animate();
+            }
+
+            bindSettingInputs() {
+                this.rangeSettingIds.forEach((id) => {
+                    const rangeEl = document.getElementById(`${id}Range`);
+                    const numberEl = document.getElementById(id);
+                    if (!rangeEl || !numberEl) return;
+
+                    rangeEl.addEventListener('input', () => {
+                        numberEl.value = rangeEl.value;
+                    });
+
+                    numberEl.addEventListener('input', () => {
+                        rangeEl.value = numberEl.value;
+                    });
+                });
+            }
+
+            numberToColorInput(value) {
+                const n = Number(value);
+                if (!Number.isFinite(n)) return '#000000';
+                return `#${n.toString(16).padStart(6, '0')}`;
+            }
+
+            colorInputToNumber(value) {
+                if (typeof value !== 'string' || !value.startsWith('#')) {
+                    return 0;
+                }
+                return parseInt(value.slice(1), 16);
+            }
+
+            getRangeValue(id) {
+                const el = document.getElementById(id);
+                return Number(el.value);
+            }
+
+            setRangeValue(id, value) {
+                const num = Number(value);
+                const numberEl = document.getElementById(id);
+                const rangeEl = document.getElementById(`${id}Range`);
+                if (numberEl) numberEl.value = String(num);
+                if (rangeEl) rangeEl.value = String(num);
+            }
+
+            getSettingsFromUI() {
+                return {
+                    theme: document.getElementById('theme').value,
+                    sphereSize: this.getRangeValue('sphereSize'),
+                    sphereWeight: this.getRangeValue('sphereWeight'),
+                    sphereAccel: this.getRangeValue('sphereAccel'),
+                    collisionBounce: this.getRangeValue('collisionBounce'),
+                    arenaSize: this.getRangeValue('arenaSize'),
+                    destructionRate: this.getRangeValue('destructionRate'),
+                    iceRate: this.getRangeValue('iceRate'),
+                    portalRate: this.getRangeValue('portalRate'),
+                    portalCooldown: this.getRangeValue('portalCooldown'),
+                    bonusRate: this.getRangeValue('bonusRate'),
+                    bonusDuration: this.getRangeValue('bonusDuration'),
+                    boostRegenSpeed: this.getRangeValue('boostRegenSpeed'),
+                    boostDrainRate: this.getRangeValue('boostDrainRate'),
+                    bloomLevel: this.getRangeValue('bloomLevel'),
+                    playerAuraSize: this.getRangeValue('playerAuraSize'),
+                    playerAuraOpacity: this.getRangeValue('playerAuraOpacity'),
+                    playerGlowIntensity: this.getRangeValue('playerGlowIntensity'),
+                    playerGlowRange: this.getRangeValue('playerGlowRange'),
+                    p1Color: this.colorInputToNumber(document.getElementById('p1Color').value),
+                    p2Color: this.colorInputToNumber(document.getElementById('p2Color').value),
+                    p1Hat: document.getElementById('p1Hat').value,
+                    p2Hat: document.getElementById('p2Hat').value
+                };
+            }
+
+            applySettingsToUI(settings) {
+                const merged = { ...this.defaultLevelSettings, ...(settings || {}) };
+
+                document.getElementById('theme').value = merged.theme;
+                this.rangeSettingIds.forEach((id) => {
+                    if (merged[id] !== undefined) {
+                        this.setRangeValue(id, merged[id]);
+                    }
+                });
+
+                document.getElementById('p1Color').value = this.numberToColorInput(merged.p1Color);
+                document.getElementById('p2Color').value = this.numberToColorInput(merged.p2Color);
+                document.getElementById('p1Hat').value = merged.p1Hat || 'none';
+                document.getElementById('p2Hat').value = merged.p2Hat || 'none';
+            }
+
+            resetSettingsToDefaults() {
+                this.applySettingsToUI(this.defaultLevelSettings);
             }
 
             initThreeJS() {
@@ -465,6 +845,8 @@
                 this.currentLevel = null;
                 document.getElementById('levelName').value = 'My Arena';
                 document.getElementById('levelDesc').value = '';
+                document.getElementById('levelDiff').value = 'normal';
+                this.resetSettingsToDefaults();
                 this.redrawTiles();
                 this.updateStatus('New level created', 'success');
             }
@@ -480,12 +862,13 @@
                 const name = document.getElementById('levelName').value || 'Untitled';
                 const desc = document.getElementById('levelDesc').value;
                 const diff = document.getElementById('levelDiff').value;
+                const settings = this.getSettingsFromUI();
 
                 const level = {
                     name,
                     description: desc,
                     difficulty: diff,
-                    theme: 'default',
+                    ...settings,
                     tiles: this.tiles.map(t => ({
                         coord: { q: t.q, r: t.r },
                         ability: t.type,
@@ -548,6 +931,7 @@
                     document.getElementById('levelName').value = level.name;
                     document.getElementById('levelDesc').value = level.description;
                     document.getElementById('levelDiff').value = level.difficulty;
+                    this.applySettingsToUI(level);
 
                     this.redrawTiles();
                     this.loadLevels();
@@ -565,6 +949,9 @@
 
                 const level = {
                     name: document.getElementById('levelName').value,
+                    description: document.getElementById('levelDesc').value,
+                    difficulty: document.getElementById('levelDiff').value,
+                    ...this.getSettingsFromUI(),
                     tiles: this.tiles.map(t => ({
                         coord: { q: t.q, r: t.r },
                         ability: t.type
@@ -578,6 +965,111 @@
                 a.href = url;
                 a.download = `${level.name.replace(/\s+/g, '_')}.json`;
                 a.click();
+            }
+
+            openImportDialog() {
+                const dialog = document.getElementById('importDialog');
+                const input = document.getElementById('importJsonInput');
+                if (dialog && typeof dialog.showModal === 'function') {
+                    dialog.showModal();
+                    if (input) input.focus();
+                    return;
+                }
+                this.updateStatus('Import dialog not supported in this browser', 'error');
+            }
+
+            closeImportDialog() {
+                const dialog = document.getElementById('importDialog');
+                if (dialog && typeof dialog.close === 'function') {
+                    dialog.close();
+                }
+            }
+
+            normalizeImportedLevel(level) {
+                const validTileTypes = new Set(['NORMAL', 'ICE', 'PORTAL', 'BONUS', 'WARNING']);
+                const validSettingsKeys = [
+                    'theme', 'sphereSize', 'sphereWeight', 'sphereAccel', 'collisionBounce',
+                    'arenaSize', 'destructionRate', 'iceRate', 'portalRate', 'portalCooldown',
+                    'bonusRate', 'bonusDuration', 'boostRegenSpeed', 'boostDrainRate',
+                    'bloomLevel', 'playerAuraSize', 'playerAuraOpacity', 'playerGlowIntensity',
+                    'playerGlowRange', 'p1Color', 'p2Color', 'p1Hat', 'p2Hat'
+                ];
+
+                const tiles = level.tiles.map((tile) => {
+                    const q = Number(tile?.coord?.q ?? tile?.q ?? 0);
+                    const r = Number(tile?.coord?.r ?? tile?.r ?? 0);
+                    const rawType = String(tile?.ability || tile?.type || 'NORMAL').toUpperCase();
+                    const type = validTileTypes.has(rawType) ? rawType : 'NORMAL';
+                    return {
+                        q: Number.isFinite(q) ? q : 0,
+                        r: Number.isFinite(r) ? r : 0,
+                        type
+                    };
+                });
+
+                // Extract only valid settings properties from the imported level
+                const importedSettings = {};
+                validSettingsKeys.forEach(key => {
+                    if (key in level) {
+                        // Handle color values - they should be numbers in the exported JSON,
+                        // but if they come in as hex strings, convert them
+                        if ((key === 'p1Color' || key === 'p2Color') && typeof level[key] === 'string') {
+                            importedSettings[key] = this.colorInputToNumber(level[key]);
+                        } else {
+                            importedSettings[key] = level[key];
+                        }
+                    }
+                });
+
+                return {
+                    name: level.name || 'Imported Level',
+                    description: level.description || '',
+                    difficulty: level.difficulty || 'normal',
+                    settings: {
+                        ...this.defaultLevelSettings,
+                        ...importedSettings
+                    },
+                    tiles
+                };
+            }
+
+            importJSONFromDialog() {
+                const input = document.getElementById('importJsonInput');
+                if (!input) {
+                    this.updateStatus('Import input not found', 'error');
+                    return;
+                }
+
+                try {
+                    const raw = input.value.trim();
+                    if (!raw) {
+                        throw new Error('Paste level JSON before importing');
+                    }
+
+                    const parsed = JSON.parse(raw);
+                    if (typeof parsed !== 'object' || Array.isArray(parsed)) {
+                        throw new Error('JSON root must be an object');
+                    }
+                    if (!parsed || !Array.isArray(parsed.tiles)) {
+                        throw new Error('JSON must include a tiles array');
+                    }
+
+                    const imported = this.normalizeImportedLevel(parsed);
+
+                    this.currentLevel = null;
+                    this.tiles = imported.tiles;
+                    document.getElementById('levelName').value = imported.name;
+                    document.getElementById('levelDesc').value = imported.description;
+                    document.getElementById('levelDiff').value = imported.difficulty;
+                    this.applySettingsToUI(imported.settings);
+
+                    this.redrawTiles();
+                    this.loadLevels();
+                    this.closeImportDialog();
+                    this.updateStatus(`Imported level in editor: ${imported.name}`, 'success');
+                } catch (err) {
+                    this.updateStatus(`Import failed: ${err.message}`, 'error');
+                }
             }
 
             updateStatus(msg, type = 'info') {
