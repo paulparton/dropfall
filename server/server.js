@@ -1,12 +1,16 @@
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
+import { randomBytes } from 'crypto';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = join(__dirname, 'public');
+const LEVELS_DIR = join(__dirname, 'levels');
+
+mkdirSync(LEVELS_DIR, { recursive: true });
 
 const MIME_TYPES = {
     '.html': 'text/html',
@@ -103,19 +107,79 @@ class GameServer {
     }
 
     handleHttp(req, res) {
-        if (req.method === 'GET' && req.url === '/api/stats') {
+        const parsedUrl = new URL(req.url || '/', 'http://localhost');
+        const requestPath = parsedUrl.pathname || '/';
+        const normalizedPath = requestPath.length > 1 ? requestPath.replace(/\/+$/, '') || '/' : requestPath;
+        const isLevelApiPath = normalizedPath === '/api/levels' || normalizedPath.startsWith('/api/levels/');
+
+        // 1) CORS preflight for level API
+        if (req.method === 'OPTIONS' && isLevelApiPath) {
+            res.writeHead(200, {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+            });
+            res.end();
+            return;
+        }
+
+        // 2) API routes
+        if (req.method === 'GET' && normalizedPath === '/api/stats') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(this.getStats()));
             return;
         }
 
-        if (req.method === 'GET' && req.url === '/api/games') {
+        if (req.method === 'GET' && normalizedPath === '/api/games') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(this.getPublicGameList()));
             return;
         }
 
-        const requestPath = (req.url || '/').split('?')[0].split('#')[0];
+        if (isLevelApiPath) {
+            this.handleLevelAPI(req, res, parsedUrl);
+            return;
+        }
+
+        // 3) Clean URL routes (can be wrapped with auth middleware later)
+        if (req.method === 'GET' && normalizedPath === '/admin') {
+            const adminPath = join(PUBLIC_DIR, 'admin.html');
+            if (existsSync(adminPath)) {
+                res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
+                res.end(readFileSync(adminPath));
+            } else {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('Not Found');
+            }
+            return;
+        }
+
+        if (req.method === 'GET' && normalizedPath === '/editor') {
+            const editorPath = join(PUBLIC_DIR, 'editor-3d.html');
+            if (existsSync(editorPath)) {
+                res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
+                res.end(readFileSync(editorPath));
+            } else {
+                res.writeHead(404, { 'Content-Type': 'text/plain' });
+                res.end('Not Found');
+            }
+            return;
+        }
+
+        // 4) Redirect old URLs
+        if (req.method === 'GET' && normalizedPath === '/admin.html') {
+            res.writeHead(301, { Location: '/admin' });
+            res.end();
+            return;
+        }
+
+        if (req.method === 'GET' && normalizedPath === '/editor-3d.html') {
+            res.writeHead(301, { Location: '/editor' });
+            res.end();
+            return;
+        }
+
+        // 5) Static files
         let filePath = requestPath === '/' ? '/index.html' : requestPath;
         filePath = join(PUBLIC_DIR, filePath);
 
@@ -125,6 +189,7 @@ class GameServer {
             res.writeHead(200, { 'Content-Type': mimeType });
             res.end(readFileSync(filePath));
         } else {
+            // 6) SPA fallback
             const hasExtension = extname(requestPath) !== '';
             if (!hasExtension) {
                 const spaFallback = join(PUBLIC_DIR, 'index.html');
@@ -140,6 +205,168 @@ class GameServer {
             res.writeHead(404, { 'Content-Type': missingMimeType });
             res.end('Not Found');
         }
+    }
+
+    sanitizeLevelId(id) {
+        if (typeof id !== 'string' || id.length === 0) {
+            return null;
+        }
+        if (id.includes('/') || id.includes('\\') || id.includes('..')) {
+            return null;
+        }
+        return id;
+    }
+
+    handleLevelAPI(req, res, parsedUrl) {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Cache-Control', 'no-store');
+
+        const pathname = parsedUrl.pathname;
+        const MAX_BODY_BYTES = 1024 * 1024;
+
+        const sendJson = (statusCode, payload) => {
+            res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(payload));
+        };
+
+        const getPathLevelId = () => {
+            const match = pathname.match(/^\/api\/levels\/([^/]+)$/);
+            if (!match) {
+                return null;
+            }
+            try {
+                return decodeURIComponent(match[1]);
+            } catch {
+                return null;
+            }
+        };
+
+        const readBodyWithLimit = (onSuccess) => {
+            let body = '';
+            let bodySize = 0;
+            let rejected = false;
+
+            req.on('data', (chunk) => {
+                if (rejected) return;
+                bodySize += chunk.length;
+                if (bodySize > MAX_BODY_BYTES) {
+                    rejected = true;
+                    sendJson(413, { error: 'Request body too large (max 1MB)' });
+                    req.destroy();
+                    return;
+                }
+                body += chunk;
+            });
+
+            req.on('end', () => {
+                if (rejected) return;
+                onSuccess(body);
+            });
+        };
+
+        if (req.method === 'GET' && pathname === '/api/levels') {
+            try {
+                const files = readdirSync(LEVELS_DIR);
+                const levels = files
+                    .filter((f) => f.endsWith('.json'))
+                    .map((f) => {
+                        const fullPath = join(LEVELS_DIR, f);
+                        const data = JSON.parse(readFileSync(fullPath, 'utf-8'));
+                        return {
+                            id: f.replace('.json', ''),
+                            name: data.name,
+                            description: data.description,
+                            difficulty: data.difficulty,
+                            tileCount: data.tiles?.length || 0,
+                            lastModified: statSync(fullPath).mtimeMs,
+                        };
+                    });
+
+                sendJson(200, levels);
+            } catch (err) {
+                sendJson(500, { error: err.message });
+            }
+            return;
+        }
+
+        if (req.method === 'GET' && pathname.match(/^\/api\/levels\/[^/]+$/)) {
+            const levelId = this.sanitizeLevelId(getPathLevelId());
+            if (!levelId) {
+                sendJson(400, { error: 'Invalid level id' });
+                return;
+            }
+
+            try {
+                const data = readFileSync(join(LEVELS_DIR, `${levelId}.json`), 'utf-8');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(data);
+            } catch {
+                sendJson(404, { error: 'Level not found' });
+            }
+            return;
+        }
+
+        if (req.method === 'POST' && pathname === '/api/levels') {
+            readBodyWithLimit((body) => {
+                try {
+                    const level = JSON.parse(body);
+                    const providedId = typeof level.id === 'string' ? level.id : null;
+                    const safeProvidedId = providedId ? this.sanitizeLevelId(providedId) : null;
+
+                    if (providedId && !safeProvidedId) {
+                        sendJson(400, { error: 'Invalid level id' });
+                        return;
+                    }
+
+                    const id = safeProvidedId || `level_${Date.now()}_${randomBytes(4).toString('hex')}`;
+                    writeFileSync(join(LEVELS_DIR, `${id}.json`), JSON.stringify(level, null, 2));
+                    sendJson(200, { id, success: true });
+                } catch (err) {
+                    sendJson(400, { error: err.message });
+                }
+            });
+            return;
+        }
+
+        if (req.method === 'PUT' && pathname.match(/^\/api\/levels\/[^/]+$/)) {
+            const levelId = this.sanitizeLevelId(getPathLevelId());
+            if (!levelId) {
+                sendJson(400, { error: 'Invalid level id' });
+                return;
+            }
+
+            readBodyWithLimit((body) => {
+                try {
+                    const level = JSON.parse(body);
+                    level.id = levelId;
+                    writeFileSync(join(LEVELS_DIR, `${levelId}.json`), JSON.stringify(level, null, 2));
+                    sendJson(200, { id: levelId, success: true });
+                } catch (err) {
+                    sendJson(400, { error: err.message });
+                }
+            });
+            return;
+        }
+
+        if (req.method === 'DELETE' && pathname.match(/^\/api\/levels\/[^/]+$/)) {
+            const levelId = this.sanitizeLevelId(getPathLevelId());
+            if (!levelId) {
+                sendJson(400, { error: 'Invalid level id' });
+                return;
+            }
+
+            try {
+                unlinkSync(join(LEVELS_DIR, `${levelId}.json`));
+                sendJson(200, { success: true });
+            } catch {
+                sendJson(404, { error: 'Level not found' });
+            }
+            return;
+        }
+
+        sendJson(404, { error: 'Not Found' });
     }
 
     handleConnection(ws) {
@@ -776,10 +1003,9 @@ class GameServer {
 ║                     DROPFALL GAME SERVER                       ║
 ╠═══════════════════════════════════════════════════════════════╣
 ║  Server running at:                                            ║
-║    Local:    http://localhost:${port}                             ║
-║    Network:  http://<your-ip>:${port}                            ║
-║                                                               ║
-║  Admin Panel: http://localhost:${port}/admin.html                 ║
+║    Game:          http://localhost:${port}                        ║
+║    Admin:         http://localhost:${port}/admin                  ║
+║    Level Editor:  http://localhost:${port}/editor                 ║
 ║                                                               ║
 ║  Supported Games: Dropfall                                     ║
 ╚═══════════════════════════════════════════════════════════════╝
