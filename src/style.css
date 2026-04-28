@@ -850,3 +850,48 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
     .player-stats { width: 100%; }
     .score-display { position: relative; top: unset; left: unset; transform: none; margin: 10px 0; }
 }
+
+/* Orientation Support - Portrait (primary for mobile) */
+@media screen and (orientation: portrait) and (max-width: 767px) {
+    .retro-title {
+        margin-top: max(1rem, env(safe-area-inset-top));
+    }
+    #menu, #game-over {
+        padding-top: max(2rem, env(safe-area-inset-top));
+    }
+}
+
+/* Orientation Support - Landscape (supported on mobile) */
+@media screen and (orientation: landscape) and (max-width: 767px) {
+    .retro-title {
+        font-size: clamp(1.5rem, 5vw, 2.5rem);
+        margin-top: max(0.5rem, env(safe-area-inset-top));
+    }
+    .retro-subtitle {
+        font-size: clamp(0.6rem, 1.5vw, 1rem);
+        margin-top: 0;
+    }
+    .controls-display {
+        flex-direction: row;
+        gap: 1rem;
+        margin-bottom: 0.5rem;
+    }
+    #menu, #game-over {
+        padding-top: max(0.5rem, env(safe-area-inset-top));
+        padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+    }
+    .retro-btn {
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+    }
+}
+
+/* Landscape tablet support */
+@media screen and (orientation: landscape) and (min-width: 768px) and (max-width: 1023px) {
+    .retro-title {
+        font-size: clamp(2rem, 4vw, 3.5rem);
+    }
+    .controls-display {
+        gap: 1.5rem;
+    }
+}
