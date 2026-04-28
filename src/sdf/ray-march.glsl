@@ -128,24 +128,25 @@ float sdIceEffect(vec3 p) {
     return ice;
 }
 
+// PORTAL FEATURE - DISABLED
 // Portal effect (teleportation portals)
-float sdPortals(vec3 p) {
-    float portals = MAX_DIST;
-    
-    // Sample tile state for portal tiles
-    vec2 tileUV = (p.xz / (uArenaSize * 8.0) + 0.5);
-    vec4 tileState = texture(uTileStates, tileUV);
-    
-    if (tileState.g > 0.5) {  // Portal tile
-        // Portal is a rotating torus
-        vec3 q = p;
-        q.y += sin(uTime * 2.0) * 0.5;
-        float torus = length(vec2(length(q.xz) - 2.0, q.y)) - 0.5;
-        portals = min(portals, torus);
-    }
-    
-    return portals;
-}
+// float sdPortals(vec3 p) {
+//     float portals = MAX_DIST;
+//     
+//     // Sample tile state for portal tiles
+//     vec2 tileUV = (p.xz / (uArenaSize * 8.0) + 0.5);
+//     vec4 tileState = texture(uTileStates, tileUV);
+//     
+//     if (tileState.g > 0.5) {  // Portal tile
+//         // Portal is a rotating torus
+//         vec3 q = p;
+//         q.y += sin(uTime * 2.0) * 0.5;
+//         float torus = length(vec2(length(q.xz) - 2.0, q.y)) - 0.5;
+//         portals = min(portals, torus);
+//     }
+//     
+//     return portals;
+// }
 
 // Bonus tiles (power-up tiles)
 float sdBonusTiles(vec3 p) {
@@ -185,7 +186,8 @@ float sceneSDF(vec3 p) {
     
     // Special tiles
     d = opUnion(d, sdIceEffect(p));
-    d = opUnion(d, sdPortals(p));
+    // PORTAL FEATURE - DISABLED
+    // d = opUnion(d, sdPortals(p));
     d = opUnion(d, sdBonusTiles(p));
     
     // Effects
@@ -325,9 +327,10 @@ vec3 getMaterialColor(vec3 pos, int materialId) {
     if (tileState.r > 0.5) {  // Ice
         color = vec3(0.0, 0.7, 1.0);
     }
-    if (tileState.g > 0.5) {  // Portal
-        color = vec3(0.0, 1.0, 1.0) * (0.5 + 0.5 * sin(uTime * 3.0));
-    }
+    // PORTAL FEATURE - DISABLED
+    // if (tileState.g > 0.5) {  // Portal
+    //     color = vec3(0.0, 1.0, 1.0) * (0.5 + 0.5 * sin(uTime * 3.0));
+    // }
     if (tileState.b > 0.5) {  // Bonus
         color = vec3(1.0, 1.0, 0.0) * (0.5 + 0.5 * sin(uTime * 2.0));
     }

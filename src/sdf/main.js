@@ -283,7 +283,8 @@ function setupSettingsUI() {
         'arena-size': 'arenaSize',
         'destruction-rate': 'destructionRate',
         'ice-rate': 'iceRate',
-        'portal-rate': 'portalRate',
+        // PORTAL FEATURE - DISABLED
+        // 'portal-rate': 'portalRate',
         'bonus-rate': 'bonusRate',
         'boost-regen-speed': 'boostRegenSpeed',
         'boost-drain-rate': 'boostDrainRate',
