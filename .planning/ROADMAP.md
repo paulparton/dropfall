@@ -1,183 +1,101 @@
 ---
-version: 2.2
-milestone: v2.2 Single-Player Race Mode
-created: 2026-04-01
-phases: 3
+milestone: v2.3
+created: 2026-04-28
 ---
 
-# Dropfall v2.2 Roadmap: Single-Player Race Mode
+# Dropfall v2.3 Roadmap: First-Class Mobile Support
 
-**Milestone Goal:** Introduce a second game mode offering racing gameplay with Mario Kart-style track design using existing ball physics and tile mechanics.
+## Overview
 
----
+This roadmap delivers first-class mobile support for Dropfall while preserving the existing desktop experience unchanged. The 5-phase structure progresses from responsive foundation → touch controls → UI polish → performance → game mode integration.
 
-## Phase 7: Race Mode Fundamentals
+**Total Phases:** 5
+**Granularity:** Standard
+**Coverage:** 29/29 v2.3 requirements mapped
 
-**Goal:** Establish core racing infrastructure—game mode selection, basic playable track, checkpoint/lap system, and race-specific HUD.
+## Phases
 
-**Duration:** 3-4 days  
-**Status:** 📋 Planning
+- [ ] **Phase 1: Responsive Layout Foundation** - Responsive layout system with desktop unchanged, mobile optimized
+- [ ] **Phase 2: Touch Controls Implementation** - Virtual joystick and touch-drag controls for ball movement
+- [ ] **Phase 3: Mobile UI Polish** - Touch-friendly UI elements, HUD repositioning, mobile layouts
+- [ ] **Phase 4: Performance Optimization** - Mobile GPU optimizations, battery-friendly rendering
+- [ ] **Phase 5: Gesture Handling & Game Modes** - Gesture support, classic and race modes fully playable on mobile
 
-**Requirements Mapped:**
-- [x] **GM-01**: User can select "Race Mode" from main game mode selection menu
-- [x] **GM-02**: System initializes Race state when entering race mode
-- [x] **TR-01**: Race track rendered with hexagonal tiles forming a navigable path
-- [x] **TR-05**: Track layout supports Mario Kart-style flow
-- [x] **CP-01**: Checkpoint system detects when player crosses designated zones
-- [x] **CP-02**: Lap count increments by 1 when player crosses finish line
-- [x] **CP-05**: Finish line is clearly marked visually
-- [x] **HUD-01**: Current speed displayed in real-time on HUD
-- [x] **HUD-02**: Current lap number displayed
-- [x] **HUD-03**: Current lap time displayed and updates each frame
-- [x] **RESULT-01**: Race end triggers when player completes final lap
-- [x] **RESULT-02**: Results screen shows final time and lap count
+## Phase Details
 
-**Success Criteria:**
-1. Player can select "Race" from game mode menu
-2. Race mode initializes without crashing or corrupting state
-3. Basic track renders and is navigable (at least 3 turns)
-4. Laps count correctly (1 lap = 1 cross of finish line, no phantom counts)
-5. HUD displays speed, lap number, and time accurately
-6. Race completes when player finishes lap 3
-7. Results screen displays with correct metrics
+### Phase 1: Responsive Layout Foundation
+**Goal**: Responsive layout system that adapts to screen size while keeping desktop layout unchanged
+**Depends on**: Nothing (first phase)
+**Requirements**: RL-01, RL-02, RL-03, RL-04, RL-05, RL-06
+**Success Criteria** (what must be TRUE):
+  1. Desktop layout (≥1024px) renders identically to pre-v2.3 state with no visual changes
+  2. Mobile layout (<768px) activates automatically with optimized arrangement for small screens
+  3. Tablet layout (768px-1023px) provides usable experience via scaled desktop or hybrid approach
+  4. iOS devices with notch/home indicator display game content without obstruction in safe areas
+  5. Rotating device between portrait and landscape updates layout appropriately without breaking the game
+**Plans**: TBD
 
-**Plans:** 2-3
+### Phase 2: Touch Controls Implementation
+**Goal**: Touch screen controls that allow full gameplay via virtual joystick or touch-drag
+**Depends on**: Phase 1 (responsive layout must exist before adding touch controls)
+**Requirements**: TC-01, TC-02, TC-03, TC-04, TC-05, TC-06
+**Success Criteria** (what must be TRUE):
+  1. Player can control ball movement on touch screens using virtual joystick with <16ms latency
+  2. Player can alternatively use touch-drag (drag finger anywhere to move ball) with same responsiveness
+  3. All menus and UI interactions (start game, pause, settings) fully navigable via touch taps and scrolls
+  4. Desktop users see no touch controls (mouse/keyboard input unchanged and touch UI hidden)
+  5. Touch interactions provide immediate visual feedback (joystick moves, buttons show pressed state)
+**Plans**: TBD
+**UI hint**: yes
 
----
+### Phase 3: Mobile UI Polish
+**Goal**: Mobile-optimized UI with touch-friendly targets and thumb-friendly layout
+**Depends on**: Phase 2 (touch controls need UI elements to interact with)
+**Requirements**: MUI-01, MUI-02, MUI-03, MUI-04, MUI-05
+**Success Criteria** (what must be TRUE):
+  1. All interactive elements (buttons, menu items, HUD controls) meet minimum 44px touch target size
+  2. HUD elements (score, timer, pause button) repositioned to thumb-friendly zones at screen bottom
+  3. Text remains readable on mobile screens with minimum 16px font size for all body text
+  4. Buttons and interactive elements spaced with minimum 8px gap to prevent accidental taps
+  5. Mobile menus and overlays (settings, pause, game over) use full-screen modal layout optimized for touch
+**Plans**: TBD
+**UI hint**: yes
 
-## Phase 8: Physics & Gameplay Polish
+### Phase 4: Performance Optimization
+**Goal**: Smooth performance on mobile devices with battery-friendly rendering
+**Depends on**: Phase 2 (optimize after core mobile functionality exists)
+**Requirements**: PERF-01, PERF-02, PERF-03, PERF-04, PERF-05
+**Success Criteria** (what must be TRUE):
+  1. Game maintains minimum 30fps on mid-range mobile devices during active gameplay
+  2. Particle effects (confetti, tile destruction, boost trails) reduced or disabled on mobile GPUs
+  3. Rendering loop avoids unnecessary redraws when game state hasn't changed (battery savings)
+  4. Texture assets optimized for mobile memory constraints (compressed formats, appropriate sizes)
+  5. Desktop performance maintained at 60fps with no regression from mobile optimizations
+**Plans**: TBD
 
-**Goal:** Tune physics for racing feel, implement boost zones, add visual/audio feedback, and ensure responsive controls.
+### Phase 5: Gesture Handling & Game Modes
+**Goal**: Gesture support and full mobile playability for both Classic and Race modes
+**Depends on**: Phase 3, Phase 4 (UI polish and performance needed before final integration)
+**Requirements**: GEST-01, GEST-02, GEST-03, GM-01, GM-02, GM-03, GM-04
+**Success Criteria** (what must be TRUE):
+  1. Swipe gestures navigate menus (swipe left/right to switch settings tabs, dismiss modals)
+  2. Pinch-to-zoom and double-tap zoom disabled so game viewport remains fixed during play
+  3. Classic mode fully playable end-to-end on mobile using touch controls with no missing functionality
+  4. Race mode fully playable end-to-end on mobile with touch controls and proper timer/checkpoint display
+  5. Mode selection screen touch-optimized with large targets and mobile-appropriate layout
+  6. Game pause/resume works correctly on mobile with no focus loss issues when switching apps or locking screen
+**Plans**: TBD
+**UI hint**: yes
 
-**Duration:** 3-4 days  
-**Status:** 📋 Planning
+## Progress
 
-**Requirements Mapped:**
-- [x] **PH-01**: Ball accelerates quickly when input is given
-- [x] **PH-02**: Ball has reduced friction for sliding feel
-- [x] **PH-04**: Ball bounces off walls with appropriate restitution
-- [x] **PH-05**: Linear velocity reset on entering race mode
-- [x] **PH-06**: Steering feels precise and immediate
-- [x] **TR-02**: Track includes straightaways and turns
-- [x] **TR-03**: Track includes elevation changes
-- [x] **TR-04**: Walls/obstacle tiles that player bounces off
-- [x] **CP-03**: Checkpoint crossing only counts from valid direction
-- [x] **CP-04**: Multiple checkpoints per lap guide player
-- [x] **CP-06**: Completing N laps (3) triggers race completion
-- [x] **BOOST-01**: Boost zone tiles placed strategically on track
-- [x] **BOOST-02**: Crossing boost zone applies immediate velocity increase
-- [x] **BOOST-03**: Boost applies consistently
-- [x] **BOOST-04**: Boost can only trigger once per pass
-- [x] **BOOST-05**: Visual feedback on boost activation
-- [x] **HUD-04**: Best lap time tracked and displayed
-- [x] **HUD-05**: Finish notification when race completes
-- [x] **AUDIO-01**: Background music appropriate for race mode
-- [x] **AUDIO-02**: Lap completion triggers audio cue
-- [x] **AUDIO-03**: Boost activation creates audio feedback
-- [x] **AUDIO-04**: Finish event triggers celebration audio
-- [x] **RESULT-03**: Best lap time persists in race results
-- [x] **RESULT-04**: Player can return to menu or start new race
-
-**Success Criteria:**
-1. Input-to-visual latency < 50ms (responsive steering)
-2. Ball friction tuned properly for racing feel
-3. Boost zones apply consistently, no phantom triggers
-4. Wall bounces feel fair
-5. Checkpoint system validates direction
-6. All audio cues distinct
-7. Best lap time correctly tracked
-8. Playtest feedback: Racing feels fun and skill-based
-
-**Plans:** 3-4
-
----
-
-## Phase 9: Content & Validation
-
-**Goal:** Finalize track content, optimize for mobile, conduct full UAT, and verify no regression in classic mode.
-
-**Duration:** 3-4 days  
-**Status:** 📋 Planning
-
-**Requirements Mapped:**
-- [x] **GM-03**: Classic mode unaffected when switching to/from Race mode
-- [x] **GM-04**: Game returns to mode selection after race completes
-- [x] **TR-06**: One initial track design available for v2.2
-- [x] **HUD-06**: HUD elements readable during high-speed gameplay
-- [x] **MOB-01**: Race mode maintains minimum 30fps on mobile
-- [x] **MOB-02**: Particle effects quantity reasonable for mobile GPU
-- [x] **MOB-03**: Touch input controls work for racing
-- [x] **MOB-04**: Screen resolution adapted for mobile viewport
-- [x] **CONTENT-01**: At least 1 track fully implemented and playable
-- [x] **CONTENT-02**: Track is thematically coherent
-- [x] **CONTENT-03**: Track difficulty appropriate for single-player
-- [x] **CONTENT-04**: Track layout encourages replay
-- [x] **RESULT-05**: Race state properly cleaned up before returning to menu
-
-**Success Criteria:**
-1. Desktop: 60fps maintained during gameplay
-2. Mobile: 30fps maintained on standard devices
-3. Touch controls responsive
-4. HUD readable during high-speed sections
-5. Track completable by first-time player
-6. Skilled player can complete in <1.5 min
-7. No P1 bugs in UAT
-8. Classic mode regression test passes
-9. External playtest positive feedback
-
-**Plans:** 2-3
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 1. Responsive Layout Foundation | 0/3 | Not started | - |
+| 2. Touch Controls Implementation | 0/3 | Not started | - |
+| 3. Mobile UI Polish | 0/2 | Not started | - |
+| 4. Performance Optimization | 0/2 | Not started | - |
+| 5. Gesture Handling & Game Modes | 0/3 | Not started | - |
 
 ---
-
-## Phase Dependencies
-
-| Phase | Dependencies | Notes |
-|-------|--------------|-------|
-| 7 | None | Core infrastructure |
-| 8 | Phase 7 | Physics, gameplay feel |
-| 9 | Phases 7+8 | Content, optimization, validation |
-
----
-
-## Requirement Traceability
-
-| Category | Phase 7 | Phase 8 | Phase 9 | Total |
-|----------|---------|---------|---------|-------|
-| GAME_MODE | 2 | 1 | 1 | 4 |
-| TRACK | 1 | 4 | 1 | 6 |
-| PHYSICS | 0 | 6 | 0 | 6 |
-| CHECKPOINT | 3 | 3 | 0 | 6 |
-| HUD_RACE | 3 | 2 | 1 | 6 |
-| BOOST | 0 | 5 | 0 | 5 |
-| COMPLETION | 2 | 1 | 2 | 5 |
-| AUDIO | 0 | 4 | 0 | 4 |
-| MOBILE | 0 | 0 | 4 | 4 |
-| CONTENT | 0 | 0 | 4 | 4 |
-| **Total** | **11** | **26** | **13** | **50** |
-
----
-
-## Key Milestones
-
-**Phase 7 → 8 Gate:**
-- Track renders and is playable
-- Checkpoint system working (no phantom counts)
-- Mode can be entered/exited cleanly
-
-**Phase 8 → 9 Gate:**
-- Physics feel good (playtester feedback positive)
-- Boost system working
-- Audio fully integrated
-- No critical bugs
-
-**Milestone Complete Gate:**
-- UAT passed
-- No classic mode regression
-- Mobile tested on ≥2 device types
-- Performance targets met
-
----
-
-*Created: 2026-04-01*  
-*Continuing from v2.1 (Phase 6)*
-
+*Roadmap created: 2026-04-28 for v2.3 Mobile Support milestone*

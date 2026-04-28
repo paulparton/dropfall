@@ -69,14 +69,37 @@ created: 2026-04-28
 
 | REQ-ID | Phase | Status |
 |--------|-------|--------|
-| RL-01 through RL-06 | TBD | Planned |
-| TC-01 through TC-06 | TBD | Planned |
-| MUI-01 through MUI-05 | TBD | Planned |
-| PERF-01 through PERF-05 | TBD | Planned |
-| GEST-01 through GEST-03 | TBD | Planned |
-| GM-01 through GM-04 | TBD | Planned |
+| RL-01 | Phase 1 | Pending |
+| RL-02 | Phase 1 | Pending |
+| RL-03 | Phase 1 | Pending |
+| RL-04 | Phase 1 | Pending |
+| RL-05 | Phase 1 | Pending |
+| RL-06 | Phase 1 | Pending |
+| TC-01 | Phase 2 | Pending |
+| TC-02 | Phase 2 | Pending |
+| TC-03 | Phase 2 | Pending |
+| TC-04 | Phase 2 | Pending |
+| TC-05 | Phase 2 | Pending |
+| TC-06 | Phase 2 | Pending |
+| MUI-01 | Phase 3 | Pending |
+| MUI-02 | Phase 3 | Pending |
+| MUI-03 | Phase 3 | Pending |
+| MUI-04 | Phase 3 | Pending |
+| MUI-05 | Phase 3 | Pending |
+| PERF-01 | Phase 4 | Pending |
+| PERF-02 | Phase 4 | Pending |
+| PERF-03 | Phase 4 | Pending |
+| PERF-04 | Phase 4 | Pending |
+| PERF-05 | Phase 4 | Pending |
+| GEST-01 | Phase 5 | Pending |
+| GEST-02 | Phase 5 | Pending |
+| GEST-03 | Phase 5 | Pending |
+| GM-01 | Phase 5 | Pending |
+| GM-02 | Phase 5 | Pending |
+| GM-03 | Phase 5 | Pending |
+| GM-04 | Phase 5 | Pending |
 
-*Phase mapping will be populated by roadmapper.*
+*Phase mapping completed by roadmapper for v2.3 milestone.*
 
 ---
 *Created: 2026-04-28 for v2.3 Mobile Support milestone*
