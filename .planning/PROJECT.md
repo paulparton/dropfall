@@ -1,65 +1,66 @@
 ---
-name: Dropfall Single-Player Race Mode
-version: v2.2
+name: Dropfall Mobile Support
+version: v2.3
 type: brownfield
 created: 2026-03-31
-updated: 2026-04-01
+updated: 2026-04-28
 ---
 
-# Dropfall v2.2: Single-Player Race Mode
+# Dropfall v2.3: First-Class Mobile Support
 
 ## What This Is
 
-Add a second game mode offering racing gameplay with Mario Kart-style dynamic track design. Reuses existing ball physics and tile mechanics from the classic Dropfall mode, but presents them in a racing context.
+Add first-class mobile support to Dropfall with responsive layouts, touch screen controls, and AAA-quality mobile experience. Desktop retains the existing layout unchanged.
 
 ## Problem Statement
 
-Classic Dropfall is a single-player survival mode where balls drop and players navigate. To expand engagement, add a racing mode that:
-- Feels like Mario Kart (competitive, fast-paced, dynamic)
-- Reuses existing ball physics and tile mechanics
-- Offers progressive challenge through track design, not just enemy spawning
-- Provides clear win conditions and progression
+Dropfall currently works on desktop only. To reach a wider audience and provide a premium mobile experience, the game needs:
+- Responsive layouts that adapt to mobile screen sizes while keeping desktop layout unchanged
+- Touch screen controls for the main game (ball movement, interactions)
+- Mobile-optimized UI/UX patterns (touch targets, gestures, viewport handling)
+- Performance optimization for mobile GPUs and processors
+- AAA-quality feel on mobile devices
 
 ## Core Value
 
-Provide players with a second distinct game mode that expands gameplay appeal while leveraging existing physics and asset systems. Racing mode celebrates speed, skill, and track mastery rather than survival duration.
+Make Dropfall accessible to mobile players with a premium touch-first experience while preserving the existing desktop experience unchanged.
 
 ## Target Features
 
-1. **Game Mode Selection** - Menu/UI to switch between Classic and Race modes
-2. **Race Track Design** - A race track with Mario Kart-inspired features (turns, jumps, speed boosts, obstacles)
-3. **Racing Physics Adaptation** - Ball gravity, momentum, and speed tuned for racing (faster than survival mode)
-4. **Finish Line Detection** - Clear start/finish with lap counting or checkpoint progression
-5. **Race UI/HUD** - Speed indicator, lap counter, best time tracking, finish state
-6. **Progressive Difficulty** - Multiple track variations with increasing challenge
-7. **Performance Optimization** - Ensure racing mode runs smoothly at 60fps
+1. **Responsive Layout System** - Fluid layouts that adapt to screen size; desktop unchanged, mobile gets optimized layout
+2. **Touch Screen Controls** - Virtual joystick or touch-drag controls for ball movement on mobile
+3. **Mobile UI Patterns** - Touch-friendly buttons, appropriate sizing, gesture support
+4. **Viewport & Orientation** - Proper viewport meta, orientation handling, safe area support
+5. **Performance Optimization** - Mobile GPU optimizations, reduced particle effects, battery-friendly rendering
+6. **Touch Gesture Support** - Swipe, tap, pinch gestures where appropriate
+7. **Mobile HUD** - Compact, touch-accessible HUD elements for mobile screens
 
 ## Key Context
 
-- v2.1 just completed: fixed online multiplayer so 2 players can control their own balls
-- Existing systems ready to reuse: ball physics, tile rendering, particle/visual effects
-- Design philosophy: lean on Mario Kart feel (speed, curves, hazards) not pure simulation
-- Single-player focus initially (multiplayer racing is future scope)
+- v2.2 completed: Single-Player Race Mode (phases 7-9 archived)
+- Existing systems: ball physics, tile rendering, race mode, classic mode all working on desktop
+- Desktop layout must remain unchanged (media queries only affect mobile)
+- Touch controls should feel native and responsive (<16ms latency)
+- Performance target: 30fps minimum on mid-range mobile devices
 
 ## Out of Scope
 
-- Multiplayer racing (future milestone)
-- Dynamic weather or advanced visual effects
-- Advanced AI opponents or ghost racing (v1 is no opponents, just track)
-- Mobile/touch controls (desktop first)
-- Cross-platform networking for racing mode
-- Advanced analytics or leaderboards
+- Mobile app store packaging (PWA or native wrapper is future scope)
+- Mobile-specific game modes
+- Mobile multiplayer (uses desktop online multiplayer)
+- Advanced mobile haptics (basic vibration only)
+- Mobile analytics or push notifications
 
 ## Success Criteria
 
-- [ ] Player can select Race mode from main menu
-- [ ] Race track renders correctly with obstacles and visual feedback
-- [ ] Ball controls feel responsive and match Mario Kart racing pacing
-- [ ] Start/finish detection works, lap count updates
-- [ ] Race UI displays speed, time, and lap clearly
-- [ ] Multiple difficulty variations available
-- [ ] 60fps maintained during gameplay
-- [ ] No regression in Classic mode functionality
+- [ ] Desktop layout unchanged on screens >1024px
+- [ ] Mobile layout activates on screens <768px width
+- [ ] Touch controls allow full gameplay (ball movement, menu navigation)
+- [ ] Touch latency <16ms (feels instant)
+- [ ] 30fps maintained on mid-range mobile devices
+- [ ] All UI elements meet 44px minimum touch target size
+- [ ] Safe area insets handled (notch, home indicator)
+- [ ] No regression in desktop functionality
 
 ---
 

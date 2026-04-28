@@ -1,9 +1,9 @@
 ---
 gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Single-Player Race Mode
-status: Planning
-last_updated: "2026-04-03T10:30:00.000Z"
+milestone: v2.3
+milestone_name: First-Class Mobile Support
+status: Defining Requirements
+last_updated: "2026-04-28T10:00:00.000Z"
 progress:
   total_phases: 0
   completed_phases: 0
@@ -11,16 +11,17 @@ progress:
   completed_plans: 0
 ---
 
-# Project State: Dropfall v2.2 Single-Player Race Mode
+# Project State: Dropfall v2.3 First-Class Mobile Support
 
 ## Milestone Goal
 
-Add a second game mode: racing with Mario Kart-style track design and ball physics.
+Add first-class mobile support with responsive layouts and touch screen controls. Desktop retains existing layout unchanged.
 
 ## Current Status
 
-- **Milestone:** v2.2 Single-Player Race Mode
-- **Status:** Planning phase
+- **Milestone:** v2.3 First-Class Mobile Support
+- **Status:** Defining requirements
+- **v2.2:** Archived (Single-Player Race Mode)
 - **v2.1:** Complete (Online Multiplayer Fix)
 - **v2.0:** Complete (TypeScript migration, Entity System)
 
@@ -28,27 +29,15 @@ Add a second game mode: racing with Mario Kart-style track design and ball physi
 
 | Phase | Status | Progress | Notes |
 |-------|--------|----------|-------|
-| 7: Race Mode Fundamentals | Not Started | 0% | Game state, mode selection, basic track |
-| 8: Physics & Gameplay Polish | Not Started | 0% | Physics tuning, boost zones, effects |
-| 9: Content & Validation | Not Started | 0% | Track finalization, mobile, UAT |
+| TBD after roadmap creation | Not Started | 0% | Requirements being defined |
 
 ## Key Context
 
-- Previous milestones have established solid foundation (physics, rendering, entity system)
-- Reusing: existing ball mechanics, particle effects, tile rendering
-- Challenge: Adapting classic mode mechanics to racing context
-- Focus: Single-player experience with clear progression
-
-## Quick Tasks Completed (v2.1 Enhancement)
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260403-tbn | Implement player scores tracking, replay system, and character customization | 2026-04-03 | 518d1c2 | [260403-tbn-scores-replay-customization](./quick/260403-tbn-scores-replay-customization/) |
-
-**What was delivered:**
-- Player scores overlay displayed during gameplay
-- Frame-based replay recording with auto-play falling clip
-- Character customization modal (12 colors × 5 hats) integrated into game flow
+- Previous milestones established solid foundation (physics, rendering, entity system, race mode)
+- Desktop layout must remain unchanged — mobile only via media queries
+- Touch controls needed for main game (ball movement)
+- Performance target: 30fps on mid-range mobile devices
+- AAA-quality mobile experience expected
 
 ## Blockers & Concerns
 
@@ -56,13 +45,13 @@ None identified at start.
 
 ## Next Actions
 
-1. ✓ Milestone planning started
-2. **→ Define requirements** — Scope v2.1 features
-3. **→ Create roadmap** — Plan phases
-4. **→ Execute** — Fix the bug
+1. ✓ Milestone started — v2.3 Mobile Support
+2. **→ Define requirements** — Scope mobile features with REQ-IDs
+3. **→ Create roadmap** — Plan phases for mobile support
+4. **→ Execute** — Build mobile-first features
 
 ## Last Updated
 
-2026-03-31 — v2.1 milestone started
+2026-04-28 — v2.3 milestone started
 
 **Next:** Define requirements, create roadmap
