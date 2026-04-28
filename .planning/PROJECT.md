@@ -27,13 +27,13 @@ Make Dropfall accessible to mobile players with a premium touch-first experience
 
 ## Target Features
 
-1. **Responsive Layout System** - Fluid layouts that adapt to screen size; desktop unchanged, mobile gets optimized layout
-2. **Touch Screen Controls** - Virtual joystick or touch-drag controls for ball movement on mobile
-3. **Mobile UI Patterns** - Touch-friendly buttons, appropriate sizing, gesture support
-4. **Viewport & Orientation** - Proper viewport meta, orientation handling, safe area support
-5. **Performance Optimization** - Mobile GPU optimizations, reduced particle effects, battery-friendly rendering
-6. **Touch Gesture Support** - Swipe, tap, pinch gestures where appropriate
-7. **Mobile HUD** - Compact, touch-accessible HUD elements for mobile screens
+1. **Player Options Screen Fix** - Fix the game settings/player options screen layout for mobile (responsive, properly fitting, no overflow)
+2. **Remove Boost Button** - Remove the existing ugly boost button from the UI
+3. **Touch Screen Controls** - Virtual joystick or touch-drag controls for ball movement on mobile (researched best methods for physics ball games)
+4. **Responsive Layout System** - Fluid layouts that adapt to screen size; desktop unchanged, mobile gets optimized layout
+5. **Mobile UI Patterns** - Touch-friendly buttons (44px+ targets), appropriate sizing, gesture support
+6. **Viewport & Orientation** - Proper viewport meta, orientation handling, safe area support
+7. **Performance Optimization** - Mobile GPU optimizations, reduced particle effects, battery-friendly rendering
 
 ## Key Context
 
@@ -80,4 +80,4 @@ This document evolves at milestone boundaries.
 
 ---
 
-*Last updated: 2026-03-31 at v2.1 milestone start*
+*Last updated: 2026-04-28 at v2.3 milestone refinement*
