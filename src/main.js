@@ -2,7 +2,7 @@ import './style.css';
 import * as THREE from 'three';
 import { useGameStore } from './store.js';
 import { initPhysics, updatePhysics } from './physics.js';
-import { initRenderer, updateRenderer, camera, scene, ambientLight, directionalLight } from './renderer.js';
+import { initRenderer, updateRenderer, camera, scene, renderer, ambientLight, directionalLight } from './renderer.js';
 import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
 import { Player } from './entities/Player.js';
 import { Arena } from './entities/Arena.js';
@@ -13,6 +13,10 @@ import { initAudio, playMusic, playCollisionSound, setMusicSpeed } from './audio
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
 import { online } from './online.js';
+import { initVR, isInVR, onVRSessionStart, onVRSessionEnd } from './vr/VRSession.js';
+import { initControllers, updateControllers } from './vr/VRControllers.js';
+import { applyVRScale, createVRCameraRig, getVRContainer, reparentToScene, reparentToVRContainer, updateVRCameraRig } from './vr/VRCamera.js';
+import { createVRUI, updateVRUI } from './vr/VRUI.js';
 
 // ============================================
 // SCREEN MANAGEMENT
@@ -52,11 +56,15 @@ let winTimer = 0;
 let pendingWinner = null;
 let countdownTimer = 3.0;
 let nameEntryMode = 'newgame';
+let vrCameraRig = null;
+let vrUI = null;
 
 // ============================================
 // POWER-UP NOTIFICATIONS
 // ============================================
 function showPowerUpNotification(playerName, powerUpName, icon, color) {
+    if (isInVR()) return;
+
     const container = document.getElementById('powerup-notifications');
     if (!container) return;
     
@@ -178,6 +186,10 @@ function resetEntities() {
     pendingWinner = null;
     winTimer = 0;
     countdownTimer = 3.0;
+
+    if (isInVR()) {
+        reparentToVRContainer(scene);
+    }
 }
 
 function resetOnlineEntities() {
@@ -219,6 +231,10 @@ function resetOnlineEntities() {
 
     camera.position.set(0, 32, 32);
     camera.lookAt(0, 0, 0);
+
+    if (isInVR()) {
+        reparentToVRContainer(scene);
+    }
 }
 
 function returnToMenu() {
@@ -241,6 +257,10 @@ function returnToMenu() {
     
     camera.position.set(0, 32, 32);
     camera.lookAt(0, 0, 0);
+
+    if (isInVR()) {
+        reparentToVRContainer(scene);
+    }
 }
 
 function startOnlineGame() {
@@ -450,7 +470,8 @@ function setupButtonHandlers() {
         'sfx-volume': 'sfxVolume', 'particle-amount': 'particleAmount', 'bloom-level': 'bloomLevel',
         'boost-regen-speed': 'boostRegenSpeed', 'boost-drain-rate': 'boostDrainRate',
         'player-aura-size': 'playerAuraSize', 'player-aura-opacity': 'playerAuraOpacity',
-        'player-glow-intensity': 'playerGlowIntensity', 'player-glow-range': 'playerGlowRange'
+        'player-glow-intensity': 'playerGlowIntensity', 'player-glow-range': 'playerGlowRange',
+        'vr-scale': 'vrScale'
     };
 
     for (const [id, key] of Object.entries(settingsMap)) {
@@ -724,8 +745,7 @@ function setupOnlineHandlers() {
 // ============================================
 // GAME LOOP
 // ============================================
-function animate() {
-    requestAnimationFrame(animate);
+function animate(_timestamp, _frame) {
     const delta = Math.min(clock.getDelta(), 0.1);
     const state = useGameStore.getState();
 
@@ -771,13 +791,15 @@ function animate() {
             updatePhysics(delta);
         }
 
-        // Power-up displays
-        document.getElementById('p1-powerups').innerHTML = player1?.activePowerUps.map(pu => 
-            `<div class="powerup-icon" style="color: #${pu.effect.color.toString(16).padStart(6,'0')}; border-color: #${pu.effect.color.toString(16).padStart(6,'0')};">${pu.effect.icon}</div>`
-        ).join('') || '';
-        document.getElementById('p2-powerups').innerHTML = player2?.activePowerUps.map(pu => 
-            `<div class="powerup-icon" style="color: #${pu.effect.color.toString(16).padStart(6,'0')}; border-color: #${pu.effect.color.toString(16).padStart(6,'0')};">${pu.effect.icon}</div>`
-        ).join('') || '';
+        if (!isInVR()) {
+            // Power-up displays
+            document.getElementById('p1-powerups').innerHTML = player1?.activePowerUps.map(pu => 
+                `<div class="powerup-icon" style="color: #${pu.effect.color.toString(16).padStart(6,'0')}; border-color: #${pu.effect.color.toString(16).padStart(6,'0')};">${pu.effect.icon}</div>`
+            ).join('') || '';
+            document.getElementById('p2-powerups').innerHTML = player2?.activePowerUps.map(pu => 
+                `<div class="powerup-icon" style="color: #${pu.effect.color.toString(16).padStart(6,'0')}; border-color: #${pu.effect.color.toString(16).padStart(6,'0')};">${pu.effect.icon}</div>`
+            ).join('') || '';
+        }
 
         // Collision detection (only on host and local games, not for online clients)
         if (player1 && player2 && !player1.isDead && !player2.isDead && !isOnlineClient) {
@@ -882,6 +904,21 @@ function animate() {
         }
     }
 
+    if (isInVR()) {
+        updateControllers();
+
+        const midpoint = (player1 && player2)
+            ? new THREE.Vector3().addVectors(player1.mesh.position, player2.mesh.position).multiplyScalar(0.5)
+            : new THREE.Vector3(0, 0, 0);
+
+        updateVRCameraRig(vrCameraRig, midpoint);
+        updateVRUI(vrUI, state);
+    } else if (vrUI) {
+        vrUI.p1Score.sprite.visible = false;
+        vrUI.p2Score.sprite.visible = false;
+        vrUI.status.sprite.visible = false;
+    }
+
     updateRenderer();
 }
 
@@ -890,6 +927,14 @@ function animate() {
 // ============================================
 function setupStoreSubscription() {
     useGameStore.subscribe((state, prevState) => {
+        if (state.settings?.vrScale !== prevState.settings?.vrScale) {
+            applyVRScale();
+        }
+
+        if (isInVR()) {
+            return;
+        }
+
         // Screen transitions
         if (state.gameState !== prevState.gameState) {
             console.log('[Store Sub] gameState changed:', prevState.gameState, '->', state.gameState);
@@ -964,6 +1009,35 @@ async function init() {
 
     try {
         initRenderer();
+
+        const vrButton = initVR(renderer);
+        document.body.appendChild(vrButton);
+        const vrControllers = initControllers(renderer, scene);
+        Object.values(vrControllers).forEach((controllerObj) => {
+            if (controllerObj) {
+                controllerObj.userData.excludeFromVRContainer = true;
+            }
+        });
+
+        vrCameraRig = createVRCameraRig(camera, scene);
+        scene.add(vrCameraRig);
+        vrUI = createVRUI(scene);
+        vrUI.p1Score.sprite.userData.excludeFromVRContainer = true;
+        vrUI.p2Score.sprite.userData.excludeFromVRContainer = true;
+        vrUI.status.sprite.userData.excludeFromVRContainer = true;
+        vrUI.p1Score.sprite.visible = false;
+        vrUI.p2Score.sprite.visible = false;
+        vrUI.status.sprite.visible = false;
+
+        onVRSessionStart(() => {
+            applyVRScale();
+            reparentToVRContainer(scene);
+        });
+
+        onVRSessionEnd(() => {
+            reparentToScene(scene);
+        });
+
         initInput();
         await initPhysics();
         
@@ -976,12 +1050,16 @@ async function init() {
         sceneFlashLight.position.set(0, 10, 0);
         scene.add(sceneFlashLight);
 
+        if (getVRContainer()) {
+            applyVRScale();
+        }
+
         setupButtonHandlers();
         setupOnlineHandlers();
         setupStoreSubscription();
         
         showScreen('menu');
-        animate();
+        renderer.setAnimationLoop(animate);
     } catch (error) {
         console.error('[Game] Initialization failed:', error);
     }

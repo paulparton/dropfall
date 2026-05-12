@@ -1,5 +1,7 @@
 
 import { useGameStore } from './store.js';
+import { isInVR } from './vr/VRSession.js';
+import { getVRInput } from './vr/VRControllers.js';
 
 export const keys = {};
 
@@ -122,6 +124,8 @@ function pollGamepadInputs() {
 }
 
 export function getPlayer1Input() {
+    if (isInVR()) return getVRInput();
+
     const controls = useGameStore.getState().settings.controls.p1;
     return {
         forward: keys[controls.up] || gamepadState[0].up || touchState[0].up,

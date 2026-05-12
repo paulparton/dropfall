@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "dev:vr": "vite --host --mode vr",
     "dev:local": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -14,6 +15,7 @@
     "test:watch": "vitest"
   },
   "devDependencies": {
+    "@vitejs/plugin-basic-ssl": "^2.1.0",
     "@testing-library/dom": "^10.4.1",
     "jsdom": "^29.0.1",
     "vite": "^7.3.1",

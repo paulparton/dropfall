@@ -3,6 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { isInVR } from './vr/VRSession.js';
 
 export let scene, camera, renderer, composer, ambientLight, directionalLight;
 
@@ -111,7 +112,9 @@ function onWindowResize() {
 }
 
 export function updateRenderer() {
-    if (composer) {
+    if (renderer && scene && camera && isInVR()) {
+        renderer.render(scene, camera);
+    } else if (composer) {
         composer.render();
     } else if (renderer && scene && camera) {
         renderer.render(scene, camera);

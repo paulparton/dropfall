@@ -7,6 +7,7 @@ const defaultSettings = {
     sphereAccel: 2000,
     collisionBounce: 0.9,
     arenaSize: 4,
+    vrScale: 4,
     musicVolume: 0.6,
     sfxVolume: 0.8,
     particleAmount: 1.0,
