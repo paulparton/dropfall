@@ -27,7 +27,9 @@ export class SDFGameEngine {
         this.tileStates = new Map();
         this.destructionTimer = 0;
         this.iceTimer = 0;
+        /* PORTAL FEATURE - DISABLED
         this.portalTimer = 0;
+        */
         this.bonusTimer = 0;
         
         // Render state
@@ -294,7 +296,9 @@ export class SDFGameEngine {
         
         this.destructionTimer += deltaTime;
         this.iceTimer += deltaTime;
+        /* PORTAL FEATURE - DISABLED
         this.portalTimer += deltaTime;
+        */
         this.bonusTimer += deltaTime;
         
         // Trigger random tile effects
@@ -308,10 +312,12 @@ export class SDFGameEngine {
             this.triggerRandomIceTile();
         }
         
+        /* PORTAL FEATURE - DISABLED
         if (this.portalTimer >= settings.portalRate) {
             this.portalTimer = 0;
             this.triggerRandomPortalTile();
         }
+        */
         
         if (this.bonusTimer >= settings.bonusRate) {
             this.bonusTimer = 0;
@@ -351,6 +357,7 @@ export class SDFGameEngine {
         }
     }
     
+    /* PORTAL FEATURE - DISABLED
     /**
      * Trigger random portal tile
      */
@@ -366,6 +373,7 @@ export class SDFGameEngine {
             }
         }
     }
+    */
     
     /**
      * Trigger random bonus tile (power-up)
@@ -539,7 +547,9 @@ export class SDFGameEngine {
         this.effects = [];
         this.destructionTimer = 0;
         this.iceTimer = 0;
+        /* PORTAL FEATURE - DISABLED
         this.portalTimer = 0;
+        */
         this.bonusTimer = 0;
         this.gameState = 'MENU';
     }

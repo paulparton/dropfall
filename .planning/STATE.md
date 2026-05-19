@@ -1,68 +1,65 @@
 ---
-gsd_state_version: 1.0
-milestone: v2.2
-milestone_name: Single-Player Race Mode
-status: Planning
-last_updated: "2026-04-03T10:30:00.000Z"
-progress:
-  total_phases: 0
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+milestone: v2.3
+created: 2026-04-28
 ---
 
-# Project State: Dropfall v2.2 Single-Player Race Mode
+# Dropfall v2.3 State
 
-## Milestone Goal
+## Project Reference
 
-Add a second game mode: racing with Mario Kart-style track design and ball physics.
+**Core Value**: Make Dropfall accessible to mobile players with a premium touch-first experience while preserving the existing desktop experience unchanged.
 
-## Current Status
+**Current Focus**: Phase 1 - Responsive Layout Foundation
 
-- **Milestone:** v2.2 Single-Player Race Mode
-- **Status:** Planning phase
-- **v2.1:** Complete (Online Multiplayer Fix)
-- **v2.0:** Complete (TypeScript migration, Entity System)
+**Milestone**: v2.3 "First-Class Mobile Support"
 
-## Phase Status
+## Current Position
 
-| Phase | Status | Progress | Notes |
-|-------|--------|----------|-------|
-| 7: Race Mode Fundamentals | Not Started | 0% | Game state, mode selection, basic track |
-| 8: Physics & Gameplay Polish | Not Started | 0% | Physics tuning, boost zones, effects |
-| 9: Content & Validation | Not Started | 0% | Track finalization, mobile, UAT |
+**Phase**: Not started (defining roadmap)
+**Plan**: —
+**Status**: Milestone reset — creating roadmap
+**Progress**: ░░░░░░░░░░ 0%
 
-## Key Context
+## Performance Metrics
 
-- Previous milestones have established solid foundation (physics, rendering, entity system)
-- Reusing: existing ball mechanics, particle effects, tile rendering
-- Challenge: Adapting classic mode mechanics to racing context
-- Focus: Single-player experience with clear progression
+| Metric | Target | Current |
+|--------|--------|---------|
+| Phases Complete | TBD | 0 |
+| Plans Executed | TBD | 0 |
+| Requirements Met | TBD | 0 |
+| Desktop Regression | None | N/A |
 
-## Quick Tasks Completed (v2.1 Enhancement)
+## Accumulated Context
+
+### Key Decisions
+- Desktop layout unchanged on screens ≥1024px (media queries only affect mobile)
+- Touch controls: virtual joystick + touch-drag alternative (research best methods)
+- Performance target: 30fps minimum on mid-range mobile
+- Touch latency target: <16ms (native-like feel)
+- Remove boost button from UI
+- Start with player options screen layout fix
+
+### Pending TODOs
+- None
+
+### Blockers
+- None
+
+### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
-| 260403-tbn | Implement player scores tracking, replay system, and character customization | 2026-04-03 | 518d1c2 | [260403-tbn-scores-replay-customization](./quick/260403-tbn-scores-replay-customization/) |
+| 260428-qwy | Remove portals from game - comment out code for potential future use | 2026-04-28 | e173311 | [260428-qwy-remove-portals-from-game-comment-out-cod](./quick/260428-qwy-remove-portals-from-game-comment-out-cod/) |
 
-**What was delivered:**
-- Player scores overlay displayed during gameplay
-- Frame-based replay recording with auto-play falling clip
-- Character customization modal (12 colors × 5 hats) integrated into game flow
+## Session Continuity
 
-## Blockers & Concerns
+**Last Session**: 2026-04-28 - Completed quick task 260428-qwy: Remove portals from game - comment out code for potential future use
+**Next Action**: Research → roadmap creation → plan phase 1
+**Context for Next Session**:
+- User provided screenshot of player options screen showing layout issues
+- Boost button to be removed
+- Research touch input methods for physics ball games
+- Portals commented out (not removed) for potential future restoration
 
-None identified at start.
-
-## Next Actions
-
-1. ✓ Milestone planning started
-2. **→ Define requirements** — Scope v2.1 features
-3. **→ Create roadmap** — Plan phases
-4. **→ Execute** — Fix the bug
-
-## Last Updated
-
-2026-03-31 — v2.1 milestone started
-
-**Next:** Define requirements, create roadmap
+---
+*State initialized: 2026-04-28 for v2.3 Mobile Support milestone*

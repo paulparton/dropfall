@@ -125,7 +125,9 @@ export class Arena extends EntityBase implements ArenaEntity {
   // Timers
   dropTimer: number = 0;
   iceTimer: number = 0;
+  /* PORTAL FEATURE - DISABLED
   portalTimer: number = 0;
+  */
   bonusTimer: number = 0;
   pulseTime: number = 0;
   
@@ -212,10 +214,12 @@ export class Arena extends EntityBase implements ArenaEntity {
               material = this.materials.ice;
               tileState = 'NORMAL'; // ICE tiles are still normal state initially
               break;
+            /* PORTAL FEATURE - DISABLED
             case 'PORTAL':
               material = this.materials.portal;
               tileState = 'NORMAL';
               break;
+            */
             case 'BONUS':
               material = this.materials.bonus;
               tileState = 'NORMAL';
@@ -299,7 +303,9 @@ export class Arena extends EntityBase implements ArenaEntity {
     if (storeState.gameState === 'PLAYING') {
         this.dropTimer += delta;
         this.iceTimer += delta;
+        /* PORTAL FEATURE - DISABLED
         this.portalTimer += delta;
+        */
         this.bonusTimer += delta;
     }
 
@@ -308,7 +314,9 @@ export class Arena extends EntityBase implements ArenaEntity {
     // Ensure settings have valid values with fallbacks
     const destructionRate = settings.destructionRate || 3.0;
     const iceRate = settings.iceRate || 2.0;
+    /* PORTAL FEATURE - DISABLED
     const portalRate = settings.portalRate || 8.0;
+    */
     const bonusRate = settings.bonusRate || 6.0;
 
     // 1. Handle The Drop
@@ -323,11 +331,13 @@ export class Arena extends EntityBase implements ArenaEntity {
         this.triggerIce();
     }
 
+    /* PORTAL FEATURE - DISABLED
     // 3. Handle Portal Tiles
     if (this.portalTimer >= portalRate) {
         this.portalTimer = 0;
         this.triggerPortal();
     }
+    */
 
     // 4. Handle Bonus Tiles
     if (this.bonusTimer >= bonusRate) {
@@ -349,6 +359,7 @@ export class Arena extends EntityBase implements ArenaEntity {
             (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
         }
 
+        /* PORTAL FEATURE - DISABLED
         if (tile.state === 'PORTAL') {
             tile.mesh.material = this.materials.portal;
             // Portal pulse: glow stronger
@@ -357,6 +368,7 @@ export class Arena extends EntityBase implements ArenaEntity {
             (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
             (tile.edges.material as THREE.LineBasicMaterial).color.setHex(0x0088ff);
         }
+        */
 
         if (tile.state === 'BONUS') {
             // Bonus tiles flash more aggressively
@@ -440,6 +452,7 @@ export class Arena extends EntityBase implements ArenaEntity {
     tile.collider.setFriction(0.0);
   }
 
+  /* PORTAL FEATURE - DISABLED
   triggerPortal(): void {
     const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
     if (stableTiles.length === 0) return;
@@ -451,6 +464,7 @@ export class Arena extends EntityBase implements ArenaEntity {
     tile.state = 'PORTAL';
     tile.timer = 0; // Portal tiles are persistent
   }
+  */
 
   triggerBonus(): void {
     const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
