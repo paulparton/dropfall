@@ -8,16 +8,29 @@
     "dev:vr": "vite --host --mode vr",
     "dev:local": "vite",
     "build": "vite build",
+    "start": "npm run build && cp -r dist/* server/public/ && node server/server.js",
     "preview": "vite preview",
     "server": "node server/server.js",
     "server:dev": "node --watch server/server.js",
+    "editor": "node server/editor-3d-server.js",
+    "editor:dev": "node --watch server/editor-3d-server.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint src --ext .ts,.js"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.1.0",
     "@testing-library/dom": "^10.4.1",
+    "@types/node": "^20.0.0",
+    "@types/three": "^0.183.1",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "@vitest/coverage-v8": "^4.1.2",
+    "eslint": "^8.57.0",
     "jsdom": "^29.0.1",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0",
     "vite": "^7.3.1",
     "vitest": "^4.1.0"
   },
@@ -25,6 +38,7 @@
     "@dimforge/rapier3d-compat": "^0.19.3",
     "three": "^0.183.1",
     "ws": "^8.18.0",
+    "zod": "^4.3.6",
     "zustand": "^5.0.11"
   }
 }

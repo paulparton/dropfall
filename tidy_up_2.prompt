@@ -1,0 +1,15 @@
+# Minor fixes
+A few fixes, mostly relaing to the features imported from the fork of the project in the `dropfall-updated` folder.
+
+## Menus
+This is not a migration from `dropfall-updated` change, but the menus need some love.
+
+### Remove the "select game mode" menu
+When i refresh the game i get a flash of the "select game mode" menu with black background which then flashes to the "Dropfall cyber arena - insert coin to start" screen with the game level in the background rotating. Then to play a game i click "insert coin to start" and then see the black background "select game mode" screen.
+
+I think we should move the three option (single player, local multiplayer online) to the "Dropfall cyber arena - insert coin to start" screen and remove the insert coin button. I like the insert coin phrase being there, maybe put a decorative graphic on the menu somewhere that looks like a retro arcade game "insert coin" text.
+
+when you are adding the buttons you should do a full review of the layout of that menu, and make the buttons look fun too, add some icons or graphics or something.
+
+### Remove the "SELECT DIFFICULTY" menu
+Move the difficulty selection to the "player names menu", and lets rename that to the "game settings" menu. Give the easy, normal and hard buttons some fun graphics

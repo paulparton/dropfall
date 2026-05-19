@@ -1,695 +1,489 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dropfall Server Admin</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dropfall</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg-dark: #0a0a12;
-            --bg-panel: #12121a;
-            --border-color: #00ffff;
-            --text-primary: #00ffff;
-            --text-secondary: #888;
-            --accent-green: #00ff88;
-            --accent-pink: #ff0088;
-            --accent-yellow: #ffff00;
-        }
-
-        body {
-            font-family: 'Courier New', monospace;
-            background: var(--bg-dark);
-            color: var(--text-primary);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 2.5rem;
-            text-shadow: 0 0 20px var(--text-primary);
-            margin-bottom: 30px;
-            letter-spacing: 4px;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .panel {
-            background: var(--bg-panel);
-            border: 2px solid var(--border-color);
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
-        }
-
-        .panel h2 {
-            font-size: 1.2rem;
-            margin-bottom: 15px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--border-color);
-            text-shadow: 0 0 10px var(--text-primary);
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
-        }
-
-        .stat-row:last-child {
-            border-bottom: none;
-        }
-
-        .stat-label {
-            color: var(--text-secondary);
-        }
-
-        .stat-value {
-            font-weight: bold;
-            color: var(--accent-green);
-        }
-
-        .stat-value.warning {
-            color: var(--accent-yellow);
-        }
-
-        .stat-value.danger {
-            color: var(--accent-pink);
-        }
-
-        .game-list {
-            margin-top: 10px;
-        }
-
-        .game-item {
-            background: rgba(0, 255, 255, 0.05);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 12px;
-            margin-bottom: 10px;
-        }
-
-        .game-item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-
-        .game-item-title {
-            font-weight: bold;
-            color: var(--accent-green);
-        }
-
-        .game-item-status {
-            font-size: 0.8rem;
-            padding: 2px 8px;
-            border-radius: 4px;
-            background: var(--accent-green);
-            color: #000;
-        }
-
-        .game-item-status.waiting {
-            background: var(--accent-yellow);
-        }
-
-        .game-item-status.playing {
-            background: var(--accent-pink);
-        }
-
-        .game-item-details {
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-
-        .player-list {
-            margin-top: 10px;
-        }
-
-        .player-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px;
-            background: rgba(255, 0, 136, 0.1);
-            border-radius: 4px;
-            margin-bottom: 5px;
-        }
-
-        .player-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: var(--accent-green);
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
-        .games-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-
-        .games-table th,
-        .games-table td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid rgba(0, 255, 255, 0.2);
-        }
-
-        .games-table th {
-            color: var(--text-secondary);
-            font-weight: normal;
-        }
-
-        .games-table tr:hover {
-            background: rgba(0, 255, 255, 0.05);
-        }
-
-        .empty-state {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-secondary);
-        }
-
-        .empty-state-icon {
-            font-size: 3rem;
-            margin-bottom: 10px;
-        }
-
-        .refresh-btn {
-            background: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 8px 16px;
-            cursor: pointer;
-            border-radius: 4px;
-            font-family: inherit;
-            transition: all 0.2s;
-        }
-
-        .refresh-btn:hover {
-            background: var(--border-color);
-            color: #000;
-        }
-
-        .header-actions {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .server-url {
-            background: rgba(0, 255, 255, 0.1);
-            padding: 10px 15px;
-            border-radius: 6px;
-            font-size: 0.9rem;
-        }
-
-        .server-url span {
-            color: var(--accent-green);
-        }
-
-        .console {
-            background: #000;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            padding: 15px;
-            height: 200px;
-            overflow-y: auto;
-            font-size: 0.85rem;
-            margin-top: 20px;
-        }
-
-        .console-line {
-            margin-bottom: 5px;
-        }
-
-        .console-line.info {
-            color: var(--text-primary);
-        }
-
-        .console-line.success {
-            color: var(--accent-green);
-        }
-
-        .console-line.warning {
-            color: var(--accent-yellow);
-        }
-
-        .console-time {
-            color: var(--text-secondary);
-            margin-right: 10px;
-        }
-
-        .config-section {
-            margin-top: 20px;
-        }
-
-        .config-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-
-        .config-row label {
-            min-width: 120px;
-            color: var(--text-secondary);
-        }
-
-        .config-row input,
-        .config-row select {
-            background: #000;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            padding: 8px 12px;
-            border-radius: 4px;
-            font-family: inherit;
-        }
-
-        .config-row input:focus,
-        .config-row select:focus {
-            outline: none;
-            box-shadow: 0 0 10px var(--border-color);
-        }
-
-        .create-game-btn {
-            background: var(--accent-green);
-            color: #000;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-family: inherit;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 15px;
-        }
-
-        .create-game-btn:hover {
-            box-shadow: 0 0 20px var(--accent-green);
-            transform: scale(1.02);
-        }
-
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--bg-panel);
-            border: 2px solid var(--accent-green);
-            padding: 15px 20px;
-            border-radius: 6px;
-            box-shadow: 0 0 20px rgba(0, 255, 136, 0.3);
-            animation: slideIn 0.3s ease;
-        }
-
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
-        }
+      #menu, #game-over, #settings-panel { z-index: 50 !important; }
+      .screen { z-index: 40 !important; }
     </style>
-</head>
-<body>
-    <div class="container">
-        <div class="header-actions">
-            <div>
-                <h1>DROPFALL SERVER</h1>
-                <div class="server-url">
-                    Server: <span id="server-url">connecting...</span>
-                </div>
-            </div>
-            <button class="refresh-btn" onclick="refreshAll()">Refresh</button>
-        </div>
-
-        <div class="grid">
-            <div class="panel">
-                <h2>Server Status</h2>
-                <div class="stat-row">
-                    <span class="stat-label">Status</span>
-                    <span class="stat-value" id="status">Connecting...</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Uptime</span>
-                    <span class="stat-value" id="uptime">--</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Total Connections</span>
-                    <span class="stat-value" id="total-connections">0</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Games Created</span>
-                    <span class="stat-value" id="games-created">0</span>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h2>Active Sessions</h2>
-                <div class="stat-row">
-                    <span class="stat-label">Connected Players</span>
-                    <span class="stat-value" id="connected-players">0</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Admin Panels</span>
-                    <span class="stat-value" id="connected-admins">0</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Lobbies Waiting</span>
-                    <span class="stat-value" id="lobbies-waiting">0</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Games In Progress</span>
-                    <span class="stat-value" id="games-in-progress">0</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Total Active Games</span>
-                    <span class="stat-value" id="active-games">0</span>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h2>Supported Games</h2>
-                <div id="supported-games">
-                    <div class="game-item">
-                        <div class="game-item-header">
-                            <span class="game-item-title">Dropfall</span>
-                            <span class="game-item-status">Active</span>
-                        </div>
-                        <div class="game-item-details">Cyber Arena Battle</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="grid">
-            <div class="panel">
-                <h2>Active Lobbies</h2>
-                <div id="lobby-list" class="game-list">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🎮</div>
-                        <div>No active lobbies</div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h2>Games In Progress</h2>
-                <div id="games-list" class="game-list">
-                    <div class="empty-state">
-                        <div class="empty-state-icon">⚔️</div>
-                        <div>No games in progress</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="panel">
-            <h2>Quick Game Configuration</h2>
-            <p style="color: var(--text-secondary); margin-bottom: 15px;">
-                Create a test game with custom settings. Players will be able to join and play.
-            </p>
-            <div class="config-section">
-                <div class="config-row">
-                    <label>Theme</label>
-                    <select id="config-theme">
-                        <option value="default">Cyber</option>
-                        <option value="beach">Beach</option>
-                        <option value="cracked_stone">Cracked Stone</option>
-                    </select>
-                </div>
-                <div class="config-row">
-                    <label>Arena Size</label>
-                    <input type="range" id="config-arena-size" min="2" max="32" value="4" step="1">
-                    <span id="config-arena-size-val">4</span>
-                </div>
-                <div class="config-row">
-                    <label>Sphere Size</label>
-                    <input type="range" id="config-sphere-size" min="0.5" max="5" value="2" step="0.1">
-                    <span id="config-sphere-size-val">2.0</span>
-                </div>
-                <div class="config-row">
-                    <label>Sphere Weight</label>
-                    <input type="range" id="config-sphere-weight" min="10" max="500" value="200" step="10">
-                    <span id="config-sphere-weight-val">200</span>
-                </div>
-                <div class="config-row">
-                    <label>Collision Bounce</label>
-                    <input type="range" id="config-bounce" min="0.1" max="1.5" value="0.9" step="0.1">
-                    <span id="config-bounce-val">0.9</span>
-                </div>
-            </div>
-            <button class="create-game-btn" onclick="createTestGame()">Create Test Game</button>
-        </div>
-
-        <div class="panel">
-            <h2>Server Console</h2>
-            <div class="console" id="console"></div>
-        </div>
+    <script type="module" crossorigin src="/assets/index-Bi_cuv3b.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/physics-yV62z-mf.js">
+    <link rel="modulepreload" crossorigin href="/assets/three-BvCvXVOE.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-D5Ezq7za.css">
+  </head>
+  <body>
+    <!-- Game canvas container -->
+    <div id="app" style="width: 100%; height: 100vh; position: absolute; top: 0; left: 0; z-index: 0;"></div>
+    
+    <!-- Game Mode Selection Screen - OBSOLETE (moved to main menu) -->
+    <div id="game-mode-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto; display: none;">
+      <div class="title-container">
+        <h1 class="retro-title">DROPFALL</h1>
+        <h2 class="retro-subtitle">SELECT GAME MODE</h2>
+      </div>
+      
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
+        <button id="mode-single-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">SINGLE PLAYER</button>
+        <button id="mode-local-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">LOCAL MULTIPLAYER</button>
+        <button id="mode-online-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">ONLINE</button>
+      </div>
     </div>
 
-    <script>
-        let ws = null;
-        let reconnectAttempts = 0;
-        const MAX_RECONNECT_ATTEMPTS = 10;
-        const RECONNECT_DELAY = 2000;
+    <!-- Difficulty Selection Screen - OBSOLETE (moved to game settings) -->
+    <div id="difficulty-select" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto; display: none;">
+      <div class="title-container">
+        <h1 class="retro-title">DIFFICULTY</h1>
+        <h2 class="retro-subtitle">SELECT DIFFICULTY</h2>
+      </div>
+      
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 50px 0;">
+        <button id="difficulty-easy-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #00ff88;">EASY</button>
+        <button id="difficulty-normal-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #0ff;">NORMAL</button>
+        <button id="difficulty-hard-btn-old" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px; color: #ff0088;">HARD</button>
+      </div>
+      
+      <div style="margin-top: 60px; text-align: center; font-size: 1.2rem; color: #0ff; max-width: 600px; margin-left: auto; margin-right: auto;">
+        <p id="difficulty-description" style="margin: 0;"></p>
+      </div>
+    </div>
 
-        const configInputs = {
-            'config-arena-size': 'config-arena-size-val',
-            'config-sphere-size': 'config-sphere-size-val',
-            'config-sphere-weight': 'config-sphere-weight-val',
-            'config-bounce': 'config-bounce-val',
-        };
+    <!-- Coming Soon Screen -->
+    <div id="coming-soon" class="screen hidden" style="background: rgba(0, 0, 0, 0.95); z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">COMING SOON</h1>
+        <h2 class="retro-subtitle">ONLINE MULTIPLAYER</h2>
+      </div>
+      
+      <div style="text-align: center; margin: 80px 0; font-size: 2rem; color: #0ff;">
+        <p>🚀 Online multiplayer features are coming soon!</p>
+        <p style="margin-top: 40px; font-size: 1.5rem;">Enjoy single player and local multiplayer in the meantime.</p>
+      </div>
+      
+      <div style="text-align: center;">
+        <button id="coming-soon-back-btn" class="retro-btn" style="padding: 20px 40px; font-size: 1.5rem;">BACK</button>
+      </div>
+    </div>
 
-        Object.entries(configInputs).forEach(([inputId, valId]) => {
-            const input = document.getElementById(inputId);
-            const val = document.getElementById(valId);
-            if (input && val) {
-                input.addEventListener('input', () => {
-                    val.textContent = input.value;
-                });
-            }
-        });
+    <!-- Online Server Connect Screen -->
+    <div id="online-connect" class="screen hidden" style="pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">CONNECT</h1>
+        <h2 class="retro-subtitle">ONLINE SERVER</h2>
+      </div>
+      
+      <div class="online-panel">
+        <div id="online-connect-status"></div>
+        
+        <div class="online-input-group">
+          <label class="online-label">Server Address</label>
+          <input type="text" id="online-server-input" placeholder="192.168.1.100:3000" class="online-input">
+        </div>
+        
+        <div class="online-input-group">
+          <label class="online-label">Your Name</label>
+          <input type="text" id="online-name-input" placeholder="Enter your name" maxlength="20" class="online-input">
+        </div>
+        
+        <button id="online-connect-btn" class="retro-btn">CONNECT</button>
+        
+        <div id="online-connect-error"></div>
+      </div>
+      
+      <div class="online-help">
+        <p>Need a server? Run <code>npm run server</code> on any computer</p>
+      </div>
+      
+      <button id="online-connect-back-btn" class="retro-btn" style="margin-top: 2rem;">BACK</button>
+    </div>
 
-        function getConfig() {
-            return {
-                theme: document.getElementById('config-theme').value,
-                arenaSize: parseInt(document.getElementById('config-arena-size').value),
-                sphereSize: parseFloat(document.getElementById('config-sphere-size').value),
-                sphereWeight: parseFloat(document.getElementById('config-sphere-weight').value),
-                collisionBounce: parseFloat(document.getElementById('config-bounce').value),
-            };
-        }
+    <!-- Online Lobby Screen -->
+    <div id="online-lobby" class="screen hidden" style="pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">ONLINE</h1>
+        <h2 class="retro-subtitle">MULTIPLAYER LOBBY</h2>
+      </div>
+      
+      <div class="online-server-bar">
+        <span id="online-connected-status" class="online-status-connected">● CONNECTED</span>
+        <span class="online-server-address">Server: <span id="online-server-url"></span></span>
+      </div>
+      
+      <div class="online-actions">
+        <button id="online-create-game-btn" class="retro-btn online-btn-create">CREATE GAME</button>
+        <button id="online-refresh-btn" class="retro-btn">REFRESH LIST</button>
+      </div>
+      
+      <div class="online-games-container">
+        <h3 class="online-section-title">AVAILABLE GAMES</h3>
+        <div id="online-games-list" class="online-games-list">
+          <div class="online-no-games">
+            <p>No games available</p>
+            <p>Create a game or wait for others to host</p>
+          </div>
+        </div>
+      </div>
+      
+      <div id="online-my-game" class="hidden online-game-panel online-host-panel">
+        <h3 class="online-panel-title">YOUR GAME</h3>
+        <div id="online-game-info" class="online-game-info"></div>
+        <div class="online-game-actions">
+          <button id="online-start-btn" class="retro-btn online-btn-start" onclick="console.log('[HTML ONCLICK] Start button clicked!')">START GAME</button>
+          <button id="online-leave-btn" class="retro-btn online-btn-leave">LEAVE</button>
+        </div>
+      </div>
+      
+      <div id="online-joining" class="hidden online-game-panel online-join-panel">
+        <h3 class="online-panel-title">JOINING GAME...</h3>
+        <div class="online-game-info">
+          <p>Waiting for host to start...</p>
+          <button id="online-cancel-join-btn" class="retro-btn online-btn-leave" style="margin-top: 1rem;">CANCEL</button>
+        </div>
+      </div>
+      
+      <div class="online-footer">
+        <button id="online-disconnect-btn" class="retro-btn online-btn-leave">DISCONNECT</button>
+        <button id="online-lobby-back-btn" class="retro-btn">BACK</button>
+      </div>
+    </div>
 
-        function connect() {
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            const wsUrl = `${protocol}//${window.location.host}`;
+    <div id="online-setup" class="screen hidden" style="pointer-events: auto;">
+      <!-- OnlineSetupPanel mounts here -->
+    </div>
+    
+    <!-- UI Overlay -->
+    <div id="menu" class="screen hidden" style="z-index: 50; pointer-events: auto;">
+      <div class="title-container">
+        <h1 class="retro-title">DROPFALL</h1>
+        <h2 class="retro-subtitle">CYBER ARENA</h2>
+      </div>
+      
+      <div class="controls-display">
+        <div class="control-box p1-controls">
+          <h3>PLAYER 1</h3>
+          <p>Keyboard: W A S D</p>
+          <p>Gamepad: Left Stick</p>
+          <p>Boost: SHIFT / A/X/R2</p>
+        </div>
+        <div id="p2-controls-display" class="control-box p2-controls">
+          <h3>PLAYER 2</h3>
+          <p>Keyboard: ARROWS</p>
+          <p>Gamepad: Left Stick</p>
+          <p>Boost: SHIFT / A/X/R2</p>
+        </div>
+      </div>
 
-            ws = new WebSocket(wsUrl);
+      <!-- Game mode selection buttons -->
+      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 20px 0;">
+        <button id="mode-single-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">🎮 SINGLE PLAYER</button>
+        <button id="mode-local-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">👥 LOCAL MULTIPLAYER</button>
+        <button id="mode-online-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">🌐 ONLINE</button>
+      </div>
 
-            ws.onopen = () => {
-                log('Connected to server', 'success');
-                reconnectAttempts = 0;
-                document.getElementById('status').textContent = 'Online';
-                document.getElementById('status').classList.remove('danger');
-                document.getElementById('status').classList.add('success');
-            };
+      <p style="color: #0ff; font-size: 1rem; margin-top: 15px; opacity: 0.8;">INSERT COIN TO START</p>
 
-            ws.onclose = () => {
-                log('Disconnected from server', 'warning');
-                document.getElementById('status').textContent = 'Disconnected';
-                document.getElementById('status').classList.add('danger');
-                attemptReconnect();
-            };
+      <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px; justify-content: center;">
+        <input type="checkbox" id="autorestart-menu" style="width: 20px; height: 20px; cursor: pointer;">
+        <label for="autorestart-menu" style="cursor: pointer; color: #0ff; font-family: 'Courier New', monospace;">Auto-Restart on Game Over</label>
+      </div>
+      <button id="settings-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">⚙️ SETTINGS</button>
+    </div>
 
-            ws.onerror = (err) => {
-                log('WebSocket error', 'warning');
-            };
+    <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100; pointer-events: auto; display: flex; flex-direction: column; align-items: center;">
+      <h2 class="retro-subtitle" style="margin-bottom: 1rem;">SETTINGS</h2>
+      
+      <!-- Main settings with left nav -->
+      <div id="settings-content" class="tab-content active" style="display: flex; gap: 1.5rem; width: 90%; max-width: 900px; align-items: flex-start;">
+        <!-- Left Navigation -->
+        <nav class="settings-nav">
+          <button class="settings-nav-btn active" data-pane="gameplay">Gameplay</button>
+          <button class="settings-nav-btn" data-pane="audio">Audio</button>
+          <button class="settings-nav-btn" data-pane="visuals">Visuals</button>
+          <button class="settings-nav-btn" data-pane="controls">Controls</button>
+          <button class="settings-nav-btn" data-pane="powerups">Power-ups</button>
+          <button class="settings-nav-btn" data-pane="presets">Presets</button>
+        </nav>
+        
+        <!-- Right Content Panes -->
+        <div class="settings-right-pane">
+          
+          <!-- GAMEPLAY PANE -->
+          <div class="settings-pane active" data-pane="gameplay">
+            <!-- Theme row - full width -->
+            <div class="settings-theme-row">
+              <label for="theme-select">Theme</label>
+<select id="theme-select" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 8px 12px; font-family: 'Courier New', Courier, monospace; font-size: 1rem;">
+                  <option value="default">Default (Cyber)</option>
+                  <option value="beach">Beach</option>
+                  <option value="temple">Temple (Aztec)</option>
+                  <option value="arctic">Arctic</option>
+                  <option value="inferno">Inferno</option>
+                </select>
+            </div>
+            <!-- Sliders grid -->
+            <div class="settings-grid" style="grid-template-columns: 1fr 1fr;">
+              <div class="setting-item">
+                <label for="arena-size">Arena Size</label>
+                <input type="range" id="arena-size" min="2" max="32" step="1" value="4">
+                <span id="arena-size-val">4</span>
+              </div>
+              <div class="setting-item">
+                <label for="sphere-size">Sphere Size</label>
+                <input type="range" id="sphere-size" min="0.5" max="5.0" step="0.1" value="2.0">
+                <span id="sphere-size-val">2.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="sphere-weight">Sphere Weight</label>
+                <input type="range" id="sphere-weight" min="10" max="500" step="10" value="200">
+                <span id="sphere-weight-val">200</span>
+              </div>
+              <div class="setting-item">
+                <label for="sphere-accel">Sphere Acceleration</label>
+                <input type="range" id="sphere-accel" min="500" max="3000" step="100" value="2000">
+                <span id="sphere-accel-val">2000</span>
+              </div>
+              <div class="setting-item">
+                <label for="collision-bounce">Collision Bounce</label>
+                <input type="range" id="collision-bounce" min="0.1" max="1.5" step="0.1" value="0.9">
+                <span id="collision-bounce-val">0.9</span>
+              </div>
+              <div class="setting-item">
+                <label for="destruction-rate">Destruction Rate (s)</label>
+                <input type="range" id="destruction-rate" min="0.5" max="10.0" step="0.5" value="3.0">
+                <span id="destruction-rate-val">3.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="ice-rate">Ice Rate (s)</label>
+                <input type="range" id="ice-rate" min="0.5" max="10.0" step="0.5" value="2.0">
+                <span id="ice-rate-val">2.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="portal-rate">Portal Rate (s)</label>
+                <input type="range" id="portal-rate" min="1.0" max="15.0" step="0.5" value="8.0">
+                <span id="portal-rate-val">8.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="portal-cooldown">Portal Cooldown (s)</label>
+                <input type="range" id="portal-cooldown" min="0.5" max="5.0" step="0.5" value="2.0">
+                <span id="portal-cooldown-val">2.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="bonus-rate">Bonus Rate (s)</label>
+                <input type="range" id="bonus-rate" min="2.0" max="15.0" step="0.5" value="6.0">
+                <span id="bonus-rate-val">6.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="bonus-duration">Bonus Duration (s)</label>
+                <input type="range" id="bonus-duration" min="1.0" max="10.0" step="0.5" value="4.0">
+                <span id="bonus-duration-val">4.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="boost-regen-speed">Boost Regen Speed</label>
+                <input type="range" id="boost-regen-speed" min="0.1" max="5" step="0.1" value="1.5">
+                <span id="boost-regen-speed-val">1.5</span>
+              </div>
+              <div class="setting-item">
+                <label for="boost-drain-rate">Boost Drain Rate</label>
+                <input type="range" id="boost-drain-rate" min="5" max="50" step="1" value="20">
+                <span id="boost-drain-rate-val">20</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- AUDIO PANE -->
+          <div class="settings-pane hidden" data-pane="audio">
+            <div class="settings-grid" style="grid-template-columns: 1fr;">
+              <div class="setting-item">
+                <label for="music-volume">Music Volume</label>
+                <input type="range" id="music-volume" min="0" max="1" step="0.05" value="0.6">
+                <span id="music-volume-val">0.6</span>
+              </div>
+              <div class="setting-item">
+                <label for="sfx-volume">SFX Volume</label>
+                <input type="range" id="sfx-volume" min="0" max="1" step="0.05" value="0.8">
+                <span id="sfx-volume-val">0.8</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- VISUALS PANE -->
+          <div class="settings-pane hidden" data-pane="visuals">
+            <div class="settings-grid" style="grid-template-columns: 1fr 1fr;">
+              <div class="setting-item">
+                <label for="particle-amount">Particle Amount</label>
+                <input type="range" id="particle-amount" min="0" max="5" step="0.1" value="1.0">
+                <span id="particle-amount-val">1.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="bloom-level">Bloom Level</label>
+                <input type="range" id="bloom-level" min="0" max="5" step="0.1" value="0">
+                <span id="bloom-level-val">0</span>
+              </div>
+              <div class="setting-item">
+                <label for="player-aura-size">Aura Size</label>
+                <input type="range" id="player-aura-size" min="0.8" max="2.0" step="0.1" value="1.4">
+                <span id="player-aura-size-val">1.4</span>
+              </div>
+              <div class="setting-item">
+                <label for="player-aura-opacity">Aura Opacity</label>
+                <input type="range" id="player-aura-opacity" min="0.0" max="1.0" step="0.05" value="0.4">
+                <span id="player-aura-opacity-val">0.4</span>
+              </div>
+              <div class="setting-item">
+                <label for="player-glow-intensity">Glow Intensity</label>
+                <input type="range" id="player-glow-intensity" min="0.1" max="5.0" step="0.1" value="3.0">
+                <span id="player-glow-intensity-val">3.0</span>
+              </div>
+              <div class="setting-item">
+                <label for="player-glow-range">Glow Range</label>
+                <input type="range" id="player-glow-range" min="5" max="50" step="1" value="30">
+                <span id="player-glow-range-val">30</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- CONTROLS PANE -->
+          <div class="settings-pane hidden" data-pane="controls">
+            <button id="show-controller-settings-btn" class="retro-btn" style="margin-bottom: 1rem; font-size: 1rem; padding: 0.5rem 1rem;">Controller Settings</button>
+            <div class="settings-grid" style="grid-template-columns: 1fr 1fr;">
+              <div class="setting-item">
+                <label>Player 1 Up</label>
+                <button id="btn-p1-up" class="control-btn">KeyW</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 2 Up</label>
+                <button id="btn-p2-up" class="control-btn">ArrowUp</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 1 Down</label>
+                <button id="btn-p1-down" class="control-btn">KeyS</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 2 Down</label>
+                <button id="btn-p2-down" class="control-btn">ArrowDown</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 1 Left</label>
+                <button id="btn-p1-left" class="control-btn">KeyA</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 2 Left</label>
+                <button id="btn-p2-left" class="control-btn">ArrowLeft</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 1 Right</label>
+                <button id="btn-p1-right" class="control-btn">KeyD</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 2 Right</label>
+                <button id="btn-p2-right" class="control-btn">ArrowRight</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 1 Boost</label>
+                <button id="btn-p1-boost" class="control-btn">ShiftLeft</button>
+              </div>
+              <div class="setting-item">
+                <label>Player 2 Boost</label>
+                <button id="btn-p2-boost" class="control-btn">ShiftRight</button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- PRESETS PANE -->
+          <div class="settings-pane hidden" data-pane="presets">
+            <div style="display: flex; gap: 10px; margin-bottom: 0.75rem;">
+              <input type="text" id="preset-name" placeholder="Preset name" style="flex: 1; background: #000; color: #0ff; border: 1px solid #0ff; padding: 8px; font-family: 'Courier New', monospace;">
+              <button id="save-preset-btn" class="retro-btn" style="font-size: 1rem; padding: 0.5rem 1rem;">Save</button>
+            </div>
+            <div style="flex: 1; border: 1px solid #0ff; padding: 10px; background: rgba(0,0,0,0.5); overflow-y: auto; min-height: 0;">
+              <div id="presets-list" style="display: flex; flex-direction: column; gap: 8px;"></div>
+            </div>
+          </div>
+          
+          <!-- POWER-UPS PANE -->
+          <div class="settings-pane hidden" data-pane="powerups">
+            <div id="powerups-grid" style="flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; align-content: start;"></div>
+          </div>
+          
+          <!-- Bottom buttons -->
+          <div class="settings-bottom-buttons">
+            <button id="reset-settings-btn" class="retro-btn" style="font-size: 1rem; border-color: #ff00ff; color: #ff00ff; box-shadow: 0 0 20px #ff00ff, inset 0 0 10px #ff00ff; text-shadow: 0 0 10px #ff00ff;">RESET TO DEFAULT</button>
+            <button id="close-settings-btn" class="retro-btn" style="font-size: 1rem;">BACK</button>
+          </div>
+          
+        </div>
+      </div>
+      
+      <!-- Controller Settings Overlay -->
+      <div id="controller-settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.95); z-index: 200; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; display: flex; justify-content: flex-start; align-items: center; padding-top: 4rem;">
+        <div style="background: rgba(0,0,0,0.95); border: 2px solid #0ff; border-radius: 12px; box-shadow: 0 0 20px #0ff; padding: 2rem 3rem; min-width: 400px; max-width: 90vw;">
+          <h2 class="retro-subtitle" style="margin-bottom: 2rem;">Controller Settings</h2>
+          <div style="margin-bottom: 2rem; color: #fff;">Press any button on your controller to see feedback and configure mappings in the main settings.</div>
+          <button id="close-controller-settings-btn" class="retro-btn" style="font-size: 1.2rem;">Back to Settings</button>
+        </div>
+      </div>
+    </div>
 
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    handleMessage(data);
-                } catch (e) {
-                    console.error('Failed to parse message:', e);
-                }
-            };
-        }
+    <div id="name-entry" class="screen hidden" style="padding: 1rem; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden;">
+      <h2 class="retro-subtitle" style="margin-bottom: 0.5rem; text-align: center;">GAME SETTINGS</h2>
+      <div id="name-entry-round-info" style="color: #ffff00; font-family: 'Courier New', monospace; font-size: 1rem; margin-bottom: 0.5rem; text-shadow: 0 0 8px #ffff00; letter-spacing: 1px; text-align: center;"></div>
+      
+      <!-- Main preview panel (will be filled by character-preview-panel component) -->
+      <div id="character-preview-mount" style="flex: 1; width: 100%; display: flex; flex-direction: column; overflow: hidden; min-height: 0;"></div>
+      
+      <!-- Action Buttons -->
+      <div style="display: flex; gap: 1rem; justify-content: center; padding-top: 1rem;">
+        <button id="name-entry-play-btn" class="retro-btn" style="padding: 0.8rem 2rem; font-size: 1.2rem;">🎮 LET'S PLAY!</button>
+        <button id="name-entry-menu-btn" class="retro-btn" style="padding: 0.8rem 1.5rem; font-size: 1rem; opacity: 0.7;">← BACK</button>
+      </div>
+    </div>
 
-        function handleMessage(data) {
-            if (data.type === 'stats') {
-                updateStats(data);
-            } else if (data.type === 'connected') {
-                log(`Connected as ${data.playerId}`, 'info');
-            } else if (data.type === 'game_created') {
-                log(`Test game created: ${data.game.id}`, 'success');
-                showToast('Game created! Players can join from the game.');
-            } else if (data.type === 'error') {
-                log(`Error: ${data.message}`, 'warning');
-                showToast(data.message);
-            }
-        }
+    <div id="hud" class="screen hidden" style="pointer-events: auto;">
+      <div class="player-stats p1">
+        <div class="name">Player 1 (Red)</div>
+        <div class="boost-bar-container">
+          <div id="p1-boost" class="boost-bar"></div>
+        </div>
+        <div id="p1-record" class="player-record">W: 0  L: 0</div>
+        <div id="p1-powerups" class="powerup-status"></div>
+      </div>
+      <div id="score-display" class="score-display">
+        <span id="p1-score" class="p1-score-text">0</span> - <span id="p2-score" class="p2-score-text">0</span>
+      </div>
+      <div class="player-stats p2">
+        <div class="name">Player 2 (Blue)</div>
+        <div class="boost-bar-container">
+          <div id="p2-boost" class="boost-bar"></div>
+        </div>
+        <div id="p2-record" class="player-record">W: 0  L: 0</div>
+        <div id="p2-powerups" class="powerup-status"></div>
+      </div>
+      <div id="effects" class="effects-container"></div>
+      <div id="powerup-notifications" class="powerup-notifications-container"></div>
+      <div id="countdown-display" class="score-display hidden" style="top: 50%; transform: translate(-50%, -50%); font-size: 8rem; z-index: 50; pointer-events: none;">3</div>
+      <div id="hud-controls" style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; pointer-events: auto;">
+        <button id="hud-restart-btn" class="retro-btn" style="padding: 0.5rem 1rem; font-size: 1rem; pointer-events: auto;">Restart</button>
+        <button id="hud-menu-btn" class="retro-btn" style="padding: 0.5rem 1rem; font-size: 1rem; pointer-events: auto;">Menu</button>
+      </div>
+    </div>
 
-        function updateStats(stats) {
-            document.getElementById('connected-players').textContent = stats.connectedPlayers;
-            document.getElementById('connected-admins').textContent = stats.connectedAdmins || 0;
-            document.getElementById('lobbies-waiting').textContent = stats.lobbiesWaiting;
-            document.getElementById('games-in-progress').textContent = stats.gamesInProgress;
-            document.getElementById('active-games').textContent = stats.activeGames;
-            document.getElementById('total-connections').textContent = stats.totalConnections;
-            document.getElementById('games-created').textContent = stats.gamesCreated;
-            document.getElementById('uptime').textContent = formatUptime(stats.uptime);
+    <div id="game-over" class="screen hidden" style="pointer-events: auto;">
+      <h1 id="winner-text">Player X Wins!</h1>
+      <div style="margin: 20px 0; display: flex; align-items: center; gap: 10px; justify-content: center;">
+        <input type="checkbox" id="autorestart-gameover" style="width: 20px; height: 20px; cursor: pointer;">
+        <label for="autorestart-gameover" style="cursor: pointer; color: #0ff; font-family: 'Courier New', monospace; font-size: 1.2rem;">Auto-Restart on Game Over</label>
+      </div>
+      <div id="replay-card" class="hidden" style="margin: 15px auto; display: flex; align-items: center; justify-content: center; gap: 20px; padding: 12px 24px; border: 1px solid #0ff; border-radius: 8px; background: rgba(0, 20, 40, 0.85); max-width: 400px;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="color: #0ff; font-family: 'Courier New', monospace; font-size: 0.95rem;">Next round in</span>
+          <span id="replay-countdown-text" style="color: #0ff; font-family: 'Courier New', monospace; font-size: 1.4rem; font-weight: bold; min-width: 24px; text-align: center;">10</span>
+        </div>
+        <button id="replay-view-btn" class="retro-btn" style="font-size: 1rem; padding: 6px 16px; margin: 0;">View Replay</button>
+      </div>
+      <button id="restart-btn" class="retro-btn">Play Again</button>
+      <button id="menu-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">Return to Menu</button>
+    </div>
 
-            const gamesEl = document.getElementById('lobby-list');
-            if (stats.lobbiesWaiting === 0) {
-                gamesEl.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🎮</div>
-                        <div>No active lobbies</div>
-                    </div>
-                `;
-            }
-
-            if (stats.gamesInProgress === 0) {
-                document.getElementById('games-list').innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">⚔️</div>
-                        <div>No games in progress</div>
-                    </div>
-                `;
-            }
-        }
-
-        function attemptReconnect() {
-            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts++;
-                log(`Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`, 'warning');
-                setTimeout(connect, RECONNECT_DELAY);
-            } else {
-                log('Max reconnect attempts reached', 'warning');
-            }
-        }
-
-        function formatUptime(seconds) {
-            const h = Math.floor(seconds / 3600);
-            const m = Math.floor((seconds % 3600) / 60);
-            const s = Math.floor(seconds % 60);
-            if (h > 0) return `${h}h ${m}m`;
-            if (m > 0) return `${m}m ${s}s`;
-            return `${s}s`;
-        }
-
-        function log(message, type = 'info') {
-            const console = document.getElementById('console');
-            const time = new Date().toLocaleTimeString();
-            const line = document.createElement('div');
-            line.className = `console-line ${type}`;
-            line.innerHTML = `<span class="console-time">[${time}]</span>${message}`;
-            console.appendChild(line);
-            console.scrollTop = console.scrollHeight;
-        }
-
-        function refreshAll() {
-            fetch('/api/stats')
-                .then(r => r.json())
-                .then(stats => updateStats(stats))
-                .catch(e => log('Failed to fetch stats', 'warning'));
-
-            fetch('/api/games')
-                .then(r => r.json())
-                .then(games => {
-                    const el = document.getElementById('lobby-list');
-                    if (games.length === 0) {
-                        el.innerHTML = `
-                            <div class="empty-state">
-                                <div class="empty-state-icon">🎮</div>
-                                <div>No active lobbies</div>
-                            </div>
-                        `;
-                    } else {
-                        el.innerHTML = games.map(game => `
-                            <div class="game-item">
-                                <div class="game-item-header">
-                                    <span class="game-item-title">${game.hostName}'s Game</span>
-                                    <span class="game-item-status waiting">Waiting</span>
-                                </div>
-                                <div class="game-item-details">
-                                    Players: ${game.playerCount}/${game.maxPlayers} |
-                                    Theme: ${game.settings.theme} |
-                                    Arena: ${game.settings.arenaSize}
-                                </div>
-                            </div>
-                        `).join('');
-                    }
-                })
-                .catch(e => log('Failed to fetch games', 'warning'));
-        }
-
-        function createTestGame() {
-            if (!ws || ws.readyState !== WebSocket.OPEN) {
-                showToast('Not connected to server');
-                return;
-            }
-
-            const config = getConfig();
-            ws.send(JSON.stringify({
-                type: 'set_name',
-                name: 'Server Admin',
-                isAdmin: true
-            }));
-
-            setTimeout(() => {
-                ws.send(JSON.stringify({
-                    type: 'create_game',
-                    settings: config
-                }));
-            }, 200);
-        }
-
-        function showToast(message) {
-            const existing = document.querySelector('.toast');
-            if (existing) existing.remove();
-
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.textContent = message;
-            document.body.appendChild(toast);
-
-            setTimeout(() => toast.remove(), 3000);
-        }
-
-        document.getElementById('server-url').textContent = window.location.origin;
-        connect();
-        refreshAll();
-        setInterval(refreshAll, 5000);
-    </script>
-</body>
+  </body>
 </html>

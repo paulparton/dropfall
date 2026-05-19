@@ -1,0 +1,184 @@
+{
+  "name": "PauplPaupl",
+  "description": "",
+  "difficulty": "normal",
+  "theme": "default",
+  "sphereSize": 2,
+  "sphereWeight": 200,
+  "sphereAccel": 2000,
+  "collisionBounce": 0.9,
+  "arenaSize": 4,
+  "destructionRate": 3,
+  "iceRate": 2,
+  "portalRate": 8,
+  "portalCooldown": 2,
+  "bonusRate": 6,
+  "bonusDuration": 4,
+  "boostRegenSpeed": 1.5,
+  "boostDrainRate": 20,
+  "bloomLevel": 0,
+  "playerAuraSize": 1.4,
+  "playerAuraOpacity": 0.4,
+  "playerGlowIntensity": 3,
+  "playerGlowRange": 20,
+  "p1Color": 16711680,
+  "p2Color": 255,
+  "p1Hat": "none",
+  "p2Hat": "none",
+  "tiles": [
+    {
+      "coord": {
+        "q": 1,
+        "r": 0
+      },
+      "ability": "WARNING",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 1
+      },
+      "ability": "WARNING",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": 0
+      },
+      "ability": "WARNING",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 1
+      },
+      "ability": "WARNING",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 0
+      },
+      "ability": "WARNING",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -1
+      },
+      "ability": "WARNING",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -1
+      },
+      "ability": "WARNING",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    }
+  ],
+  "author": "Editor",
+  "id": "level_1775555541868_53d3dfad"
+}

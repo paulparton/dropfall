@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { createTileBody, world } from '../physics.js';
+import { getPhysicsSystem } from '../systems/PhysicsSystem.js';
 import { scene } from '../renderer.js';
-import { getThemeMaterials } from '../utils/themeTextures.js';
+import { getThemeMaterials, getThemeColors, getThemeShaderMaterials } from '../utils/themeTextures.js';
 import { generateHexGrid, hexToPixel } from '../utils/math.js';
 import { useGameStore } from '../store.js';
+import { POWER_UP_EFFECTS } from './Player.js';
+
+// Tile state to shader uniform mapping
+const STATE_MAP = { NORMAL: 0, ICE: 1, WARNING: 2, FALLING: 3, BONUS: 5, PORTAL: 6 };
 
 // === PERFORMANCE: Shared geometries to reduce memory and draw calls ===
 let SHARED_TILE_GEOMETRY = null;
@@ -68,8 +72,7 @@ function getTileMaterials(theme, edgeColor, baseColor, iceColor) {
 }
 
 export class Arena {
-    constructor() {
-        // Clear materials cache to ensure fresh materials with all variants
+    constructor(customTiles) {        console.log('[Arena] Constructor called');        // Clear materials cache to ensure fresh materials with all variants
         TILE_MATERIALS_CACHE = {};
         
         this.tiles = [];
@@ -83,8 +86,29 @@ export class Arena {
         this.arenaSize = settings.arenaSize;
         const theme = settings.theme || 'default';
 
+        const hasCustomTiles = Array.isArray(customTiles);
+        const normalizeAbility = (ability) => {
+            const normalizedAbility = (typeof ability === 'string' ? ability.toUpperCase() : 'NORMAL');
+            if (normalizedAbility === 'ICE' || normalizedAbility === 'PORTAL' || normalizedAbility === 'BONUS' || normalizedAbility === 'NORMAL') {
+                return normalizedAbility;
+            }
+            return 'NORMAL';
+        };
+
         // 1. Generate Grid
-        const hexes = generateHexGrid(this.arenaSize);
+        const hexes = hasCustomTiles
+            ? customTiles.map(tile => ({
+                q: tile?.coord?.q,
+                r: tile?.coord?.r,
+                ability: normalizeAbility(tile?.ability),
+                height: Number.isFinite(tile?.height) ? tile.height : 0
+            })).filter(tile => Number.isFinite(tile.q) && Number.isFinite(tile.r))
+            : generateHexGrid(this.arenaSize).map(hex => ({
+                q: hex.q,
+                r: hex.r,
+                ability: 'NORMAL',
+                height: 0
+            }));
 
         // 2. Create Tiles
         const gridSpacing = 8.0;
@@ -95,33 +119,43 @@ export class Arena {
         const geometry = getSharedTileGeometry(tileRadius, height);
         const edgesGeometry = getSharedEdgesGeometry(tileRadius, height);
         
-        this.edgeColor = 0xff00ff;
-        this.baseColor = 0x666666;
-        this.iceColor = 0x00ffff;
-        if (theme === 'beach') {
-            this.edgeColor = 0x00ffff;
-            this.baseColor = 0xffffff;
-            this.iceColor = 0x0000ff;
-        }
-        if (theme === 'cracked_stone') {
-            this.edgeColor = 0xff4400;
-            this.baseColor = 0xffffff;
-            this.iceColor = 0x00ffff;
-        }
+        // === Create shader-based platform and skybox materials ===
+        const shaderMaterials = getThemeShaderMaterials(theme);
+        this.basePlatformMaterial = shaderMaterials.platformMaterial;
+        this.skyboxMaterial = shaderMaterials.skyboxMaterial;
 
-        // === PERFORMANCE: Get shared materials and store as instance member ===
-        this.materials = getTileMaterials(theme, this.edgeColor, this.baseColor, this.iceColor);
+        // Get theme colors from themeTextures
+        const themeColors = getThemeColors(theme);
+        this.edgeColor = themeColors.edgeColor;
+        this.baseColor = themeColors.baseColor;
+        this.iceColor = themeColors.iceColor;
 
+        // === Create spherical skybox ===
+        this.skyboxGeometry = new THREE.SphereGeometry(400, 64, 64);
+        this.skybox = new THREE.Mesh(this.skyboxGeometry, this.skyboxMaterial);
+        this.skybox.renderOrder = -1000;
+        scene.add(this.skybox);
+        console.log('[Arena] Added skybox to scene');
+
+        let tileCount = 0;
         hexes.forEach(hex => {
             const pos = hexToPixel(hex.q, hex.r, gridSpacing);
-            const position = { x: pos.x, y: 0, z: pos.z };
+            const initialState = hex.ability || 'NORMAL';
+            const position = { x: pos.x, y: hex.height, z: pos.z };
 
-            // === PERFORMANCE: Reuse geometry, don't clone ===
-            const mesh = new THREE.Mesh(geometry, this.materials.normal);
+            // === Use shader-based material for each tile (cloned for independent uniforms) ===
+            const tileMaterial = this.basePlatformMaterial.clone();
+            const mesh = new THREE.Mesh(geometry, tileMaterial);
             mesh.position.set(position.x, position.y, position.z);
             mesh.rotation.y = Math.PI / 6;
             mesh.castShadow = true;
             mesh.receiveShadow = true;
+            
+            // Track uniforms for state updates
+            const uniforms = tileMaterial.uniforms;
+            if (uniforms?.uState) {
+                uniforms.uState.value = STATE_MAP[initialState] || 0;
+            }
             
             // Glowing Edges with simpler material
             const edgesMat = new THREE.LineBasicMaterial({ 
@@ -137,19 +171,31 @@ export class Arena {
             scene.add(mesh);
 
             // === PERFORMANCE: NO PointLight - use emissive instead ===
-            const { rigidBody, collider } = createTileBody(position, tileRadius, height);
+            // Use PhysicsSystem for event tracking
+            const physicsSystem = getPhysicsSystem();
+            const tileId = `tile_${hex.q}_${hex.r}`;
+            const { rigidBody, collider } = physicsSystem.createBody(tileId, position, {
+                radius: tileRadius,
+                height: height,
+                isDynamic: false
+            });
             this.tiles.push({
                 q: hex.q,
                 r: hex.r,
                 mesh,
                 edges,
+                uniforms,
                 rigidBody,
                 collider,
-                state: 'NORMAL',
-                timer: 0,
+                state: initialState,
+                timer: initialState === 'ICE' ? Number.POSITIVE_INFINITY : 0,
                 distanceToCenter: Math.sqrt(position.x ** 2 + position.z ** 2),
-                edgeOpacity: 0.7
+                edgeOpacity: 0.5  // More subtle default opacity
             });
+
+            if (initialState === 'ICE') {
+                collider.setFriction(0.0);
+            }
         });
     }
 
@@ -157,7 +203,7 @@ export class Arena {
         return this.tiles.find(t => t.q === q && t.r === r);
     }
 
-    update(delta) {
+    update(delta, { isOnlineClient = false } = {}) {
         const storeState = useGameStore.getState();
         if (storeState.gameState === 'PLAYING') {
             this.dropTimer += delta;
@@ -174,103 +220,136 @@ export class Arena {
         const portalRate = settings.portalRate || 8.0;
         const bonusRate = settings.bonusRate || 6.0;
 
-        // 1. Handle The Drop
-        if (this.dropTimer >= destructionRate) {
-            this.dropTimer = 0;
-            this.triggerDrop();
+        if (!isOnlineClient) {
+            // 1. Handle The Drop
+            if (this.dropTimer >= destructionRate) {
+                this.dropTimer = 0;
+                this.triggerDrop();
+            }
+
+            // 2. Handle Ice Tiles
+            if (this.iceTimer >= iceRate) {
+                this.iceTimer = 0;
+                this.triggerIce();
+            }
+
+            // 3. Handle Portal Tiles
+            if (this.portalTimer >= portalRate) {
+                this.portalTimer = 0;
+                this.triggerPortal();
+            }
+
+            // 4. Handle Bonus Tiles
+            if (this.bonusTimer >= bonusRate) {
+                this.bonusTimer = 0;
+                this.triggerBonus();
+            }
         }
 
-        // 2. Handle Ice Tiles
-        if (this.iceTimer >= iceRate) {
-            this.iceTimer = 0;
-            this.triggerIce();
-        }
-
-        // 3. Handle Portal Tiles
-        if (this.portalTimer >= portalRate) {
-            this.portalTimer = 0;
-            this.triggerPortal();
-        }
-
-        // 4. Handle Bonus Tiles
-        if (this.bonusTimer >= bonusRate) {
-            this.bonusTimer = 0;
-            this.triggerBonus();
-        }
-
-        // === PERFORMANCE: Accumulate time instead of Date.now() every frame ===
+        // === PERFORMANCE: Accumulate time for shader uniforms ===
         this.pulseTime += delta;
-        const beatFreq = 135 / 60; // 2.25 Hz
-        const bpm = 135;
+        
+        // Update shader uniforms for pulse effect
+        if (this.basePlatformMaterial && this.basePlatformMaterial.uniforms) {
+            this.basePlatformMaterial.uniforms.uTime.value = this.pulseTime;
+            this.basePlatformMaterial.uniforms.uPulse.value = this.pulseTime * 2.25;
+        }
 
         this.tiles.forEach(tile => {
-            // === PERFORMANCE: Pulse via emissive intensity, not light intensity ===
-            const pulse = (Math.sin(this.pulseTime * Math.PI * 2 * beatFreq - tile.distanceToCenter * 0.2) + 1) / 2;
-
-            if (tile.state === 'NORMAL') {
-                tile.mesh.material = this.materials.normal;
-                tile.edgeOpacity = 0.7 + pulse * 0.3;
-                tile.edges.material.opacity = tile.edgeOpacity;
+            // Animate power-up statue
+            if (tile.statue) {
+                tile.statue.time += delta;
+                const bob = Math.sin(tile.statue.time * 2) * 0.3;
+                tile.statue.group.position.y = tile.mesh.position.y + 3.5 + bob;
+                tile.statue.gem.rotation.y += delta * 1.5;
+                tile.statue.gem.rotation.x = Math.sin(tile.statue.time * 0.5) * 0.2;
+                tile.statue.ring.rotation.z += delta * 2;
+                tile.statue.ring.rotation.x = Math.PI / 2 + Math.sin(tile.statue.time * 1.2) * 0.15;
+                const pulse = 0.7 + Math.sin(tile.statue.time * 3) * 0.3;
+                tile.statue.glow.material.opacity = 0.08 * pulse;
             }
 
-            if (tile.state === 'PORTAL') {
-                tile.mesh.material = this.materials.portal;
-                // Portal pulse: glow stronger
-                tile.mesh.material.emissiveIntensity = 0.4 + pulse * 0.4;
-                tile.edgeOpacity = 0.8 + pulse * 0.2;
-                tile.edges.material.opacity = tile.edgeOpacity;
-                tile.edges.material.color.setHex(0x0088ff);
+            // Update shader time uniform for this tile's material
+            if (tile.uniforms) {
+                tile.uniforms.uTime.value = this.pulseTime;
+                tile.uniforms.uPulse.value = this.pulseTime * 2.25;
+                tile.uniforms.uState.value = STATE_MAP[tile.state] || 0;
+                tile.uniforms.uStateTimer.value = tile.timer;
+                // Set ice color from theme
+                if (tile.uniforms.uIceColor) {
+                    tile.uniforms.uIceColor.value.setHex(this.iceColor);
+                }
             }
 
-            if (tile.state === 'BONUS') {
-                // Bonus tiles flash more aggressively
-                tile.mesh.material = this.materials.bonus;
-                const bonusFlash = (Math.sin(this.pulseTime * Math.PI * 4) + 1) / 2; // Faster flash
-                tile.mesh.material.emissiveIntensity = 0.5 + bonusFlash * 0.5;
-                tile.edgeOpacity = 0.6 + bonusFlash * 0.4;
-                tile.edges.material.opacity = tile.edgeOpacity;
-                tile.edges.material.color.setHex(0xff8800);
-            }
+            // Handle edge glow pulsing
+            const pulse = (Math.sin(this.pulseTime * Math.PI * 2 * 2.25 - tile.distanceToCenter * 0.2) + 1) / 2;
+            tile.edgeOpacity = 0.7 + pulse * 0.3;
+            tile.edges.material.opacity = tile.edgeOpacity;
 
             if (tile.state === 'WARNING') {
                 tile.timer -= delta;
                 const isFlash = Math.sin(tile.timer * 10) > 0;
                 
                 if (isFlash) {
-                    tile.mesh.material = this.warningMaterial || this.materials.warning;
-                    tile.edges.material.opacity = 1.0;
                     tile.edges.material.color.setHex(0xff0000);
                 } else {
-                    tile.mesh.material = this.materials.normal;
-                    tile.edges.material.opacity = 0.7;
                     tile.edges.material.color.setHex(this.edgeColor);
                 }
 
                 if (tile.timer <= 0) {
                     tile.state = 'FALLING';
-                    tile.mesh.material = this.materials.falling;
-                    tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-                    tile.mesh.scale.set(0.95, 1, 0.95);
+                    tile.uniforms.uState.value = STATE_MAP.FALLING;
+                    if (isOnlineClient) {
+                        tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+                        tile.mesh.visible = false;
+                        tile.mesh.scale.set(0.95, 1, 0.95);
+                        if (tile.edges) {
+                            tile.edges.visible = false;
+                        }
+                    } else {
+                        tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+                        tile.mesh.scale.set(0.95, 1, 0.95);
+                    }
                 }
             } else if (tile.state === 'ICE') {
                 tile.timer -= delta;
-                tile.mesh.material = this.materials.ice;
-                tile.edgeOpacity = 0.8 + pulse * 0.2;
-                tile.edges.material.opacity = tile.edgeOpacity;
 
                 if (tile.timer <= 0) {
                     tile.state = 'NORMAL';
-                    tile.mesh.material = this.materials.normal;
                     tile.collider.setFriction(0.0);
                     tile.edges.material.color.setHex(this.edgeColor);
                 }
             } else if (tile.state === 'FALLING') {
-                const position = tile.rigidBody.translation();
-                const rotation = tile.rigidBody.rotation();
-                tile.mesh.position.copy(position);
-                tile.mesh.quaternion.copy(rotation);
+                if (isOnlineClient) {
+                    tile.mesh.visible = false;
+                    if (tile.edges) {
+                        tile.edges.visible = false;
+                    }
+                } else {
+                    const position = tile.rigidBody.translation();
+                    const rotation = tile.rigidBody.rotation();
+                    tile.mesh.position.copy(position);
+                    tile.mesh.quaternion.copy(rotation);
+                }
             }
         });
+
+        // Update skybox material uniforms
+        if (this.skyboxMaterial && this.skyboxMaterial.uniforms) {
+            this.skyboxMaterial.uniforms.uTime.value = this.pulseTime;
+        }
+    }
+
+    hideTile(q, r) {
+        const tile = this.getTileAt(q, r);
+        if (!tile) return;
+
+        tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+        tile.mesh.visible = false;
+        tile.mesh.scale.set(0.95, 1, 0.95);
+        if (tile.edges) {
+            tile.edges.visible = false;
+        }
     }
 
     triggerDrop() {
@@ -308,6 +387,78 @@ export class Arena {
         tile.timer = 0; // Portal tiles are persistent
     }
 
+    _pickWeightedPowerUp() {
+        const weights = useGameStore.getState().settings.powerUpWeights;
+        const candidates = POWER_UP_EFFECTS.filter(pu => (weights[pu.type] || 0) > 0);
+        if (candidates.length === 0) return POWER_UP_EFFECTS[Math.floor(Math.random() * POWER_UP_EFFECTS.length)];
+
+        const totalWeight = candidates.reduce((sum, pu) => sum + (weights[pu.type] || 0), 0);
+        let roll = Math.random() * totalWeight;
+        for (const pu of candidates) {
+            roll -= weights[pu.type] || 0;
+            if (roll <= 0) return pu;
+        }
+        return candidates[candidates.length - 1];
+    }
+
+    _createStatue(powerUp, worldPos) {
+        const group = new THREE.Group();
+        const color = powerUp.color;
+
+        const gemGeo = new THREE.OctahedronGeometry(1.2, 0);
+        const gemMat = new THREE.MeshStandardMaterial({
+            color,
+            emissive: color,
+            emissiveIntensity: 0.8,
+            metalness: 0.3,
+            roughness: 0.2,
+            transparent: true,
+            opacity: 0.9
+        });
+        const gem = new THREE.Mesh(gemGeo, gemMat);
+        gem.castShadow = true;
+        group.add(gem);
+
+        const ringGeo = new THREE.TorusGeometry(1.6, 0.08, 8, 24);
+        const ringMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.5
+        });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        group.add(ring);
+
+        const pillarMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.2
+        });
+        const pillarGeo = new THREE.CylinderGeometry(0.06, 0.1, 1.5, 4);
+        for (let i = 0; i < 3; i++) {
+            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+            const angle = (i / 3) * Math.PI * 2;
+            pillar.position.set(Math.cos(angle) * 1.2, -0.75, Math.sin(angle) * 1.2);
+            group.add(pillar);
+        }
+
+        const glowGeo = new THREE.SphereGeometry(1.8, 12, 12);
+        const glowMat = new THREE.MeshBasicMaterial({
+            color,
+            transparent: true,
+            opacity: 0.12,
+            side: THREE.BackSide,
+            depthWrite: false
+        });
+        const glow = new THREE.Mesh(glowGeo, glowMat);
+        group.add(glow);
+
+        group.position.set(worldPos.x, worldPos.y + 3.5, worldPos.z);
+        scene.add(group);
+
+        return { group, gem, ring, glow, time: 0 };
+    }
+
     triggerBonus() {
         const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
         if (stableTiles.length === 0) return;
@@ -315,8 +466,12 @@ export class Arena {
         const index = Math.floor(Math.random() * stableTiles.length);
         const tile = stableTiles[index];
 
+        const powerUp = this._pickWeightedPowerUp();
         tile.state = 'BONUS';
-        tile.timer = 0; // Bonus tiles are persistent until picked up
+        tile.timer = 0;
+        tile.powerUpType = powerUp.type;
+        tile.statue = this._createStatue(powerUp, tile.mesh.position);
+        tile.statuePowerUp = powerUp;
     }
 
     getPortalTiles() {
@@ -325,21 +480,81 @@ export class Arena {
 
     convertTileToNormal(tile) {
         tile.state = 'NORMAL';
-        tile.mesh.material = this.materials.normal;
+        if (tile.uniforms) {
+            tile.uniforms.uState.value = STATE_MAP.NORMAL;
+        }
+        if (tile.statue) {
+            scene.remove(tile.statue.group);
+            tile.statue.group.traverse(child => {
+                if (child.isMesh) {
+                    child.geometry.dispose();
+                    child.material.dispose();
+                }
+            });
+            tile.statue = null;
+            tile.statuePowerUp = null;
+            tile.powerUpType = null;
+        }
         tile.edges.material.color.setHex(this.edgeColor);
     }
 
+    getActiveTileSet() {
+        const activeTiles = new Set();
+        for (const tile of this.tiles) {
+            if (tile.state !== 'FALLING' && tile.state !== 'WARNING') {
+                activeTiles.add(`${tile.q},${tile.r}`);
+            }
+        }
+        return activeTiles;
+    }
+
+    getWarnedTileSet() {
+        const warnedTiles = new Set();
+        for (const tile of this.tiles) {
+            if (tile.state === 'WARNING') {
+                warnedTiles.add(`${tile.q},${tile.r}`);
+            }
+        }
+        return warnedTiles;
+    }
+
     cleanup() {
+        const physicsSystem = getPhysicsSystem();
         this.tiles.forEach(tile => {
             scene.remove(tile.mesh);
-            // === PERFORMANCE: Don't dispose shared geometry ===
-            tile.mesh.material.dispose();
+            // Dispose shader material
+            if (tile.mesh.material.dispose) {
+                tile.mesh.material.dispose();
+            }
             tile.edges.material.dispose();
-            if (world && tile.rigidBody) {
-                world.removeRigidBody(tile.rigidBody);
+            if (tile.rigidBody) {
+                physicsSystem.destroyBody(`tile_${tile.q}_${tile.r}`);
             }
         });
         
+        // Dispose shader materials
+        if (this.basePlatformMaterial) {
+            this.basePlatformMaterial.dispose();
+        }
+        if (this.skybox) {
+            scene.remove(this.skybox);
+            if (this.skyboxGeometry) this.skyboxGeometry.dispose();
+            if (this.skyboxMaterial) this.skyboxMaterial.dispose();
+            this.skybox = null;
+        }
+        
+        this.tiles.forEach(tile => {
+            if (tile.statue) {
+                scene.remove(tile.statue.group);
+                tile.statue.group.traverse(child => {
+                    if (child.isMesh) {
+                        child.geometry.dispose();
+                        child.material.dispose();
+                    }
+                });
+            }
+        });
+
         this.tiles = [];
     }
 }

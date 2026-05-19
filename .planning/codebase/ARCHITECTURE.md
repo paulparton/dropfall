@@ -1,179 +1,208 @@
 # Architecture
 
-**Analysis Date:** 2026-03-19
+**Analysis Date:** 2026-03-28
 
 ## Pattern Overview
 
-**Overall:** Game-Loop with Systems & Entities
-
-The codebase uses a classic game-loop architecture where a central orchestrator (`src/main.js`) drives a fixed-timestep physics update and per-frame render tick via `requestAnimationFrame`. There is no formal ECS; instead, each major subsystem is a plain ES module exporting `init*` / `update*` functions, and game objects are plain ES6 classes.
-
-There are **two parallel and largely independent rendering implementations**:
-1. **Three.js implementation** (primary) — `src/main.js` + `src/renderer.js` + `src/entities/`
-2. **SDF/Ray-marching implementation** (experimental) — `src/sdf/` folder, entered from `index-sdf.html`
-
-Both implementations share `src/store.js`, `src/input.js`, and `src/audio.js`.
+**Overall:** Event-driven state machine with layered rendering/physics engine and modular entity systems.
 
 **Key Characteristics:**
-- Single shared Zustand vanilla store as the authoritative source for game state and settings
-- Physics (Rapier3D WASM) is decoupled from rendering via an accumulator-based fixed timestep
-- Entities read settings from the store at construction time (not reactively subscribed during runtime)
-- UI is vanilla HTML/CSS with DOM manipulation — no UI framework
-- State machine: `MENU → NAME_ENTRY → COUNTDOWN → PLAYING → ROUND_OVER → GAME_OVER`
+- Single-threaded game loop with requestAnimationFrame pacing (60Hz desktop, 30Hz mobile)
+- Centralized state management via Zustand store—authoritative source for game state, settings, scores
+- Separation of concerns: rendering, physics, input, AI, effects decoupled via store subscriptions and module exports
+- Support for three game modes: local 2P, single-player with tactical AI, and online multiplayer (WebSocket-based)
+- Physics-driven combat with Rapier3D (3D rigid body dynamics, gravity Y=-20.0, collision bounce 0.9–1.5)
+- Procedural particle/lightning/shockwave effects system for visual feedback
+- Dual rendering paths: primary Three.js (main.js), experimental SDF ray-marching (src/sdf/)
 
 ## Layers
 
-**Entry Point / Orchestrator:**
-- Purpose: Init all systems, wire DOM events, run the game loop, manage game-state transitions
-- Location: `src/main.js`
-- Contains: `init()`, `gameLoop()`, `startGame()`, `returnToMenu()`, UI event listeners, preset management, name-entry flow
-- Depends on: All systems and entities
-- Used by: `index.html` via `<script type="module">`
+**Presentation (Three.js Rendering):**
+- Purpose: Render 3D scene with materials, lighting, post-processing (Unreal Bloom)
+- Location: `src/renderer.js`, entity mesh creation in `src/entities/*.js`
+- Contains: Scene setup, camera (y:20 z:20 lookAt origin), WebGL config (adaptive antialias/power), bloom pipeline, PCF soft shadows, Reinhard tone mapping
+- Depends on: Three.js, `src/utils/themeTextures.js` (materials), `src/store.js` (bloom settings)
+- Used by: Main loop calls `updateRenderer()` each frame; entities add meshes to scene
+- Mobile: Device detection adaptive—pixel ratio 1.0/2.0, shadow res 512×512/1024×1024, bloom disabled on low-power
 
-**State Layer:**
-- Purpose: Single source of truth for game state, player scores, settings, boost meters
+**Physics (Rapier3D Rigid Body Dynamics):**
+- Purpose: Simulate rigid body collisions, gravity, forces, constraints with deterministic timestep
+- Location: `src/physics.js`
+- Contains: World init (gravity y:-20), body creation (players/tiles), collision queries, accumulator with fixed timestep
+- Depends on: `@dimforge/rapier3d-compat` (WASM physics)
+- Used by: Player/tile impulses, collision detection, destruction
+- Mobile: 1/30 timestep vs desktop 1/60; reduced solver iterations (2 vs default)
+
+**Entity System (Game Objects):**
+- Purpose: Encapsulate player, arena, and effect behaviors with lifecycle (update/cleanup)
+- Location: `src/entities/` (Player.js, Arena.js, ParticleSystem.js, LightningSystem.js, ShockwaveSystem.js)
+- Contains: Three.js mesh + Rapier physics body linkage per entity; per-object state (position, velocity, health, power-up timers)
+- Each entity exports: constructor, update(delta, ...), cleanup(), emit() (for effects systems)
+- Depends on: `renderer.js` (scene), `physics.js` (world/factory fns), `store.js` (settings/state), `utils/`
+- Used by: Main loop calls update/cleanup; main loop queries positions/states each frame
+
+**State Management (Zustand Store):**
+- Purpose: Centralized, persistent store for game state, settings, and player data
 - Location: `src/store.js`
-- Contains: Zustand vanilla store (`useGameStore`) with state fields and action methods
-- Depends on: `zustand/vanilla`, `localStorage`
-- Used by: All systems and entities that need to read settings or dispatch state transitions
+- Contains: Game phases (MENU, GAME_MODE_SELECT, DIFFICULTY_SELECT, NAME_ENTRY, COUNTDOWN, PLAYING, ROUND_OVER, GAME_OVER), scores (p1Score, p2Score), player names, settings object (theme, sphereSize, sphereWeight, gravity multipliers, boost regen, particle amount, audio volumes), online connection state, active power-ups
+- Exports: `useGameStore` action methods: `startGame()`, `endRound()`, `setDifficulty()`, `updateSetting()`, `setOnlineConnected()`, etc.
+- Persistence: localStorage for player names, settings, game mode, difficulty
+- Used by: All systems subscribe via `useGameStore.getState()` to read current state or dispatch actions
 
-**Systems Layer:**
-- Purpose: Stateless-ish modules with `init*` + `update*` lifecycle, managing one cross-cutting concern each
-- Location: `src/renderer.js`, `src/physics.js`, `src/input.js`, `src/audio.js`
-- Contains:
-  - `renderer.js` — Three.js `WebGLRenderer`, `EffectComposer` (UnrealBloom + OutputPass), scene, camera, lights; exports `scene` and `camera` for entities to add meshes
-  - `physics.js` — Rapier3D WASM world; accumulator-based fixed timestep; factory functions `createPlayerBody`, `createTileBody`
-  - `input.js` — Keyboard (`keydown`/`keyup`) + Gamepad API polling; produces `{ up, down, left, right, boost }` structs per player
-  - `audio.js` — Web Audio API synthesizer (programmatic music + SFX); no audio file assets
-- Depends on: each other minimally; renderer imports from store for bloom settings
-- Used by: `src/main.js` (init sequence); entities import `scene`, `world` directly
+**Input Handling (Multi-Device):**
+- Purpose: Unified input abstraction across keyboard, gamepad, and touch
+- Location: `src/input.js`
+- Contains: Global `keys` object (keyCode → boolean), gamepad robust polling loop (~12-16ms updates), touch tap detection (screen edge regions for 4-way + center for boost)
+- Exports: `getPlayer1Input()`, `getPlayer2Input()` returning `{forward, backward, left, right, boost}` each frame
+- Gamepad Fallback: If controller disconnected mid-game, falls back to keyboard; reconnect auto-resumes
+- Mobile Detection: Adjusts touch area sizes and polling frequency
 
-**Entities Layer:**
-- Purpose: Game objects with their own Three.js meshes + Rapier physics bodies + per-frame `update()` methods
-- Location: `src/entities/`
-- Contains:
-  - `Player.js` — Sphere player with physics body, aura mesh, glow light, power-up system; accepts input callback
-  - `Arena.js` — Hex grid of tiles; manages tile state machine (`NORMAL → WARNING → FALLING → ICE → PORTAL → BONUS`); shared geometry/material optimisation
-  - `ParticleSystem.js` — GPU-driven particles using custom GLSL ShaderMaterial with additive blending
-  - `LightningSystem.js` — Procedural segmented lightning bolts with branching
-  - `ShockwaveSystem.js` — Expanding ring meshes for collision impact feedback
-- Depends on: `renderer.js` (scene), `physics.js` (world, factory fns), `store.js` (settings), `utils/`
-- Used by: `src/main.js`
+**AI Controller (Single-Player NPC):**
+- Purpose: Tactical NPC opponent for 1-player mode
+- Location: `src/ai/AIController.js`
+- Contains: State machine (HUNT, FLANK_CHARGE, PUSH, EDGE_ESCAPE), difficulty-parameterized behavior (easy/normal/hard boost usage, prediction, flanking distance)
+- Behavior: "Flanking herder" strategy—circles to center-side of player, charges to push them toward arena edge
+- Difficulties: Easy (30% boost chance, conservative), Normal (50% boost), Hard (aggressive, faster reactions)
+- Exports: `update(p1Pos, p2Pos, p1Vel, p2Vel, centerPos, arenaRadius, delta, state)`, `getInput()` returning control struct
 
-**Utilities Layer:**
-- Purpose: Stateless pure-function helpers
-- Location: `src/utils/`
-- Contains:
-  - `math.js` — Hex grid maths: `hexToPixel`, `pixelToHex`, `generateHexGrid`, `hexDistance`, `hexNeighbor`
-  - `textures.js` — Canvas-based procedural texture generators (`createSphereTexture`, `createDiamondPlateTexture`)
-  - `themeTextures.js` — Theme-aware material parameter factories for `default` / `beach` / `cracked_stone` themes with cached texture generation
-
-**SDF Sub-system (Experimental):**
-- Purpose: Alternative WebGL ray-marching renderer for the same game logic
-- Location: `src/sdf/`
-- Contains:
-  - `game-engine.js` — `SDFGameEngine` class; orchestrates SDF physics + renderer + input
-  - `renderer.js` — WebGL `THREE.PlaneGeometry` fullscreen quad with ray-march shader; tile state passed as texture uniforms
-  - `physics.js` — Fork of main `physics.js` using same Rapier3D library
-  - `effects.js` — SDF-specific visual effects
-  - `ray-march.glsl` / `sdf-functions.glsl` — GLSL shaders: scene SDF, ray-marching loop, shading
-  - `main.js` — Entry point (same structure as `src/main.js`), loaded by `index-sdf.html`
-  - `test-main.js` — Standalone test/debug harness for the SDF renderer
-- Shares with main: `src/store.js`, `src/input.js`, `src/audio.js`
+**Online Multiplayer (WebSocket):**
+- Purpose: Real-time networked 2-player gameplay via central server
+- Location: `src/online.js` (client), `server/server.js` (server)
+- Client Protocol: Custom JSON messages—`set_name`, `create_game`, `join_game`, `ready`, `start_game`, `player_input` (each frame), `game_state_update` (host broadcasts)
+- Sync Strategy: Host runs physics and broadcasts tick; clients receive opponent state and apply locally
+- Server: Node.js + WebSocket (ws library); manages game instances, player slots (host/client), stat tracking
+- Used by: Triggered from online lobby UI; main loop sends/receives input and state when in ONLINE mode
 
 ## Data Flow
 
-**Main Game Loop:**
+**Single-Frame Loop (60Hz desktop, 30Hz mobile):**
 
-1. `requestAnimationFrame` calls `gameLoop(delta)` in `src/main.js`
-2. `updatePhysics(delta)` advances Rapier world with fixed-timestep accumulator (16.67ms / 33ms on mobile)
-3. `player1.update(delta, input)` and `player2.update(delta, input)` apply forces from input to Rapier bodies, sync Three.js mesh positions from physics, tick power-up timers
-4. `arena.update(delta)` ticks tile destruction timers, transitions tile states, removes fallen tiles from scene + physics world
-5. `particles.update(delta)`, `lightning.update(delta)`, `shockwaves.update(delta)` advance visual effect lifetimes
-6. Collision detection: `main.js` reads both players' Rapier body positions each frame and applies knockback impulses when spheres overlap, triggering particle/lightning/shockwave emissions
-7. `updateRenderer()` calls `composer.render()` (Three.js post-processing pipeline)
+1. Input: `getPlayer1Input()`, `getPlayer2Input()` read keyboard+gamepad+touch
+2. Physics: `updatePhysics(delta)` steps Rapier with fixed timestep accumulator
+3. Entities: `player1.update()`, `player2.update()`, `arena.update()` consume input, apply forces, sync mesh to body
+4. Collision: Manual circle-overlap check each frame; triggers knockback + effects (particles, lightning, shockwave)
+5. Render: `updateRenderer()` composes scene via EffectComposer pipeline (render → bloom → output)
 
-**State Transitions:**
+**Game State Lifecycle:**
 
-```
-click "Start" → store.enterNameEntry() → ['NAME_ENTRY']
-  → confirm names → store.startGame() → ['COUNTDOWN']
-  → countdown ends → store.setPlaying() → ['PLAYING']
-  → player falls → store.endRound(winner) → ['ROUND_OVER'] or ['GAME_OVER']
-  → auto-restart / next round → store.startRound() → ['COUNTDOWN']
-  → return to menu → store.returnToMenu() → ['MENU']
-```
+MENU → GAME_MODE_SELECT → DIFFICULTY_SELECT → NAME_ENTRY → COUNTDOWN → PLAYING → ROUND_OVER → [loop or GAME_OVER]
 
-**Settings Flow:**
+**Online Multiplayer:**
 
-1. User adjusts slider in settings panel (`index.html` DOM)
-2. `input` event → `store.updateSetting(key, value)` → persists to `localStorage`
-3. Settings are read from store **once at construction time** by entities (`new Player(...)`, `new Arena()`)
-4. Re-read only when a new game/round starts (entities are reconstructed)
+Local input sent via `online.send()`; server relays opponent input; both clients drive physics independently with opponent state synced periodically to detect drift.
 
-**Input Flow:**
 
-1. `input.js` polls `navigator.getGamepads()` every frame via `requestAnimationFrame` loop
-2. Also listens to keyboard `keydown`/`keyup` events globally
-3. `getPlayer1Input()` / `getPlayer2Input()` return `{ up, down, left, right, boost }` merged from keyboard + gamepad
-4. `Player.update()` consumes this struct to compute force vectors
 
 ## Key Abstractions
 
 **Game Store (`useGameStore`):**
-- Purpose: Central state bus — replaces scattered global variables
-- Location: `src/store.js`
-- Pattern: Zustand vanilla store; accessed via `useGameStore.getState()` (no React)
-- State fields: `gameState`, `winner`, `p1Score`, `p2Score`, `player1Boost`, `player2Boost`, `settings`, `activeTileEffects`, `p1Name`, `p2Name`
+- Purpose: Centralized state for game phases, scores, settings, online status
+- Location: `src/store.js` — Zustand vanilla store accessed via `useGameStore.getState()`
+- Persistence: Settings → localStorage; game mode/difficulty/player names → localStorage
+- State fields: `gameState`, `gameMode`, `difficulty`, `p1Name`, `p2Name`, `p1Score`, `p2Score`, `settings`, `online`, `activeTileEffects`
 
-**Hex Grid (`src/utils/math.js`):**
-- Purpose: Axial coordinate system for the arena tile grid
-- Pattern: Cube-coordinate hex maths (flat-top orientation)
-- `generateHexGrid(radius)` → array of `{q, r}` coordinates
-- `hexToPixel(q, r, size)` → `{x, z}` world position
-- `pixelToHex(x, z, size)` → `{q, r}` for hit detection (e.g. knowing which tile a player is on)
+**Power-Up System:**
+- Purpose: Temporary physics/visual modifications to players
+- Location: `src/entities/Player.js` line ~10—`POWER_UP_EFFECTS` array
+- Pattern: Data-driven with `apply(player, duration)` and `remove(player)` methods
+- Types: ACCELERATION_BOOST, SIZE_REDUCTION, WEIGHT_INCREASE, SPEED_BURST, LIGHT_TOUCH, etc.
+- UI: Notifications display in top-right via `showPowerUpNotification()`
 
-**Power-Up System (`src/entities/Player.js`):**
-- Purpose: Timed runtime modifications to player physics and visual properties
-- Pattern: Data-driven array of `{ type, apply(player, duration), remove(player) }` objects
-- Applied effects mutate player instance properties (`sphereAccelMultiplier`, `sizeMultiplier`, etc.)
-- `POWER_UP_EFFECTS` array is exported for use by other systems (showcase, notifications)
+**Tile State Machine:**
+- Purpose: Arena tiles with lifecycle (normal → ice/warning → falling → destroyed)
+- Location: `src/entities/Arena.js`
+- Transitions: Driven by timers (`destructionRate`, `iceRate` settings)
+- Physics: When destroyed, Rapier collider removed from world
 
-**Tile State Machine (`src/entities/Arena.js`):**
-- States: `NORMAL`, `WARNING`, `FALLING`, `FALLEN`, `ICE`, `PORTAL`, `BONUS`
-- Transitions driven by timers; falling tiles have their Rapier physics body removed from the world and their Three.js mesh animated downward
+**Effect Systems (Particles, Lightning, Shockwaves):**
+- Purpose: Visual feedback for collisions
+- Particle System: GPU GLSL ShaderMaterial, emitted from collision epicenter
+- Lightning System: Procedural bolts between two points
+- Shockwave System: Expanding RingGeometry with radial gradient
+- Optimization: Shared geometries reduce draw calls and GPU memory
+
+**Hex Grid Utilities:**
+- Purpose: Convert hex coordinates ↔ 3D positions for arena tiles
+- Location: `src/utils/math.js` — `hexToPixel()`, `pixelToHex()`, `generateHexGrid()`, `hexDistance()`, `hexNeighbor()`
+- Coordinate System: Axial cube coordinates (flat-top hexagons)
+
+**Collision Detection:**
+- Pattern: Per-frame circle-circle distance check; manual impulse application
+- Trigger: distance(player1, player2) < sum(radii) → apply knockback
+- Effects: Particle spray, lightning chain, shockwave expansion
 
 ## Entry Points
 
-**Primary Entry Point (Three.js):**
-- Location: `src/main.js` — imported by `index.html`
-- Triggers: `DOMContentLoaded` event
-- Responsibilities: System init, entity construction, game loop, UI wiring
+**Web/Desktop (Three.js Implementation):**
+- Location: `src/main.js` → imported by `index.html`
+- Initialization sequence: initPhysics() → initRenderer() → initInput() → initAudio() → setupButtonHandlers() → setupStoreSubscription() → animate()
+- Game Loop: requestAnimationFrame calls animate() each frame
+- Triggers: User interacts with UI (start button, mode select, etc.) → store state changes → DOM updates via store subscription
 
-**SDF Entry Point:**
-- Location: `src/sdf/main.js` — imported by `index-sdf.html`
-- Triggers: `DOMContentLoaded` event
-- Responsibilities: SDF engine init, shared UI wiring, SDF game loop
+**Electron Desktop App:**
+- Location: `electron/preload.js` → Node IPC bridge
+- Build: Uses electron-builder (see `DESKTOP_BUILD.md`)
+- Packaging: Creates standalone Mac/Windows executables with bundled game
+
+**Server (Online Multiplayer):**
+- Location: `server/server.js`
+- Runtime: Node.js with ws library
+- Responsibilities: HTTP static file serving, WebSocket connection handling, game instance management, player slot assignment, state broadcasting
+- Scalability: Single-threaded; broadcasts game state to both players every ~16ms
+
+**SDF/Ray-Marching (Experimental Entry Point):**
+- Location: `src/sdf/main.js` → imported by `index-sdf.html` (parallel implementation)
+- Uses shared store/input/audio from main codebase
+- Renders via GLSL ray-marching shader instead of Three.js geometry
 
 ## Error Handling
 
-**Strategy:** Minimal; errors surface to browser console. The `initGame()` in the SDF main wraps initialisation in try/catch with console error logging.
+**Strategy:** Defensive programming with null checks and optional chaining; errors logged to console.
 
 **Patterns:**
-- Guard-clause singletons: `if (renderer) return;` / `if (window.__GAME_INITIALIZED__) return;` prevent double-init
-- Physics accumulator cap (`if (accumulator > 0.1) accumulator = 0.1`) prevents spiral-of-death
-- `localStorage` parse wrapped in try/catch with fallback to defaults
+- Entity cleanup: Use optional chaining `player1?.cleanup()`, `arena?.cleanup()` to avoid crashes if entity undefined
+- Physics queries: Check `if (world)` before stepping; default world to null if init fails
+- Input fallback: If gamepad disconnects, falls back to keyboard immediately; no gameplay interruption
+- Online recovery: WebSocket reconnect logic with exponential backoff (max 5 attempts), message queue buffers outgoing messages until connected
+- Settings merge: Defaults always merged with user localStorage; missing settings filled in automatically
+
+**No explicit error boundaries:** Unhandled errors propagate to browser console; game doesn't pause
 
 ## Cross-Cutting Concerns
 
-**Performance:** Mobile device detection (`isMobileDevice()`) is duplicated in `renderer.js`, `physics.js`, `entities/ParticleSystem.js` — used at init time to scale down quality (pixel ratio, shadow res, particle count, physics timestep, bloom skip).
+**Performance Instrumentation:**
+- Code pattern: Comments flag optimization hotspots with "PERFORMANCE: [note]"
+- Examples: Shared tile geometry (reduces GPU memory), mobile constraints reduced, bloom skip on low-power devices, physics accumulator cap prevents spiral-of-death
+- Mobile auto-scaling: Renderer, physics, input all detect and adapt to device capability
 
-**Theming:** `src/utils/themeTextures.js` returns theme-specific `MeshStandardMaterial` params (colors + procedural texture maps). All entities accept a `theme` string sourced from `store.settings.theme`.
+**State Persistence:**
+- What persists: Player names, difficulty, game mode, all settings (theme, sphere size, volumes, boost speed)
+- Where: localStorage under keys like `dropfall_settings`, `dropfall_p1name`, `dropfall_difficulty`
+- When: Settings persisted immediately on change; names saved when set
 
-**Logging:** Raw `console.log` / `console.error` throughout; no logging library. SDF init path is heavily instrumented; main path is sparse.
+**Theming System:**
+- Location: `src/utils/themeTextures.js`
+- Pattern: Factory functions return theme-specific MeshStandardMaterial params (colors, roughness, metalness, texture maps)
+- Themes: `default` (neon cyberpunk), `beach` (tropical), `cracked_stone` (marble)
+- Scope: All surfaces (tiles, player, lights) respect theme setting
 
-**Validation:** None at runtime. Settings are validated only by HTML `<input type="range" min max>` constraints.
+**Audio Synthesis:**
+- Approach: Web Audio API with programmatic synthesis; no audio file assets
+- Music: EDM-style adaptive BPM (135 base, scales with gameplay intensity)
+- SFX: Collision sounds (pitched by intensity), boost sounds, destruction sounds
+- Dynamic: Music speed scales with game pace (setMusicSpeed multiplier applied)
+
+**Logging:**
+- Pattern: Raw `console.log()` / `console.error()` throughout; no dedicated logger
+- Conventions: Online layer uses `[Online]` prefix, store layer uses `[Store Sub]` prefix, AI uses `[AI]` prefix
+- Debug traces: Game state transitions logged, WebSocket events logged, entity lifecycle events logged
+
+**Input Normalization:**
+- All input sources normalize to common `{forward, backward, left, right, boost}` struct
+- Keyboard mapping: P1={W,A,S,D,ShiftLeft}, P2={ArrowUp,ArrowLeft,ArrowDown,ArrowRight,ShiftRight}, customizable in settings
+- Gamepad mapping: Analogue sticks for movement, buttons for boost
+- Touch: Screen division into up/down/left/right zones + center for boost
 
 ---
 
-*Architecture analysis: 2026-03-19*
+*Architecture analysis: 2026-03-28*

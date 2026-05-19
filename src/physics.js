@@ -37,6 +37,7 @@ export async function initPhysics() {
 let accumulator = 0;
 const isMobile = isMobileDevice();
 const timeStep = isMobile ? 1 / 30 : 1 / 60; // Lower timestep on mobile
+export let interpolationFactor = 1.0; // Track how much of the timestep has elapsed for interpolation
 
 export function updatePhysics(delta) {
     if (world) {
@@ -44,10 +45,16 @@ export function updatePhysics(delta) {
         // Cap accumulator to prevent spiral of death if tab is inactive
         if (accumulator > 0.1) accumulator = 0.1;
         
+        // Store previous positions for interpolation
+        let steppedThisFrame = false;
         while (accumulator >= timeStep) {
             world.step();
             accumulator -= timeStep;
+            steppedThisFrame = true;
         }
+        
+        // Calculate interpolation factor (0 at start of timestep, 1 at end)
+        interpolationFactor = steppedThisFrame ? (accumulator / timeStep) : 0.0;
     }
 }
 

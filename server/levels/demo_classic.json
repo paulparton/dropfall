@@ -1,0 +1,498 @@
+{
+  "id": "demo_classic",
+  "name": "Classic Arena",
+  "description": "Standard radius-4 battlefield with all normal tiles.",
+  "difficulty": "normal",
+  "theme": "default",
+  "isDemo": true,
+  "tiles": [
+    {
+      "coord": {
+        "q": -4,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -4,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -4,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -4,
+        "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -4,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -3,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -2,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": -1,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 0,
+        "r": 4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 1,
+        "r": 3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 2,
+        "r": 2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 3,
+        "r": 1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -4
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -3
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -2
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": -1
+      },
+      "ability": "NORMAL",
+      "height": 4
+    },
+    {
+      "coord": {
+        "q": 4,
+        "r": 0
+      },
+      "ability": "NORMAL",
+      "height": 4
+    }
+  ]
+}
