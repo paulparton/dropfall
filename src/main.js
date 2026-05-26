@@ -39,7 +39,7 @@ import { initAudio, playMusic, playCollisionSound, setMusicSpeed, updateRollingS
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
 import { online } from './online.js';
-import { initVR, isInVR, onVRSessionStart, onVRSessionEnd } from './vr/VRSession.js';
+import { initVR, isInVR, onVRSessionStart, onVRSessionEnd, initAR, isInAR, getXRSessionMode } from './vr/VRSession.js';
 import { initControllers, updateControllers } from './vr/VRControllers.js';
 import { applyVRScale, createVRCameraRig, getVRContainer, reparentToScene, reparentToVRContainer, updateVRCameraRig } from './vr/VRCamera.js';
 import { createVRUI, updateVRUI } from './vr/VRUI.js';
@@ -1177,7 +1177,8 @@ function setupButtonHandlers() {
         'boost-regen-speed': 'boostRegenSpeed', 'boost-drain-rate': 'boostDrainRate',
         'player-aura-size': 'playerAuraSize', 'player-aura-opacity': 'playerAuraOpacity',
         'player-glow-intensity': 'playerGlowIntensity', 'player-glow-range': 'playerGlowRange',
-        'vr-scale': 'vrScale'
+        'vr-scale': 'vrScale',
+        'ar-height': 'arHeight'
     };
 
     for (const [id, key] of Object.entries(settingsMap)) {
@@ -1195,6 +1196,19 @@ function setupButtonHandlers() {
             });
         }
     }
+
+    // AR mode controls
+    document.getElementById('ar-mode')?.addEventListener('change', (e) => {
+        useGameStore.getState().updateSetting('arMode', e.target.value === 'true');
+    });
+    document.getElementById('ar-mode-type')?.addEventListener('change', (e) => {
+        useGameStore.getState().updateSetting('arModeType', e.target.value);
+    });
+    document.getElementById('ar-height')?.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        document.getElementById('ar-height-val').textContent = val.toFixed(2);
+        useGameStore.getState().updateSetting('arHeight', val);
+    });
 
     document.getElementById('theme-select')?.addEventListener('change', (e) => {
         useGameStore.getState().updateSetting('theme', e.target.value);
@@ -1412,6 +1426,21 @@ function setupButtonHandlers() {
             }
         });
     });
+
+    // Sync AR controls with stored values
+    const syncARSettings = () => {
+        const settings = useGameStore.getState().settings;
+        const arModeEl = document.getElementById('ar-mode');
+        const arModeTypeEl = document.getElementById('ar-mode-type');
+        const arHeightEl = document.getElementById('ar-height');
+        const arHeightVal = document.getElementById('ar-height-val');
+
+        if (arModeEl) arModeEl.value = settings.arMode ? 'true' : 'false';
+        if (arModeTypeEl) arModeTypeEl.value = settings.arModeType || 'roomscale';
+        if (arHeightEl) arHeightEl.value = settings.arHeight ?? 0.75;
+        if (arHeightVal) arHeightVal.textContent = (settings.arHeight ?? 0.75).toFixed(2);
+    };
+    syncARSettings();
 }
 
 // ============================================
@@ -2208,6 +2237,33 @@ async function init() {
 
         const vrButton = initVR(renderer);
         document.body.appendChild(vrButton);
+
+        // AR button (hidden by default, shown when AR mode selected)
+        const arButton = initAR(renderer);
+        arButton.id = 'ARButton';
+        document.body.appendChild(arButton);
+
+        // Show/hide XR buttons based on store setting
+        const updateXRButtons = () => {
+            const settings = useGameStore.getState().settings;
+            const showAR = settings.arMode === true;
+            vrButton.style.display = showAR ? 'none' : '';
+            arButton.style.display = showAR ? '' : 'none';
+        };
+        updateXRButtons();
+
+        // Subscribe to XR mode changes
+        useGameStore.subscribe((state, prevState) => {
+            if (state.settings?.arMode !== prevState.settings?.arMode) {
+                updateXRButtons();
+            }
+            if (state.settings?.arHeight !== prevState.settings?.arHeight ||
+                state.settings?.arModeType !== prevState.settings?.arModeType) {
+                // Re-apply camera positioning when AR settings change
+                applyVRScale();
+            }
+        });
+
         const vrControllers = initControllers(renderer, scene);
         Object.values(vrControllers).forEach((controllerObj) => {
             if (controllerObj) {

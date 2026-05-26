@@ -11,12 +11,17 @@
     <style>
       #menu, #game-over, #settings-panel { z-index: 50 !important; }
       .screen { z-index: 40 !important; }
-      #VRButton {
+      #VRButton, #ARButton {
         position: fixed !important;
-        bottom: 20px !important;
         left: 50% !important;
         transform: translateX(-50%) !important;
         z-index: 9999 !important;
+      }
+      #VRButton {
+        bottom: 20px !important;
+      }
+      #ARButton {
+        bottom: 80px !important;
       }
     </style>
   </head>
@@ -300,6 +305,28 @@
               <label for="vr-scale">VR Level Size (meters)</label>
               <input type="range" id="vr-scale" min="1" max="10" step="0.5" value="4">
               <span id="vr-scale-val">4</span>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(0,255,255,0.3); padding-top: 0.75rem; margin-top: 0.5rem;">
+              <label style="font-size: 0.95rem; color: #ff00ff; text-shadow: 0 0 5px #ff00ff;">AR MODE</label>
+            </div>
+            <div class="setting-item">
+              <label for="ar-mode">Enable AR</label>
+              <select id="ar-mode" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 4px 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;">
+                <option value="false">Off (VR)</option>
+                <option value="true">On (AR)</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="ar-mode-type">AR Mode</label>
+              <select id="ar-mode-type" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 4px 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;">
+                <option value="roomscale">Roomscale (Floor)</option>
+                <option value="tabletop">Tabletop (Elevated)</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="ar-height">Table Height (m)</label>
+              <input type="range" id="ar-height" min="0.3" max="1.5" step="0.05" value="0.75">
+              <span id="ar-height-val">0.75</span>
             </div>
           </div>
           
