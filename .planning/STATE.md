@@ -38,6 +38,7 @@ created: 2026-04-28
 - Touch latency target: <16ms (native-like feel)
 - Remove boost button from UI
 - Start with player options screen layout fix
+- AR mode added via three.js ARButton (`immersive-ar` session), roomscale (floor) and tabletop (configurable height) modes
 
 ### Pending TODOs
 - None
@@ -54,13 +55,13 @@ created: 2026-04-28
 
 ## Session Continuity
 
-**Last Session**: 2026-04-28 - Completed quick task 260428-qwy: Remove portals from game - comment out code for potential future use
-**Next Action**: Research → roadmap creation → plan phase 1
+**Last Session**: 2026-05-26 - Completed quick task 260526-tmm: Add AR mode to Dropfall VR/headset rooms (roomscale + tabletop)
+**Next Action**: Test AR mode on Meta Quest 2 headset (roomscale and tabletop)
 **Context for Next Session**:
-- User provided screenshot of player options screen showing layout issues
-- Boost button to be removed
-- Research touch input methods for physics ball games
-- Portals commented out (not removed) for potential future restoration
+- AR mode: roomscale (arena on floor) and tabletop (arena at configurable height, default 0.75m)
+- AR settings in Gameplay pane: AR Mode toggle, AR Mode Type dropdown, Table Height slider
+- ARButton toggles with VRButton based on arMode setting
+- Scene background goes transparent in AR (passthrough visible), restores on exit
 
 ---
 *State initialized: 2026-04-28 for v2.3 Mobile Support milestone*
