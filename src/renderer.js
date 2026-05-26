@@ -28,7 +28,7 @@ export function initRenderer() {
     camera.lookAt(0, 0, 0);
 
     // 3. Renderer
-    renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: isMobile ? "low-power" : "high-performance" });
+    renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: isMobile ? "low-power" : "high-performance", alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(isMobile ? 1.0 : Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;

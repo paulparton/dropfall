@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { useGameStore } from '../store.js';
+import { isInAR } from './VRSession.js';
 
 const ARENA_WORLD_SIZE = 64; // Approximate arena diameter in world units.
 
@@ -46,7 +47,16 @@ export function applyVRScale() {
 
     currentScale = vrScale / ARENA_WORLD_SIZE;
     vrContainer.scale.setScalar(currentScale);
-    vrContainer.position.set(0, 0, 0);
+
+    // AR tabletop mode: elevate container to configured table height
+    if (isInAR()) {
+        const settings = useGameStore.getState().settings || {};
+        const arModeType = settings.arModeType || 'roomscale';
+        const arHeight = Number.isFinite(settings.arHeight) ? settings.arHeight : 0.75;
+        vrContainer.position.set(0, arModeType === 'tabletop' ? arHeight : 0, 0);
+    } else {
+        vrContainer.position.set(0, 0, 0);
+    }
 
     lastAppliedVRScale = vrScale;
 }
