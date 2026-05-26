@@ -357,23 +357,22 @@ export class SDFGameEngine {
         }
     }
     
-    /* PORTAL FEATURE - DISABLED
-    /**
-     * Trigger random portal tile
-     */
-    triggerRandomPortalTile() {
-        if (this.arena && this.arena.tiles.length > 0) {
-            const randomIndex = Math.floor(Math.random() * this.arena.tiles.length);
-            const tile = this.arena.tiles[randomIndex];
-            
-            if (tile && tile.state === 'NORMAL') {
-                tile.state = 'PORTAL';
-                tile.isPortal = true;
-                // Portal effect: teleportation
-            }
-        }
-    }
-    */
+    // PORTAL FEATURE - DISABLED
+    // /**
+    //  * Trigger random portal tile
+    //  */
+    // triggerRandomPortalTile() {
+    //     if (this.arena && this.arena.tiles.length > 0) {
+    //         const randomIndex = Math.floor(Math.random() * this.arena.tiles.length);
+    //         const tile = this.arena.tiles[randomIndex];
+    //         
+    //         if (tile && tile.state === 'NORMAL') {
+    //             tile.state = 'PORTAL';
+    //             tile.isPortal = true;
+    //             // Portal effect: teleportation
+    //         }
+    //     }
+    // }
     
     /**
      * Trigger random bonus tile (power-up)
