@@ -50,6 +50,7 @@ created: 2026-04-28
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 260428-qwy | Remove portals from game - comment out code for potential future use | 2026-04-28 | e173311 | [260428-qwy-remove-portals-from-game-comment-out-cod](./quick/260428-qwy-remove-portals-from-game-comment-out-cod/) |
+| 260526-tmm | Add AR mode to Dropfall VR/headset rooms (roomscale + tabletop) | 2026-05-26 | dbe6b94, ed9029b | [260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms](./quick/260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms/) |
 
 ## Session Continuity
 
