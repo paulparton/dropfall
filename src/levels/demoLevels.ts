@@ -1,4 +1,4 @@
-export type TileAbility = 'NORMAL' | 'ICE' | 'PORTAL' | 'BONUS' | 'HAZARD' | 'CHECKPOINT';
+export type TileAbility = 'NORMAL' | 'ICE' | 'BONUS' | 'HAZARD' | 'CHECKPOINT';
 
 export interface HexCoord {
   q: number;
@@ -39,8 +39,6 @@ export interface LevelOverrides {
   arenaSize?: number;
   destructionRate?: number;
   iceRate?: number;
-  portalRate?: number;
-  portalCooldown?: number;
   bonusRate?: number;
   bonusDuration?: number;
   boostRegenSpeed?: number;
@@ -572,7 +570,7 @@ const iceRing: DemoLevel = {
   ),
 };
 
-const portalGaps = new Set<string>([
+const mazeGaps = new Set<string>([
   '0,-3',
   '1,-3',
   '-1,-2',
@@ -585,29 +583,17 @@ const portalGaps = new Set<string>([
   '0,2',
 ]);
 
-const portalChain = new Set<string>([
-  '-3,2',
-  '-2,2',
-  '-1,1',
-  '0,0',
-  '1,-1',
-  '2,-2',
-  '3,-2',
-]);
+const labyrinthRunCoords = classicArenaCoords.filter((coord) => !mazeGaps.has(keyOf(coord)));
 
-const portalMazeCoords = classicArenaCoords.filter((coord) => !portalGaps.has(keyOf(coord)));
-
-const portalMaze: DemoLevel = {
-  id: 'demo_portal_maze',
-  name: 'Portal Maze',
-  description: 'Broken pathways and linked portal lanes create sudden flanks.',
+const labyrinthRun: DemoLevel = {
+  id: 'demo_labyrinth_run',
+  name: 'Labyrinth Run',
+  description: 'Broken pathways and tight lanes create sudden flanks.',
   difficulty: 'hard',
   theme: 'tron',
   mode: 'battle',
   isDemo: true,
-  tiles: buildTilesFromCoords(portalMazeCoords, (coord) =>
-    portalChain.has(keyOf(coord)) ? 'PORTAL' : 'NORMAL',
-  ),
+  tiles: buildTilesFromCoords(labyrinthRunCoords, () => 'NORMAL'),
 };
 
 const tinyDuel: DemoLevel = {
@@ -765,7 +751,7 @@ const serpentineCircuit: DemoLevel = generateSerpentineCircuit();
 export const demoLevels: DemoLevel[] = [
   classicArena,
   iceRing,
-  portalMaze,
+  labyrinthRun,
   tinyDuel,
   gauntlet,
   raceTrack,

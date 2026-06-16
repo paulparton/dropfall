@@ -144,7 +144,6 @@ export class Player {
         this.isDead = false;
         this.freezeTimer = 0;
         this.iceCooldown = 0;
-        this.portalCooldown = 0;
         this.isBoosting = false;
         this.wasBoosting = false;
         
@@ -299,9 +298,8 @@ export class Player {
         // Update timers
         if (this.freezeTimer > 0) this.freezeTimer -= delta;
         if (this.iceCooldown > 0) this.iceCooldown -= delta;
-        if (this.portalCooldown > 0) this.portalCooldown -= delta;
 
-        // 3. Check Tile State for Ice and Portal
+        // 3. Check Tile State for Ice and Bonus
         if (arena) {
             const hex = pixelToHex(position.x, position.z, 8.0); // radius is 8.0
             const tile = arena.getTileAt(hex.q, hex.r);
@@ -311,29 +309,6 @@ export class Player {
                 if (this.freezeTimer <= 0 && this.iceCooldown <= 0) {
                     this.freezeTimer = 1.0; // Freeze for 1.0 seconds
                     this.iceCooldown = 2.0; // Cooldown to prevent perma-freeze
-                }
-            }
-            
-            // Portal tile logic
-            if (tile && tile.state === 'PORTAL') {
-                if (!this.portalCooldown || this.portalCooldown <= 0) {
-                    const portalTiles = arena.getPortalTiles();
-                    if (portalTiles.length > 1) {
-                        // Find a different portal tile to teleport to
-                        const otherPortals = portalTiles.filter(p => p !== tile);
-                        const targetPortal = otherPortals[Math.floor(Math.random() * otherPortals.length)];
-                        
-                        // Teleport to target portal
-                        const targetPos = targetPortal.mesh.position;
-                        this.rigidBody.setTranslation({ x: targetPos.x, y: targetPos.y + 2, z: targetPos.z }, true);
-                        
-                        // Reset velocity to avoid momentum carryover
-                        this.rigidBody.setLinvel({ x: 0, y: 0, z: 0 }, true);
-                        
-                        // Set cooldown
-                        const settings = useGameStore.getState().settings;
-                        this.portalCooldown = settings.portalCooldown;
-                    }
                 }
             }
             

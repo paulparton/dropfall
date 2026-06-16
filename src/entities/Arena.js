@@ -8,7 +8,7 @@ import { useGameStore } from '../store.js';
 import { POWER_UP_EFFECTS } from './Player.js';
 
 // Tile state to shader uniform mapping
-const STATE_MAP = { NORMAL: 0, ICE: 1, WARNING: 2, FALLING: 3, BONUS: 5, PORTAL: 6 };
+const STATE_MAP = { NORMAL: 0, ICE: 1, WARNING: 2, FALLING: 3, BONUS: 5 };
 
 // === PERFORMANCE: Shared geometries to reduce memory and draw calls ===
 let SHARED_TILE_GEOMETRY = null;
@@ -53,12 +53,6 @@ function getTileMaterials(theme, edgeColor, baseColor, iceColor) {
             ...tileMaterialParams,
             color: 0xff2200
         }),
-        portal: new THREE.MeshStandardMaterial({
-            ...tileMaterialParams,
-            color: 0x00ffff,
-            emissive: 0x0088ff,
-            emissiveIntensity: 0.6
-        }),
         bonus: new THREE.MeshStandardMaterial({
             ...tileMaterialParams,
             color: 0xffff00,
@@ -78,7 +72,6 @@ export class Arena {
         this.tiles = [];
         this.dropTimer = 0;
         this.iceTimer = 0;
-        this.portalTimer = 0;
         this.bonusTimer = 0;
         this.pulseTime = 0;
 
@@ -89,7 +82,7 @@ export class Arena {
         const hasCustomTiles = Array.isArray(customTiles);
         const normalizeAbility = (ability) => {
             const normalizedAbility = (typeof ability === 'string' ? ability.toUpperCase() : 'NORMAL');
-            if (normalizedAbility === 'ICE' || normalizedAbility === 'PORTAL' || normalizedAbility === 'BONUS' || normalizedAbility === 'NORMAL') {
+            if (normalizedAbility === 'ICE' || normalizedAbility === 'BONUS' || normalizedAbility === 'NORMAL') {
                 return normalizedAbility;
             }
             return 'NORMAL';
@@ -208,7 +201,6 @@ export class Arena {
         if (storeState.gameState === 'PLAYING') {
             this.dropTimer += delta;
             this.iceTimer += delta;
-            this.portalTimer += delta;
             this.bonusTimer += delta;
         }
 
@@ -217,7 +209,6 @@ export class Arena {
         // Ensure settings have valid values with fallbacks
         const destructionRate = settings.destructionRate || 3.0;
         const iceRate = settings.iceRate || 2.0;
-        const portalRate = settings.portalRate || 8.0;
         const bonusRate = settings.bonusRate || 6.0;
 
         if (!isOnlineClient) {
@@ -233,13 +224,7 @@ export class Arena {
                 this.triggerIce();
             }
 
-            // 3. Handle Portal Tiles
-            if (this.portalTimer >= portalRate) {
-                this.portalTimer = 0;
-                this.triggerPortal();
-            }
-
-            // 4. Handle Bonus Tiles
+            // 3. Handle Bonus Tiles
             if (this.bonusTimer >= bonusRate) {
                 this.bonusTimer = 0;
                 this.triggerBonus();
@@ -376,17 +361,6 @@ export class Arena {
         tile.collider.setFriction(0.0);
     }
 
-    triggerPortal() {
-        const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
-        if (stableTiles.length === 0) return;
-
-        const index = Math.floor(Math.random() * stableTiles.length);
-        const tile = stableTiles[index];
-
-        tile.state = 'PORTAL';
-        tile.timer = 0; // Portal tiles are persistent
-    }
-
     _pickWeightedPowerUp() {
         const weights = useGameStore.getState().settings.powerUpWeights;
         const candidates = POWER_UP_EFFECTS.filter(pu => (weights[pu.type] || 0) > 0);
@@ -472,10 +446,6 @@ export class Arena {
         tile.powerUpType = powerUp.type;
         tile.statue = this._createStatue(powerUp, tile.mesh.position);
         tile.statuePowerUp = powerUp;
-    }
-
-    getPortalTiles() {
-        return this.tiles.filter(t => t.state === 'PORTAL');
     }
 
     convertTileToNormal(tile) {

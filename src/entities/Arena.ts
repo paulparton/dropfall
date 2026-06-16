@@ -17,7 +17,7 @@ import type { ArenaEntity, GameContext } from '../types/Entity';
 import type { ArenaBounds } from '../types/Game';
 
 // Tile state types
-export type TileState = 'NORMAL' | 'ICE' | 'PORTAL' | 'BONUS' | 'WARNING' | 'FALLING' | 'DESTRUCTED';
+export type TileState = 'NORMAL' | 'ICE' | 'BONUS' | 'WARNING' | 'FALLING' | 'DESTRUCTED';
 
 // Arena tile data structure
 export interface ArenaTileData {
@@ -39,7 +39,6 @@ interface TileMaterials {
   ice: THREE.MeshStandardMaterial;
   warning: THREE.MeshStandardMaterial;
   falling: THREE.MeshStandardMaterial;
-  portal: THREE.MeshStandardMaterial;
   bonus: THREE.MeshStandardMaterial;
 }
 
@@ -86,12 +85,6 @@ function getTileMaterials(theme: string, edgeColor: number, baseColor: number, i
             ...tileMaterialParams,
             color: 0xff2200
         }),
-        portal: new THREE.MeshStandardMaterial({
-            ...tileMaterialParams,
-            color: 0x00ffff,
-            emissive: 0x0088ff,
-            emissiveIntensity: 0.6
-        }),
         bonus: new THREE.MeshStandardMaterial({
             ...tileMaterialParams,
             color: 0xffff00,
@@ -106,7 +99,7 @@ function getTileMaterials(theme: string, edgeColor: number, baseColor: number, i
 
 /**
  * Arena class extending EntityBase
- * Manages hex grid tiles with different states (NORMAL, ICE, PORTAL, BONUS, etc.)
+ * Manages hex grid tiles with different states (NORMAL, ICE, BONUS, etc.)
  */
 export class Arena extends EntityBase implements ArenaEntity {
   readonly type: 'arena' = 'arena';
@@ -125,9 +118,6 @@ export class Arena extends EntityBase implements ArenaEntity {
   // Timers
   dropTimer: number = 0;
   iceTimer: number = 0;
-  /* PORTAL FEATURE - DISABLED
-  portalTimer: number = 0;
-  */
   bonusTimer: number = 0;
   pulseTime: number = 0;
   
@@ -214,12 +204,6 @@ export class Arena extends EntityBase implements ArenaEntity {
               material = this.materials.ice;
               tileState = 'NORMAL'; // ICE tiles are still normal state initially
               break;
-            /* PORTAL FEATURE - DISABLED
-            case 'PORTAL':
-              material = this.materials.portal;
-              tileState = 'NORMAL';
-              break;
-            */
             case 'BONUS':
               material = this.materials.bonus;
               tileState = 'NORMAL';
@@ -299,14 +283,13 @@ export class Arena extends EntityBase implements ArenaEntity {
     // Delegate to game update logic
     this.updateGame(deltaTime);
   }
+
+    updateGame(delta: number): void {
     const storeState = useGameStore.getState();
     if (storeState.gameState === 'PLAYING') {
-        this.dropTimer += delta;
-        this.iceTimer += delta;
-        /* PORTAL FEATURE - DISABLED
-        this.portalTimer += delta;
-        */
-        this.bonusTimer += delta;
+      this.dropTimer += delta;
+      this.iceTimer += delta;
+      this.bonusTimer += delta;
     }
 
     const settings = storeState.settings;
@@ -314,35 +297,24 @@ export class Arena extends EntityBase implements ArenaEntity {
     // Ensure settings have valid values with fallbacks
     const destructionRate = settings.destructionRate || 3.0;
     const iceRate = settings.iceRate || 2.0;
-    /* PORTAL FEATURE - DISABLED
-    const portalRate = settings.portalRate || 8.0;
-    */
     const bonusRate = settings.bonusRate || 6.0;
 
     // 1. Handle The Drop
     if (this.dropTimer >= destructionRate) {
-        this.dropTimer = 0;
-        this.triggerDrop();
+      this.dropTimer = 0;
+      this.triggerDrop();
     }
 
     // 2. Handle Ice Tiles
     if (this.iceTimer >= iceRate) {
-        this.iceTimer = 0;
-        this.triggerIce();
+      this.iceTimer = 0;
+      this.triggerIce();
     }
 
-    /* PORTAL FEATURE - DISABLED
-    // 3. Handle Portal Tiles
-    if (this.portalTimer >= portalRate) {
-        this.portalTimer = 0;
-        this.triggerPortal();
-    }
-    */
-
-    // 4. Handle Bonus Tiles
+    // 3. Handle Bonus Tiles
     if (this.bonusTimer >= bonusRate) {
-        this.bonusTimer = 0;
-        this.triggerBonus();
+      this.bonusTimer = 0;
+      this.triggerBonus();
     }
 
     // === PERFORMANCE: Accumulate time instead of Date.now() every frame ===
@@ -350,80 +322,69 @@ export class Arena extends EntityBase implements ArenaEntity {
     const beatFreq = 135 / 60; // 2.25 Hz
 
     this.tiles.forEach(tile => {
-        // === PERFORMANCE: Pulse via emissive intensity, not light intensity ===
-        const pulse = (Math.sin(this.pulseTime * Math.PI * 2 * beatFreq - tile.distanceToCenter * 0.2) + 1) / 2;
+      // === PERFORMANCE: Pulse via emissive intensity, not light intensity ===
+      const pulse = (Math.sin(this.pulseTime * Math.PI * 2 * beatFreq - tile.distanceToCenter * 0.2) + 1) / 2;
 
-        if (tile.state === 'NORMAL') {
-            tile.mesh.material = this.materials.normal;
-            tile.edgeOpacity = 0.7 + pulse * 0.3;
-            (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
-        }
+      if (tile.state === 'NORMAL') {
+        tile.mesh.material = this.materials.normal;
+        tile.edgeOpacity = 0.7 + pulse * 0.3;
+        (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
+      }
 
-        /* PORTAL FEATURE - DISABLED
-        if (tile.state === 'PORTAL') {
-            tile.mesh.material = this.materials.portal;
-            // Portal pulse: glow stronger
-            (tile.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.4 + pulse * 0.4;
-            tile.edgeOpacity = 0.8 + pulse * 0.2;
-            (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
-            (tile.edges.material as THREE.LineBasicMaterial).color.setHex(0x0088ff);
-        }
-        */
+      if (tile.state === 'BONUS') {
+        // Bonus tiles flash more aggressively
+        tile.mesh.material = this.materials.bonus;
+        const bonusFlash = (Math.sin(this.pulseTime * Math.PI * 4) + 1) / 2; // Faster flash
+        (tile.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5 + bonusFlash * 0.5;
+        tile.edgeOpacity = 0.6 + bonusFlash * 0.4;
+        (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
+        (tile.edges.material as THREE.LineBasicMaterial).color.setHex(0xff8800);
+      }
 
-        if (tile.state === 'BONUS') {
-            // Bonus tiles flash more aggressively
-            tile.mesh.material = this.materials.bonus;
-            const bonusFlash = (Math.sin(this.pulseTime * Math.PI * 4) + 1) / 2; // Faster flash
-            (tile.mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.5 + bonusFlash * 0.5;
-            tile.edgeOpacity = 0.6 + bonusFlash * 0.4;
-            (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
-            (tile.edges.material as THREE.LineBasicMaterial).color.setHex(0xff8800);
-        }
-
-        if (tile.state === 'WARNING') {
-            tile.timer -= delta;
-            const isFlash = Math.sin(tile.timer * 10) > 0;
+      if (tile.state === 'WARNING') {
+        tile.timer -= delta;
+        const isFlash = Math.sin(tile.timer * 10) > 0;
             
-            if (isFlash) {
-                tile.mesh.material = this.materials.warning;
-                (tile.edges.material as THREE.LineBasicMaterial).opacity = 0.7;  // Less blinding warning
-                (tile.edges.material as THREE.LineBasicMaterial).color.setHex(0xff0000);
-            } else {
-                tile.mesh.material = this.materials.normal;
-                (tile.edges.material as THREE.LineBasicMaterial).opacity = 0.7;
-                (tile.edges.material as THREE.LineBasicMaterial).color.setHex(this.edgeColor);
-            }
-
-            if (tile.timer <= 0) {
-                tile.state = 'FALLING';
-                tile.mesh.material = this.materials.falling;
-                tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
-                tile.mesh.scale.set(0.95, 1, 0.95);
-            }
-        } else if (tile.state === 'ICE') {
-            tile.timer -= delta;
-            tile.mesh.material = this.materials.ice;
-            tile.edgeOpacity = 0.8 + pulse * 0.2;
-            (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
-
-            if (tile.timer <= 0) {
-                tile.state = 'NORMAL';
-                tile.mesh.material = this.materials.normal;
-                tile.collider.setFriction(0.0);
-                (tile.edges.material as THREE.LineBasicMaterial).color.setHex(this.edgeColor);
-            }
-        } else if (tile.state === 'FALLING') {
-            const position = tile.rigidBody.translation();
-            const rotation = tile.rigidBody.rotation();
-            tile.mesh.position.copy(position);
-            tile.mesh.quaternion.copy(rotation);
+        if (isFlash) {
+          tile.mesh.material = this.materials.warning;
+          (tile.edges.material as THREE.LineBasicMaterial).opacity = 0.7;  // Less blinding warning
+          (tile.edges.material as THREE.LineBasicMaterial).color.setHex(0xff0000);
+        } else {
+          tile.mesh.material = this.materials.normal;
+          (tile.edges.material as THREE.LineBasicMaterial).opacity = 0.7;
+          (tile.edges.material as THREE.LineBasicMaterial).color.setHex(this.edgeColor);
         }
+
+        if (tile.timer <= 0) {
+          tile.state = 'FALLING';
+          tile.mesh.material = this.materials.falling;
+          tile.rigidBody.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+          tile.mesh.scale.set(0.95, 1, 0.95);
+        }
+      } else if (tile.state === 'ICE') {
+        tile.timer -= delta;
+        tile.mesh.material = this.materials.ice;
+        tile.edgeOpacity = 0.8 + pulse * 0.2;
+        (tile.edges.material as THREE.LineBasicMaterial).opacity = tile.edgeOpacity;
+
+        if (tile.timer <= 0) {
+          tile.state = 'NORMAL';
+          tile.mesh.material = this.materials.normal;
+          tile.collider.setFriction(0.0);
+          (tile.edges.material as THREE.LineBasicMaterial).color.setHex(this.edgeColor);
+        }
+      } else if (tile.state === 'FALLING') {
+        const position = tile.rigidBody.translation();
+        const rotation = tile.rigidBody.rotation();
+        tile.mesh.position.copy(position);
+        tile.mesh.quaternion.copy(rotation);
+      }
     });
 
     if (this.skyboxMaterial) {
-        this.skyboxMaterial.uniforms.uTime.value = this.pulseTime;
+      this.skyboxMaterial.uniforms.uTime.value = this.pulseTime;
     }
-  }
+    }
 
   triggerDrop(): void {
     const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
@@ -452,20 +413,6 @@ export class Arena extends EntityBase implements ArenaEntity {
     tile.collider.setFriction(0.0);
   }
 
-  /* PORTAL FEATURE - DISABLED
-  triggerPortal(): void {
-    const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
-    if (stableTiles.length === 0) return;
-
-    const index = Math.floor(Math.random() * stableTiles.length);
-    const tile = stableTiles[index];
-    if (!tile) return;
-
-    tile.state = 'PORTAL';
-    tile.timer = 0; // Portal tiles are persistent
-  }
-  */
-
   triggerBonus(): void {
     const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
     if (stableTiles.length === 0) return;
@@ -480,10 +427,6 @@ export class Arena extends EntityBase implements ArenaEntity {
 
   getTileAt(q: number, r: number): ArenaTileData | undefined {
     return this.tiles.find(t => t.q === q && t.r === r);
-  }
-
-  getPortalTiles(): ArenaTileData[] {
-    return this.tiles.filter(t => t.state === 'PORTAL');
   }
 
   convertTileToNormal(tile: ArenaTileData): void {

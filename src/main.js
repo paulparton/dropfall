@@ -238,8 +238,6 @@ const LEVEL_OVERRIDE_SETTING_KEYS = [
     'arenaSize',
     'destructionRate',
     'iceRate',
-    'portalRate',
-    'portalCooldown',
     'bonusRate',
     'bonusDuration',
     'boostRegenSpeed',
@@ -1112,8 +1110,6 @@ function setupButtonHandlers() {
             arenaSize: settings.arenaSize,
             destructionRate: settings.destructionRate,
             iceRate: settings.iceRate,
-            portalRate: settings.portalRate,
-            portalCooldown: settings.portalCooldown,
             bonusRate: settings.bonusRate,
             bonusDuration: settings.bonusDuration,
             boostRegenSpeed: settings.boostRegenSpeed,
@@ -1171,7 +1167,7 @@ function setupButtonHandlers() {
     const settingsMap = {
         'sphere-size': 'sphereSize', 'sphere-weight': 'sphereWeight', 'sphere-accel': 'sphereAccel',
         'collision-bounce': 'collisionBounce', 'arena-size': 'arenaSize', 'destruction-rate': 'destructionRate',
-        'ice-rate': 'iceRate', 'portal-rate': 'portalRate', 'portal-cooldown': 'portalCooldown',
+        'ice-rate': 'iceRate',
         'bonus-rate': 'bonusRate', 'bonus-duration': 'bonusDuration', 'music-volume': 'musicVolume',
         'sfx-volume': 'sfxVolume', 'particle-amount': 'particleAmount', 'bloom-level': 'bloomLevel',
         'boost-regen-speed': 'boostRegenSpeed', 'boost-drain-rate': 'boostDrainRate',
@@ -1239,7 +1235,6 @@ function setupButtonHandlers() {
                 sphereWeight: 50,
                 destructionRate: 6.0,
                 iceRate: 4.0,
-                portalRate: 12.0,
                 bonusRate: 10.0
             },
             'Fast & Heavy': {
@@ -1248,7 +1243,6 @@ function setupButtonHandlers() {
                 sphereWeight: 400,
                 destructionRate: 1.5,
                 iceRate: 1.0,
-                portalRate: 4.0,
                 bonusRate: 3.0
             },
             'Tiny Spheres': {
@@ -1257,7 +1251,6 @@ function setupButtonHandlers() {
                 sphereWeight: 80,
                 destructionRate: 3.0,
                 iceRate: 2.0,
-                portalRate: 8.0,
                 bonusRate: 5.0
             },
             'Massive Spheres': {
@@ -1267,7 +1260,6 @@ function setupButtonHandlers() {
                 collisionBounce: 0.3,
                 destructionRate: 4.0,
                 iceRate: 3.0,
-                portalRate: 10.0,
                 bonusRate: 8.0
             },
             'Chaos Mode': {
@@ -1276,7 +1268,6 @@ function setupButtonHandlers() {
                 sphereWeight: 150,
                 destructionRate: 0.8,
                 iceRate: 0.8,
-                portalRate: 2.0,
                 bonusRate: 2.0,
                 bonusDuration: 2.0
             },
@@ -1286,7 +1277,6 @@ function setupButtonHandlers() {
                 sphereWeight: 150,
                 destructionRate: 8.0,
                 iceRate: 6.0,
-                portalRate: 15.0,
                 bonusRate: 12.0,
                 bonusDuration: 6.0
             },
@@ -1294,20 +1284,17 @@ function setupButtonHandlers() {
                 arenaSize: 8,
                 destructionRate: 4.0,
                 iceRate: 3.0,
-                portalRate: 10.0,
                 bonusRate: 8.0
             },
             'Tiny Arena': {
                 arenaSize: 2,
                 destructionRate: 2.0,
                 iceRate: 1.5,
-                portalRate: 5.0,
                 bonusRate: 4.0
             },
             'Party Mode': {
                 destructionRate: 1.0,
                 iceRate: 1.0,
-                portalRate: 3.0,
                 bonusRate: 2.5,
                 bonusDuration: 3.0,
                 sphereAccel: 2500,
@@ -1320,7 +1307,6 @@ function setupButtonHandlers() {
                 collisionBounce: 1.4,
                 destructionRate: 2.5,
                 iceRate: 2.0,
-                portalRate: 6.0,
                 bonusRate: 5.0
             }
         };

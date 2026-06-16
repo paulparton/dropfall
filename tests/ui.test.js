@@ -166,8 +166,6 @@ describe('Settings Controls', () => {
         'arena-size',
         'destruction-rate',
         'ice-rate',
-        'portal-rate',
-        'portal-cooldown',
         'bonus-rate',
         'bonus-duration',
         'music-volume',
@@ -182,8 +180,8 @@ describe('Settings Controls', () => {
         'player-glow-range',
     ];
 
-    it('should have 21 configurable settings', () => {
-        expect(controlSettings.length).toBe(21);
+    it('should have 19 configurable settings', () => {
+        expect(controlSettings.length).toBe(19);
     });
 
     it('should have all gameplay-relevant settings', () => {
@@ -194,7 +192,6 @@ describe('Settings Controls', () => {
     });
 
     it('should have all power-up rate settings', () => {
-        expect(controlSettings).toContain('portal-rate');
         expect(controlSettings).toContain('bonus-rate');
         expect(controlSettings).toContain('destruction-rate');
         expect(controlSettings).toContain('ice-rate');

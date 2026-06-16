@@ -493,8 +493,6 @@ class GameServer {
                 arenaSize: 4,
                 destructionRate: 3.0,
                 iceRate: 2.0,
-                portalRate: 8.0,
-                portalCooldown: 2.0,
                 bonusRate: 6.0,
                 bonusDuration: 4.0,
                 boostRegenSpeed: 1.5,

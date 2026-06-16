@@ -346,8 +346,6 @@
                     <div class="settings-group">
                         <div class="setting-row"><label>Destruction Rate</label><div class="setting-pair"><input id="destructionRateRange" type="range" min="0.1" max="15.0" step="0.1"><input id="destructionRate" type="number" min="0.1" max="15.0" step="0.1"></div></div>
                         <div class="setting-row"><label>Ice Rate</label><div class="setting-pair"><input id="iceRateRange" type="range" min="0.1" max="10.0" step="0.1"><input id="iceRate" type="number" min="0.1" max="10.0" step="0.1"></div></div>
-                        <div class="setting-row"><label>Portal Rate</label><div class="setting-pair"><input id="portalRateRange" type="range" min="0.5" max="20.0" step="0.5"><input id="portalRate" type="number" min="0.5" max="20.0" step="0.5"></div></div>
-                        <div class="setting-row"><label>Portal Cooldown</label><div class="setting-pair"><input id="portalCooldownRange" type="range" min="0.5" max="10.0" step="0.5"><input id="portalCooldown" type="number" min="0.5" max="10.0" step="0.5"></div></div>
                         <div class="setting-row"><label>Bonus Rate</label><div class="setting-pair"><input id="bonusRateRange" type="range" min="0.5" max="20.0" step="0.5"><input id="bonusRate" type="number" min="0.5" max="20.0" step="0.5"></div></div>
                         <div class="setting-row"><label>Bonus Duration</label><div class="setting-pair"><input id="bonusDurationRange" type="range" min="1.0" max="15.0" step="0.5"><input id="bonusDuration" type="number" min="1.0" max="15.0" step="0.5"></div></div>
                         <div class="setting-row"><label>Boost Regen Speed</label><div class="setting-pair"><input id="boostRegenSpeedRange" type="range" min="0.1" max="5.0" step="0.1"><input id="boostRegenSpeed" type="number" min="0.1" max="5.0" step="0.1"></div></div>
@@ -385,7 +383,6 @@
                 <h2>Tile Type</h2>
                 <button class="tile-button active" onclick="editor.setTileType(event, 'NORMAL')">🟢 NORMAL</button>
                 <button class="tile-button" onclick="editor.setTileType(event, 'ICE')">🔵 ICE</button>
-                <button class="tile-button" onclick="editor.setTileType(event, 'PORTAL')">🟣 PORTAL</button>
                 <button class="tile-button" onclick="editor.setTileType(event, 'BONUS')">🟡 BONUS</button>
                 <button class="tile-button" onclick="editor.setTileType(event, 'WARNING')">🟠 WARNING</button>
             </div>
@@ -554,8 +551,6 @@
                     arenaSize: 4,
                     destructionRate: 3.0,
                     iceRate: 2.0,
-                    portalRate: 8.0,
-                    portalCooldown: 2.0,
                     bonusRate: 6.0,
                     bonusDuration: 4.0,
                     boostRegenSpeed: 1.5,
@@ -573,7 +568,7 @@
 
                 this.rangeSettingIds = [
                     'sphereSize', 'sphereWeight', 'sphereAccel', 'collisionBounce', 'arenaSize',
-                    'destructionRate', 'iceRate', 'portalRate', 'portalCooldown', 'bonusRate',
+                    'destructionRate', 'iceRate', 'bonusRate',
                     'bonusDuration', 'boostRegenSpeed', 'boostDrainRate', 'bloomLevel',
                     'playerAuraSize', 'playerAuraOpacity', 'playerGlowIntensity', 'playerGlowRange'
                 ];
@@ -637,8 +632,6 @@
                     arenaSize: this.getRangeValue('arenaSize'),
                     destructionRate: this.getRangeValue('destructionRate'),
                     iceRate: this.getRangeValue('iceRate'),
-                    portalRate: this.getRangeValue('portalRate'),
-                    portalCooldown: this.getRangeValue('portalCooldown'),
                     bonusRate: this.getRangeValue('bonusRate'),
                     bonusDuration: this.getRangeValue('bonusDuration'),
                     boostRegenSpeed: this.getRangeValue('boostRegenSpeed'),
@@ -767,7 +760,6 @@
                 const colors = {
                     'NORMAL': 0x666666,
                     'ICE': 0x335555,
-                    'PORTAL': 0x00ffff,
                     'BONUS': 0xffff00,
                     'WARNING': 0xff6600
                 };
@@ -778,10 +770,7 @@
                     roughness: 0.6
                 });
 
-                if (type === 'PORTAL') {
-                    material.emissive = new THREE.Color(0x0088ff);
-                    material.emissiveIntensity = 0.6;
-                } else if (type === 'BONUS') {
+                if (type === 'BONUS') {
                     material.emissive = new THREE.Color(0xff8800);
                     material.emissiveIntensity = 0.7;
                 }
@@ -986,10 +975,10 @@
             }
 
             normalizeImportedLevel(level) {
-                const validTileTypes = new Set(['NORMAL', 'ICE', 'PORTAL', 'BONUS', 'WARNING']);
+                const validTileTypes = new Set(['NORMAL', 'ICE', 'BONUS', 'WARNING']);
                 const validSettingsKeys = [
                     'theme', 'sphereSize', 'sphereWeight', 'sphereAccel', 'collisionBounce',
-                    'arenaSize', 'destructionRate', 'iceRate', 'portalRate', 'portalCooldown',
+                    'arenaSize', 'destructionRate', 'iceRate',
                     'bonusRate', 'bonusDuration', 'boostRegenSpeed', 'boostDrainRate',
                     'bloomLevel', 'playerAuraSize', 'playerAuraOpacity', 'playerGlowIntensity',
                     'playerGlowRange', 'p1Color', 'p2Color', 'p1Hat', 'p2Hat'

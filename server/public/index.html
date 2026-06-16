@@ -2,16 +2,31 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- viewport-fit=cover enables content to render in iOS safe areas (notch, home indicator) -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- Suggest portrait as primary orientation for mobile (hint, not enforced) -->
+    <meta name="screen-orientation" content="portrait-primary" />
     <title>Dropfall</title>
     <style>
       #menu, #game-over, #settings-panel { z-index: 50 !important; }
       .screen { z-index: 40 !important; }
+      #VRButton, #ARButton {
+        position: fixed !important;
+        left: 50% !important;
+        transform: translateX(-50%) !important;
+        z-index: 9999 !important;
+      }
+      #VRButton {
+        bottom: 20px !important;
+      }
+      #ARButton {
+        bottom: 80px !important;
+      }
     </style>
-    <script type="module" crossorigin src="/assets/index-Bi_cuv3b.js"></script>
+    <script type="module" crossorigin src="/assets/index-CpZkskZP.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/physics-yV62z-mf.js">
-    <link rel="modulepreload" crossorigin href="/assets/three-BvCvXVOE.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-D5Ezq7za.css">
+    <link rel="modulepreload" crossorigin href="/assets/three-cs_MZA8J.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-DtOrmy6e.css">
   </head>
   <body>
     <!-- Game canvas container -->
@@ -259,16 +274,6 @@
                 <span id="ice-rate-val">2.0</span>
               </div>
               <div class="setting-item">
-                <label for="portal-rate">Portal Rate (s)</label>
-                <input type="range" id="portal-rate" min="1.0" max="15.0" step="0.5" value="8.0">
-                <span id="portal-rate-val">8.0</span>
-              </div>
-              <div class="setting-item">
-                <label for="portal-cooldown">Portal Cooldown (s)</label>
-                <input type="range" id="portal-cooldown" min="0.5" max="5.0" step="0.5" value="2.0">
-                <span id="portal-cooldown-val">2.0</span>
-              </div>
-              <div class="setting-item">
                 <label for="bonus-rate">Bonus Rate (s)</label>
                 <input type="range" id="bonus-rate" min="2.0" max="15.0" step="0.5" value="6.0">
                 <span id="bonus-rate-val">6.0</span>
@@ -288,6 +293,33 @@
                 <input type="range" id="boost-drain-rate" min="5" max="50" step="1" value="20">
                 <span id="boost-drain-rate-val">20</span>
               </div>
+            </div>
+            <div class="setting-item">
+              <label for="vr-scale">VR Level Size (meters)</label>
+              <input type="range" id="vr-scale" min="1" max="10" step="0.5" value="4">
+              <span id="vr-scale-val">4</span>
+            </div>
+            <div class="setting-item" style="grid-column: 1 / -1; border-top: 1px solid rgba(0,255,255,0.3); padding-top: 0.75rem; margin-top: 0.5rem;">
+              <label style="font-size: 0.95rem; color: #ff00ff; text-shadow: 0 0 5px #ff00ff;">AR MODE</label>
+            </div>
+            <div class="setting-item">
+              <label for="ar-mode">Enable AR</label>
+              <select id="ar-mode" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 4px 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;">
+                <option value="false">Off (VR)</option>
+                <option value="true">On (AR)</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="ar-mode-type">AR Mode</label>
+              <select id="ar-mode-type" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 4px 8px; font-family: 'Courier New', Courier, monospace; font-size: 0.9rem;">
+                <option value="roomscale">Roomscale (Floor)</option>
+                <option value="tabletop">Tabletop (Elevated)</option>
+              </select>
+            </div>
+            <div class="setting-item">
+              <label for="ar-height">Table Height (m)</label>
+              <input type="range" id="ar-height" min="0.3" max="1.5" step="0.05" value="0.75">
+              <span id="ar-height-val">0.75</span>
             </div>
           </div>
           

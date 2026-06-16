@@ -27,10 +27,6 @@ export interface GameSettings {
   particleAmount: number;
   destructionRate: number;
   iceRate: number;
-  /* PORTAL FEATURE - COMMENTED OUT FOR POTENTIAL FUTURE USE
-  portalRate: number;
-  portalCooldown: number;
-  */
   bonusRate: number;
   bonusDuration: number;
   bloomLevel: number;
@@ -238,10 +234,6 @@ const defaultSettings: GameSettings = {
   particleAmount: 1.0,
   destructionRate: 3.0,
   iceRate: 2.0,
-  /* PORTAL FEATURE - COMMENTED OUT FOR POTENTIAL FUTURE USE
-  portalRate: 8.0,
-  portalCooldown: 2.0,
-  */
   bonusRate: 6.0,
   bonusDuration: 4.0,
   bloomLevel: 0,

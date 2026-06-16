@@ -21,7 +21,6 @@ const HALF_SQRT3 = SQRT3 / 2;
 const ABILITY_COLORS: Record<string, string> = {
   NORMAL: '#666666',
   ICE: '#00ddff',
-  PORTAL: '#aa44ff',
   BONUS: '#ffdd00',
   HAZARD: '#ff4444',
 };

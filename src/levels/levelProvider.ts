@@ -26,8 +26,6 @@ export type LevelData =
       arenaSize?: number;
       destructionRate?: number;
       iceRate?: number;
-      portalRate?: number;
-      portalCooldown?: number;
       bonusRate?: number;
       bonusDuration?: number;
       boostRegenSpeed?: number;
