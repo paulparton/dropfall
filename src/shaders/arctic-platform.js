@@ -98,6 +98,8 @@ float frostPattern(vec2 p) {
 void main() {
     vec2 uv = vUv;
     vec2 worldUV = vWorldPos.xz * 0.1;
+    float topMask = smoothstep(0.45, 0.8, vNormal.y);
+    float sideMask = 1.0 - topMask;
 
     // -- Base ice color --
     // Translucent ice with depth layers
@@ -120,7 +122,7 @@ void main() {
 
     // -- Frost crystal overlay --
     float frost = frostPattern(uv);
-    color += frost * vec3(0.85, 0.93, 1.0) * 0.2;
+    color += frost * vec3(0.85, 0.93, 1.0) * 0.2 * topMask;
 
     // -- Snowflakes (2-3 per tile) --
     for (int i = 0; i < 3; i++) {
@@ -133,7 +135,7 @@ void main() {
         vec2 p = rotate2d(angle) * (uv - center);
         float sf = snowflakeSDF(p / size, seed) * size;
         float mask = smoothstep(0.003, 0.0, sf);
-        color = mix(color, vec3(0.95, 0.97, 1.0), mask * 0.7);
+        color = mix(color, vec3(0.95, 0.97, 1.0), mask * 0.7 * topMask);
     }
 
     // -- Bubble inclusions (trapped air) --
@@ -144,63 +146,67 @@ void main() {
         float bd = length(uv - bpos) - bsize;
         float bubble = smoothstep(0.003, 0.0, bd);
         float rim = smoothstep(bsize * 0.5, bsize, length(uv - bpos));
-        color += bubble * vec3(0.3, 0.5, 0.7) * rim * 0.4;
+        color += bubble * vec3(0.3, 0.5, 0.7) * rim * 0.4 * topMask;
         // Specular highlight on bubble
         float spec = smoothstep(bsize * 0.7, bsize * 0.4, length(uv - bpos - vec2(0.003, 0.003)));
-        color += bubble * spec * vec3(1.0) * 0.3;
+        color += bubble * spec * vec3(1.0) * 0.3 * topMask;
     }
 
     // -- Subsurface shimmer --
     float shimmer = sin(worldUV.x * 30.0 + worldUV.y * 20.0 + uTime * 1.5) * 0.5 + 0.5;
     shimmer *= sin(worldUV.x * 15.0 - worldUV.y * 25.0 + uTime * 1.2) * 0.5 + 0.5;
-    color += shimmer * vec3(0.1, 0.15, 0.25) * 0.15;
+    color += shimmer * vec3(0.1, 0.15, 0.25) * 0.15 * topMask;
 
     // -- Specular glint (Fresnel-like) --
     float fresnel = pow(1.0 - abs(dot(vNormal, vec3(0.0, 1.0, 0.0))), 3.0);
-    color += fresnel * vec3(0.6, 0.8, 1.0) * 0.3;
+    color += fresnel * vec3(0.6, 0.8, 1.0) * 0.3 * topMask;
 
     // -- Tile edge frost rim --
     float edgeDist = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y));
     float edgeFrost = smoothstep(0.12, 0.0, edgeDist);
     float edgeNoise = noise2D(uv * 40.0 + vWorldPos.xz * 5.0);
     edgeFrost *= 0.5 + edgeNoise * 0.5;
-    color = mix(color, vec3(0.92, 0.96, 1.0), edgeFrost * 0.5);
+    color = mix(color, vec3(0.92, 0.96, 1.0), edgeFrost * 0.5 * topMask);
 
     // ========== STATE EFFECTS ==========
     if (uState == 1) {
         // ICE state: even more frozen, pulsing crystal blue
         float icePulse = sin(uTime * 3.0) * 0.5 + 0.5;
-        color = mix(color, uIceColor, 0.3 + icePulse * 0.15);
+        color = mix(color, uIceColor, (0.3 + icePulse * 0.15) * topMask);
         // Frost crystals grow from edges
         float iceGrow = smoothstep(0.3, 0.0, edgeDist) * (0.6 + icePulse * 0.4);
-        color = mix(color, vec3(0.7, 0.9, 1.0), iceGrow * 0.4);
+        color = mix(color, vec3(0.7, 0.9, 1.0), iceGrow * 0.4 * topMask);
     } else if (uState == 2) {
         // WARNING: Cracking ice — red glow from below
         float warnPulse = sin(uTime * 6.0) * 0.5 + 0.5;
         float warnCrack = crackLine * (0.5 + warnPulse * 0.5);
-        color = mix(color, vec3(1.0, 0.2, 0.1), warnCrack * 0.8);
+        color = mix(color, vec3(1.0, 0.2, 0.1), warnCrack * 0.8 * topMask);
         // Orange glow from cracks
-        color += vec3(1.0, 0.4, 0.1) * crackLine * warnPulse * 0.3;
+        color += vec3(1.0, 0.4, 0.1) * crackLine * warnPulse * 0.3 * topMask;
     } else if (uState == 3) {
         // FALLING: Shattering — bright cracks, fragments separating
         float shatterTime = min(uStateTimer * 2.0, 1.0);
-        color = mix(color, vec3(0.4, 0.7, 1.0), crackLine * shatterTime * 0.9);
+        color = mix(color, vec3(0.4, 0.7, 1.0), crackLine * shatterTime * 0.9 * topMask);
         // Brightening as it falls
-        color += vec3(0.2, 0.4, 0.8) * shatterTime * 0.3;
+        color += vec3(0.2, 0.4, 0.8) * shatterTime * 0.3 * topMask;
     } else if (uState == 4 || uState == 5) {
-        // BONUS: Glowing aurora portal
+        // BONUS: Glowing aurora portal — icy arctic colors
         float bonusPulse = sin(uTime * 2.0 + worldUV.x * 5.0) * 0.5 + 0.5;
-        vec3 aurora1 = vec3(0.1, 0.9, 0.4);
-        vec3 aurora2 = vec3(0.3, 0.4, 1.0);
+        vec3 aurora1 = vec3(0.4, 0.85, 1.0);    // Pale cyan
+        vec3 aurora2 = vec3(0.7, 0.95, 1.0);    // Frosty white-blue
         vec3 auroraColor = mix(aurora1, aurora2, bonusPulse);
-        color = mix(color, auroraColor, 0.4 + uPulse * 0.2);
+        color = mix(color, auroraColor, (0.3 + uPulse * 0.15) * topMask);
     }
+
+    // Keep side faces calm and matte so tiny tile gaps do not show animated bright artifacts.
+    vec3 sideColor = mix(vec3(0.46, 0.62, 0.74), vec3(0.28, 0.44, 0.58), smoothstep(-2.0, 2.0, vLocalPos.y));
+    color = mix(color, sideColor, sideMask);
 
     // -- Edge color glow --
     float edgeGlow = smoothstep(0.06, 0.0, edgeDist);
     vec3 eColor = uEdgeColor;
     if (uState == 2) eColor = vec3(1.0, 0.3, 0.1);
-    color = mix(color, eColor, edgeGlow * (0.3 + uPulse * 0.3));
+    color = mix(color, eColor, edgeGlow * (0.3 + uPulse * 0.3) * topMask);
 
     gl_FragColor = vec4(color, 1.0);
 }

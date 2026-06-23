@@ -8,6 +8,33 @@ import { useGameStore } from '../store.js';
 import { pixelToHex } from '../utils/math.js';
 import { setBoostSound } from '../audio.js';
 
+// Theme-aware power-up colors
+function getThemeAwarePowerUpColors(theme) {
+    if (theme === 'arctic') {
+        return {
+            ACCELERATION_BOOST: 0xccddff,   // Pale blue
+            SIZE_REDUCTION:    0x88ccff,   // Light cyan
+            WEIGHT_INCREASE:   0xb0d0ff,   // Soft periwinkle
+            SPEED_BURST:       0x77ddff,   // Frosty cyan
+            LIGHT_TOUCH:       0xddecff,   // Nearly white-blue
+            SIZE_INCREASE:     0xaaddff,   // Pale ice blue
+            GRIP_BOOST:        0x99ddff,   // Soft cyan-blue
+            INVULNERABILITY:   0xbbddff    // Pale frosty white
+        };
+    }
+    // Default neon colors for other themes
+    return {
+        ACCELERATION_BOOST: 0xff6600,
+        SIZE_REDUCTION:     0x0099ff,
+        WEIGHT_INCREASE:    0x8800ff,
+        SPEED_BURST:        0xff0000,
+        LIGHT_TOUCH:        0x00ff88,
+        SIZE_INCREASE:      0xffff00,
+        GRIP_BOOST:         0x00ccff,
+        INVULNERABILITY:    0xff00ff
+    };
+}
+
 // Power-up effect definitions
 const POWER_UP_EFFECTS = [
     {
@@ -18,7 +45,7 @@ const POWER_UP_EFFECTS = [
         color: 0xff6600,
         apply: (player, duration) => {
             player.sphereAccelMultiplier = 2.0;
-            player.powerUpColor = 0xff6600;
+            player.powerUpColor = player.themeAwarePowerUpColors?.ACCELERATION_BOOST || 0xff6600;
         },
         remove: (player) => {
             player.sphereAccelMultiplier = 1.0;
@@ -34,7 +61,7 @@ const POWER_UP_EFFECTS = [
             player.sizeMultiplier = 0.6;
             player.mesh.scale.set(0.6, 0.6, 0.6);
             player.auraMesh.scale.set(0.6, 0.6, 0.6);
-            player.powerUpColor = 0x0099ff;
+            player.powerUpColor = player.themeAwarePowerUpColors?.SIZE_REDUCTION || 0x0099ff;
         },
         remove: (player) => {
             player.sizeMultiplier = 1.0;
@@ -50,7 +77,7 @@ const POWER_UP_EFFECTS = [
         color: 0x8800ff,
         apply: (player, duration) => {
             player.weightMultiplier = 2.0;
-            player.powerUpColor = 0x8800ff;
+            player.powerUpColor = player.themeAwarePowerUpColors?.WEIGHT_INCREASE || 0x8800ff;
         },
         remove: (player) => {
             player.weightMultiplier = 1.0;
@@ -67,7 +94,7 @@ const POWER_UP_EFFECTS = [
             const speed = Math.sqrt(vel.x ** 2 + vel.z ** 2);
             const boost = speed > 0 ? new THREE.Vector3(vel.x, 0, vel.z).normalize().multiplyScalar(50) : new THREE.Vector3(50, 0, 0);
             player.rigidBody.applyImpulse({ x: boost.x, y: 0, z: boost.z }, true);
-            player.powerUpColor = 0xff0000;
+            player.powerUpColor = player.themeAwarePowerUpColors?.SPEED_BURST || 0xff0000;
         },
         remove: (player) => {}
     },
@@ -79,7 +106,7 @@ const POWER_UP_EFFECTS = [
         color: 0x00ff88,
         apply: (player, duration) => {
             player.gravityMultiplier = 0.5;
-            player.powerUpColor = 0x00ff88;
+            player.powerUpColor = player.themeAwarePowerUpColors?.LIGHT_TOUCH || 0x00ff88;
         },
         remove: (player) => {
             player.gravityMultiplier = 1.0;
@@ -95,7 +122,7 @@ const POWER_UP_EFFECTS = [
             player.sizeMultiplier = 1.6;
             player.mesh.scale.set(1.6, 1.6, 1.6);
             player.auraMesh.scale.set(1.6, 1.6, 1.6);
-            player.powerUpColor = 0xffff00;
+            player.powerUpColor = player.themeAwarePowerUpColors?.SIZE_INCREASE || 0xffff00;
         },
         remove: (player) => {
             player.sizeMultiplier = 1.0;
@@ -111,7 +138,7 @@ const POWER_UP_EFFECTS = [
         color: 0x00ccff,
         apply: (player, duration) => {
             player.frictionMultiplier = 3.0;
-            player.powerUpColor = 0x00ccff;
+            player.powerUpColor = player.themeAwarePowerUpColors?.GRIP_BOOST || 0x00ccff;
         },
         remove: (player) => {
             player.frictionMultiplier = 1.0;
@@ -125,7 +152,7 @@ const POWER_UP_EFFECTS = [
         color: 0xff00ff,
         apply: (player, duration) => {
             player.isInvulnerable = true;
-            player.powerUpColor = 0xff00ff;
+            player.powerUpColor = player.themeAwarePowerUpColors?.INVULNERABILITY || 0xff00ff;
         },
         remove: (player) => {
             player.isInvulnerable = false;
@@ -133,7 +160,7 @@ const POWER_UP_EFFECTS = [
     }
 ];
 
-export { POWER_UP_EFFECTS };
+export { POWER_UP_EFFECTS, getThemeAwarePowerUpColors };
 
 export class Player {
     constructor(id, color, startPosition, inputFn) {
@@ -164,6 +191,9 @@ export class Player {
         this.sphereAccel = settings.sphereAccel;
         this.collisionBounce = settings.collisionBounce;
         const theme = settings.theme || 'default';
+
+        // Initialize theme-aware power-up colors
+        this.themeAwarePowerUpColors = getThemeAwarePowerUpColors(theme);
 
         // 1. Three.js Mesh
         const geometry = new THREE.SphereGeometry(this.sphereSize, 16, 16); // PERFORMANCE: Reduced from 32, 32

@@ -190,6 +190,31 @@ export class Arena {
                 collider.setFriction(0.0);
             }
         });
+        
+        // Arctic theme: Create seam filler plane to mask tile gaps
+        if (theme === 'arctic' && this.tiles.length > 0) {
+            const maxDistance = this.tiles.reduce((max, tile) => Math.max(max, tile.distanceToCenter), 0);
+            const minTileY = this.tiles.reduce((min, tile) => Math.min(min, tile.mesh.position.y), Number.POSITIVE_INFINITY);
+
+            const fillerSize = (maxDistance + tileRadius * 1.8) * 2.5;
+            const fillerGeometry = new THREE.PlaneGeometry(fillerSize, fillerSize);
+            
+            // Use MeshBasicMaterial — unlit, no per-triangle shading differences.
+            // MeshStandardMaterial causes macOS Metal WebGL to shade the 2 PlaneGeometry
+            // triangles differently (per-triangle lighting precision), producing visible
+            // triangular artifacts in tile gaps. BasicMaterial renders a flat uniform color.
+            const fillerMaterial = new THREE.MeshBasicMaterial({
+                color: 0xb7cfde,
+                depthWrite: false,
+                depthTest: true
+            });
+
+            this.arcticSeamFiller = new THREE.Mesh(fillerGeometry, fillerMaterial);
+            this.arcticSeamFiller.rotation.x = -Math.PI / 2;
+            this.arcticSeamFiller.position.set(0, minTileY - height * 0.5 + 0.06, 0);
+            this.arcticSeamFiller.renderOrder = -5;
+            scene.add(this.arcticSeamFiller);
+        }
     }
 
     getTileAt(q, r) {
@@ -235,9 +260,13 @@ export class Arena {
         this.pulseTime += delta;
         
         // Update shader uniforms for pulse effect
+        // uPulse must oscillate in [0,1]; raw pulseTime * 2.25 grows unboundedly and
+        // makes mix() extrapolate past the intended color range, causing triangular
+        // artefacts on macOS Metal WebGL where out-of-range fragments aren't clamped.
+        const shaderPulse = (Math.sin(this.pulseTime * Math.PI * 2 * 2.25) + 1) / 2;
         if (this.basePlatformMaterial && this.basePlatformMaterial.uniforms) {
             this.basePlatformMaterial.uniforms.uTime.value = this.pulseTime;
-            this.basePlatformMaterial.uniforms.uPulse.value = this.pulseTime * 2.25;
+            this.basePlatformMaterial.uniforms.uPulse.value = shaderPulse;
         }
 
         this.tiles.forEach(tile => {
@@ -257,7 +286,7 @@ export class Arena {
             // Update shader time uniform for this tile's material
             if (tile.uniforms) {
                 tile.uniforms.uTime.value = this.pulseTime;
-                tile.uniforms.uPulse.value = this.pulseTime * 2.25;
+                tile.uniforms.uPulse.value = shaderPulse;
                 tile.uniforms.uState.value = STATE_MAP[tile.state] || 0;
                 tile.uniforms.uStateTimer.value = tile.timer;
                 // Set ice color from theme

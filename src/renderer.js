@@ -13,6 +13,10 @@ function isMobileDevice() {
         || window.innerWidth < 768;
 }
 
+export function isMacOS() {
+    return /macintosh|mac os x|macos/i.test(navigator.userAgent);
+}
+
 export function initRenderer() {
     if (renderer) return; // Prevent multiple initializations
 
