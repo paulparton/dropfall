@@ -3,7 +3,7 @@
  * Self-contained player cards with inline name, color, hat, and 3D preview controls
  */
 
-import { COLOR_PALETTE, getAllPatterns, isPatternId, getDisplayColor, PatternOption } from './ColorPalette.js';
+import { COLOR_PALETTE, getAllPatterns, isPatternId, getDisplayColor } from './ColorPalette.js';
 import * as THREE from 'three';
 import { createHatMesh, disposeHatGroup, HatResult, SantaSegment } from '../utils/hatFactory.js';
 import { updateHatPhysics, createHatPhysicsState, HatPhysicsState } from '../utils/hatPhysics.js';
@@ -158,9 +158,9 @@ export function createCharacterPreviewPanel(
 
   const colorStripStyles = document.createElement('style');
   colorStripStyles.textContent = `
-    .character-preview-color-strip::-webkit-scrollbar {
-      display: none;
-    }
+    .rl-swatch-grid::-webkit-scrollbar { width: 3px; }
+    .rl-swatch-grid::-webkit-scrollbar-track { background: transparent; }
+    .rl-swatch-grid::-webkit-scrollbar-thumb { background: rgba(100,160,220,0.3); border-radius: 2px; }
   `;
   container.appendChild(colorStripStyles);
 
@@ -498,9 +498,8 @@ export function createCharacterPreviewPanel(
     width: 100%;
     max-width: 1000px;
     justify-content: center;
-    align-items: stretch;
-    flex: 1;
-    min-height: 0;
+    align-items: flex-start;
+    flex-shrink: 0;
   `;
 
   players.forEach((player) => {
@@ -522,89 +521,127 @@ export function createCharacterPreviewPanel(
 }
 
 /**
- * Create a single player card with all controls embedded
+ * Create a single player card with Rocket League-inspired dark/neon esports aesthetic
  */
 function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Function, isMultiplayer?: boolean): HTMLElement {
   const isP1 = player.playerId === 'player1';
-  const playerLabel = isP1 ? 'PLAYER 1' : (isMultiplayer ? 'PLAYER 2' : 'CPU');
-  const playerColorCss = numToHexCss(getDisplayColor(player.color));
+  const accentCss = isP1 ? '#00B4D8' : '#FF6B35';
+  const accentRgb = isP1 ? '0,180,216' : '255,107,53';
+  const playerLabel = isP1 ? 'P1' : (isMultiplayer ? 'P2' : 'CPU');
+  const fontStack = "'Rajdhani', 'Trebuchet MS', system-ui, sans-serif";
 
   const card = document.createElement('div');
   card.style.cssText = `
     flex: 1 1 0;
-    max-width: 400px;
+    max-width: 420px;
     min-width: 280px;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
-    padding: 1rem;
-    background: rgba(0, 255, 255, 0.04);
-    border: 2px solid ${playerColorCss};
-    border-radius: 8px;
-    box-shadow: 0 0 18px ${playerColorCss}33;
+    gap: 0;
+    background: rgba(7,9,18,0.92);
+    border: 1px solid rgba(${accentRgb},0.35);
+    border-radius: 10px;
+    box-shadow: 0 0 30px rgba(${accentRgb},0.1), inset 0 1px 0 rgba(255,255,255,0.04);
+    overflow: hidden;
   `;
 
-  const label = document.createElement('h3');
-  label.textContent = playerLabel;
-  label.style.cssText = `
-    color: ${playerColorCss};
-    margin: 0;
-    text-align: center;
-    font-size: 0.95rem;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    text-shadow: 0 0 8px ${playerColorCss};
+  // Header bar
+  const header = document.createElement('div');
+  header.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.55rem 0.85rem;
+    background: rgba(${accentRgb},0.1);
+    border-bottom: 1px solid rgba(${accentRgb},0.2);
   `;
-  card.appendChild(label);
+
+  const labelBadge = document.createElement('span');
+  labelBadge.textContent = playerLabel;
+  labelBadge.style.cssText = `
+    color: ${accentCss};
+    font-family: ${fontStack};
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    padding: 2px 7px;
+    border: 1px solid rgba(${accentRgb},0.5);
+    border-radius: 3px;
+  `;
+  header.appendChild(labelBadge);
 
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
   nameInput.maxLength = 12;
-  nameInput.placeholder = 'Enter name...';
+  nameInput.placeholder = isP1 ? 'PLAYER 1' : (isMultiplayer ? 'PLAYER 2' : 'CPU');
   nameInput.value = player.playerName;
   nameInput.style.cssText = `
-    background: #0a0a1a;
-    border: 2px solid ${playerColorCss};
-    color: #ffffff;
-    font-family: 'Courier New', monospace;
-    padding: 6px 10px;
-    width: 100%;
+    flex: 1;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid rgba(${accentRgb},0.22);
+    color: #e8e8f0;
+    font-family: ${fontStack};
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 4px;
     box-sizing: border-box;
+    outline: none;
+    min-width: 0;
   `;
+  nameInput.onfocus = () => {
+    nameInput.style.borderColor = accentCss;
+    nameInput.style.boxShadow = `0 0 0 1px ${accentCss}33`;
+  };
+  nameInput.onblur = () => {
+    nameInput.style.borderColor = `rgba(${accentRgb},0.22)`;
+    nameInput.style.boxShadow = 'none';
+  };
   nameInput.oninput = (event) => {
     const target = event.target as HTMLInputElement;
     const nextName = target.value;
     const s = useGameStore.getState();
-
     if (player.playerId === 'player1') {
       s.setPlayerNames(nextName, s.p2Name);
     } else {
       s.setPlayerNames(s.p1Name, nextName);
     }
-
     onPlayerStateChange?.(player.playerId, { playerName: nextName });
   };
-  card.appendChild(nameInput);
+  header.appendChild(nameInput);
+  card.appendChild(header);
 
-  // Canvas container - intentionally kept identical to previous layout styles
+  // Canvas container with fixed height
   const canvasContainer = document.createElement('div');
   canvasContainer.style.cssText = `
     width: 100%;
-    flex: 1;
-    min-height: 200px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 2px dashed ${playerColorCss};
-    border-radius: 8px;
-    overflow: hidden;
+    height: 240px;
+    background: #060a14;
+    position: relative;
+    flex-shrink: 0;
   `;
 
   const canvas = document.createElement('canvas');
-  canvas.style.cssText = `
-    width: 100%;
-    height: 100%;
-    display: block;
-  `;
+  canvas.style.cssText = `width: 100%; height: 100%; display: block;`;
   canvasContainer.appendChild(canvas);
+
+  const initialDisplayColor = numToHexCss(getDisplayColor(player.color));
+  const colorBar = document.createElement('div');
+  colorBar.dataset.role = 'color-bar';
+  colorBar.style.cssText = `
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: ${initialDisplayColor};
+    box-shadow: 0 0 8px ${initialDisplayColor};
+  `;
+  canvasContainer.appendChild(colorBar);
   card.appendChild(canvasContainer);
 
   const resizeObserver = new ResizeObserver(() => {
@@ -623,270 +660,254 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   });
   resizeObserver.observe(canvasContainer);
 
-  const colorBar = document.createElement('div');
-  colorBar.dataset.role = 'color-bar';
-  colorBar.style.cssText = `
-    width: 100%;
-    height: 4px;
-    background: ${playerColorCss};
-    box-shadow: 0 0 12px ${playerColorCss};
-  `;
-  card.appendChild(colorBar);
-
-  const colorStrip = document.createElement('div');
-  colorStrip.className = 'character-preview-color-strip';
-  colorStrip.style.cssText = `
+  // Customization section
+  const customSection = document.createElement('div');
+  customSection.style.cssText = `
+    padding: 0.65rem 0.75rem;
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    gap: 6px;
-    padding: 8px 4px;
-    scrollbar-width: none;
-    -ms-overflow-style: none;
-    min-width: 0;
-    flex: 1;
+    flex-direction: column;
+    gap: 0.5rem;
+    border-top: 1px solid rgba(${accentRgb},0.12);
   `;
 
-  const paletteColors = getAllPaletteColors();
-  paletteColors.forEach((color) => {
-    const swatch = document.createElement('button');
-    const colorCss = numToHexCss(color.hex);
-    swatch.type = 'button';
-    swatch.title = color.name;
-    swatch.dataset.colorCss = colorCss;
-    swatch.style.cssText = `
-      width: 32px;
-      min-width: 32px;
-      min-height: 32px;
-      aspect-ratio: 1;
-      border-radius: 50%;
-      flex-shrink: 0;
-      cursor: pointer;
-      scroll-snap-align: start;
-      border: none;
-      background: ${colorCss};
-      box-shadow: ${color.hex === player.color ? `0 0 6px 2px ${colorCss}55, 0 0 0 3px #ffff00` : `0 0 6px 2px ${colorCss}55`};
+  const makeSectionLabel = (text: string): HTMLElement => {
+    const el = document.createElement('div');
+    el.textContent = text;
+    el.style.cssText = `
+      color: rgba(${accentRgb},0.6);
+      font-family: ${fontStack};
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 3px;
+      text-transform: uppercase;
     `;
-
-    swatch.onclick = () => {
-      const swatches = colorStrip.querySelectorAll('button');
-      swatches.forEach((element) => {
-        const swatchElement = element as HTMLButtonElement;
-        const swatchColorCss = swatchElement.dataset.colorCss;
-        if (swatchColorCss) {
-          swatchElement.style.boxShadow = `0 0 6px 2px ${swatchColorCss}55`;
-        }
-      });
-      swatch.style.boxShadow = `0 0 6px 2px ${colorCss}55, 0 0 0 3px #ffff00`;
-
-      colorBar.style.background = colorCss;
-      colorBar.style.boxShadow = `0 0 12px ${colorCss}`;
-      card.style.borderColor = colorCss;
-      card.style.boxShadow = `0 0 18px ${colorCss}33`;
-      label.style.color = colorCss;
-      label.style.textShadow = `0 0 8px ${colorCss}`;
-      nameInput.style.borderColor = colorCss;
-      hatSelect.style.borderColor = colorCss;
-      hatSelect.style.color = colorCss;
-      canvasContainer.style.borderColor = colorCss;
-
-      const instance = previewInstances.get(player.playerId);
-      if (instance) {
-        updatePreviewColor(instance, color.hex);
-      }
-
-      const s = useGameStore.getState();
-      if (player.playerId === 'player1') {
-        s.setPlayerColors(color.hex, s.p2Color);
-      } else {
-        s.setPlayerColors(s.p1Color, color.hex);
-      }
-
-      onPlayerStateChange?.(player.playerId, { color: color.hex });
-    };
-
-    colorStrip.appendChild(swatch);
-  });
-
-  // Add separator
-  const separator = document.createElement('div');
-  separator.style.cssText = `
-    width: 2px;
-    height: 28px;
-    background: rgba(255, 255, 255, 0.15);
-    flex-shrink: 0;
-    margin: 0 4px;
-    border-radius: 1px;
-  `;
-  colorStrip.appendChild(separator);
-
-  // Add pattern swatches
-  const patterns: PatternOption[] = getAllPatterns();
-  patterns.forEach((pattern) => {
-    const swatch = document.createElement('button');
-    const displayColor = getDisplayColor(pattern.id);
-    const displayColorCss = numToHexCss(displayColor);
-    swatch.type = 'button';
-    swatch.title = pattern.name;
-    swatch.dataset.colorCss = displayColorCss;
-    swatch.dataset.patternId = pattern.id;
-
-    // Use canvas for pattern preview background
-    const previewCanvas = createSwatchCanvas(pattern.id, 64);
-    swatch.style.cssText = `
-      width: 32px;
-      min-width: 32px;
-      min-height: 32px;
-      aspect-ratio: 1;
-      border-radius: 50%;
-      flex-shrink: 0;
-      cursor: pointer;
-      scroll-snap-align: start;
-      border: none;
-      background-image: url(${previewCanvas.toDataURL()});
-      background-size: cover;
-      box-shadow: ${pattern.id === (isPatternId(player.color) ? player.color : '') ? `0 0 6px 2px ${displayColorCss}55, 0 0 0 3px #ffff00` : `0 0 6px 2px ${displayColorCss}55`};
-    `;
-
-    swatch.onclick = () => {
-      // Reset ALL swatches (both solid and pattern)
-      const allSwatches = colorStrip.querySelectorAll('button');
-      allSwatches.forEach((element) => {
-        const el = element as HTMLButtonElement;
-        const swatchColorCss = el.dataset.colorCss;
-        if (swatchColorCss) {
-          el.style.boxShadow = `0 0 6px 2px ${swatchColorCss}55`;
-        }
-      });
-      swatch.style.boxShadow = `0 0 6px 2px ${displayColorCss}55, 0 0 0 3px #ffff00`;
-
-      // Update card UI elements with the pattern's display color
-      colorBar.style.background = displayColorCss;
-      colorBar.style.boxShadow = `0 0 12px ${displayColorCss}`;
-      card.style.borderColor = displayColorCss;
-      card.style.boxShadow = `0 0 18px ${displayColorCss}33`;
-      label.style.color = displayColorCss;
-      label.style.textShadow = `0 0 8px ${displayColorCss}`;
-      nameInput.style.borderColor = displayColorCss;
-      hatSelect.style.borderColor = displayColorCss;
-      hatSelect.style.color = displayColorCss;
-      canvasContainer.style.borderColor = displayColorCss;
-
-      // Update 3D preview with pattern material
-      const instance = previewInstances.get(player.playerId);
-      if (instance && instance.ball) {
-        const oldMaterial = instance.ball.material as THREE.Material;
-        instance.ball.material = createBallMaterial(pattern.id);
-        oldMaterial.dispose();
-      }
-
-      // Update store
-      const s = useGameStore.getState();
-      if (player.playerId === 'player1') {
-        s.setPlayerColors(pattern.id, s.p2Color);
-      } else {
-        s.setPlayerColors(s.p1Color, pattern.id);
-      }
-
-      onPlayerStateChange?.(player.playerId, { color: pattern.id });
-    };
-
-    colorStrip.appendChild(swatch);
-  });
-
-  const colorStripWrapper = document.createElement('div');
-  colorStripWrapper.style.cssText = `
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    width: 100%;
-  `;
-
-  const scrollLeft = document.createElement('button');
-  scrollLeft.type = 'button';
-  scrollLeft.innerHTML = '&#9664;';
-  scrollLeft.style.cssText = `
-    flex-shrink: 0;
-    width: 24px;
-    height: 32px;
-    background: transparent;
-    border: 1px solid rgba(0, 255, 255, 0.3);
-    border-radius: 4px;
-    color: #0ff;
-    font-size: 12px;
-    cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-    padding: 0;
-  `;
-  scrollLeft.onmouseover = () => { scrollLeft.style.opacity = '1'; };
-  scrollLeft.onmouseout = () => { scrollLeft.style.opacity = '0.6'; };
-  scrollLeft.onclick = () => { colorStrip.scrollBy({ left: -120, behavior: 'smooth' }); };
-
-  const scrollRight = document.createElement('button');
-  scrollRight.type = 'button';
-  scrollRight.innerHTML = '&#9654;';
-  scrollRight.style.cssText = `
-    flex-shrink: 0;
-    width: 24px;
-    height: 32px;
-    background: transparent;
-    border: 1px solid rgba(0, 255, 255, 0.3);
-    border-radius: 4px;
-    color: #0ff;
-    font-size: 12px;
-    cursor: pointer;
-    opacity: 0.6;
-    transition: opacity 0.2s;
-    padding: 0;
-  `;
-  scrollRight.onmouseover = () => { scrollRight.style.opacity = '1'; };
-  scrollRight.onmouseout = () => { scrollRight.style.opacity = '0.6'; };
-  scrollRight.onclick = () => { colorStrip.scrollBy({ left: 120, behavior: 'smooth' }); };
-
-  colorStripWrapper.append(scrollLeft, colorStrip, scrollRight);
-  card.appendChild(colorStripWrapper);
-
-  const hatSelect = document.createElement('select');
-  hatSelect.style.cssText = `
-    width: 100%;
-    background: #0a0a1a;
-    color: ${playerColorCss};
-    border: 2px solid ${playerColorCss};
-    font-family: 'Courier New', monospace;
-    padding: 4px;
-    box-sizing: border-box;
-  `;
-
-  for (const hatType of HAT_VALUES) {
-    const option = document.createElement('option');
-    option.value = hatType;
-    option.textContent = HAT_LABELS[hatType] || hatType;
-    hatSelect.appendChild(option);
-  }
-  hatSelect.value = player.hat;
-
-  hatSelect.onchange = () => {
-    const newHatValue = hatSelect.value;
-    const s = useGameStore.getState();
-
-    if (player.playerId === 'player1') {
-      s.setPlayerHats(newHatValue, s.p2Hat);
-    } else {
-      s.setPlayerHats(s.p1Hat, newHatValue);
-    }
-
-    const instance = previewInstances.get(player.playerId);
-    if (instance) {
-      updatePreviewHat(instance, newHatValue);
-    }
-
-    onPlayerStateChange?.(player.playerId, { hat: newHatValue });
+    return el;
   };
 
-  card.appendChild(hatSelect);
+  // --- COLOR SELECTION ---
+  customSection.appendChild(makeSectionLabel('PAINT'));
+
+  const COLOR_CATS = [
+    { key: 'all', label: 'ALL' },
+    { key: 'neon', label: 'Neon' },
+    { key: 'metallic', label: 'Metallic' },
+    { key: 'jewel', label: 'Jewel' },
+    { key: 'dark', label: 'Dark' },
+    { key: 'patterns', label: 'Special' },
+  ];
+
+  const tabsRow = document.createElement('div');
+  tabsRow.style.cssText = `display: flex; gap: 3px; flex-wrap: wrap;`;
+
+  const swatchGrid = document.createElement('div');
+  swatchGrid.className = 'rl-swatch-grid';
+  swatchGrid.style.cssText = `
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    padding: 4px 0;
+    max-height: 96px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(${accentRgb},0.3) transparent;
+    align-items: flex-start;
+  `;
+
+  let activeCat = 'all';
+
+  const CAT_KEY_MAP: Record<string, keyof typeof COLOR_PALETTE> = {
+    neon: 'neon', dark: 'dark', metallic: 'metallic', jewel: 'jewel',
+    pastel: 'pastel', earth: 'earth', vivid: 'vivid', mono: 'monochrome',
+  };
+
+  const renderSwatches = (catKey: string): void => {
+    swatchGrid.innerHTML = '';
+    const allPatterns = getAllPatterns();
+
+    type SwatchItem = { colorHex: number | string; displayHex: number; name: string; isPattern: boolean; patternId?: string };
+    const items: SwatchItem[] = [];
+
+    if (catKey === 'all') {
+      getAllPaletteColors().forEach(c => items.push({ colorHex: c.hex, displayHex: c.hex, name: c.name, isPattern: false }));
+      allPatterns.forEach(p => items.push({ colorHex: p.id, displayHex: getDisplayColor(p.id), name: p.name, isPattern: true, patternId: p.id }));
+    } else if (catKey === 'patterns') {
+      allPatterns.forEach(p => items.push({ colorHex: p.id, displayHex: getDisplayColor(p.id), name: p.name, isPattern: true, patternId: p.id }));
+    } else {
+      const pk = CAT_KEY_MAP[catKey];
+      if (pk) COLOR_PALETTE[pk].forEach(c => items.push({ colorHex: c.hex, displayHex: c.hex, name: c.name, isPattern: false }));
+    }
+
+    items.forEach(({ colorHex, displayHex, name, isPattern, patternId }) => {
+      const swatch = document.createElement('button');
+      const displayCss = numToHexCss(displayHex);
+      const isSelected = isPattern
+        ? (isPatternId(player.color) && player.color === colorHex)
+        : (typeof player.color === 'number' && player.color === colorHex);
+
+      swatch.type = 'button';
+      swatch.title = name;
+      swatch.dataset.colorCss = displayCss;
+      swatch.dataset.selected = isSelected ? '1' : '0';
+
+      let bgStyle = `background: ${displayCss};`;
+      if (isPattern && patternId) {
+        const pc = createSwatchCanvas(patternId, 56);
+        bgStyle = `background: url(${pc.toDataURL()}) center/cover;`;
+      }
+
+      swatch.style.cssText = `
+        width: 26px;
+        height: 26px;
+        min-width: 26px;
+        min-height: 26px;
+        padding: 0;
+        box-sizing: border-box;
+        border-radius: 50%;
+        cursor: pointer;
+        border: 2px solid ${isSelected ? '#ffffff' : 'transparent'};
+        ${bgStyle}
+        box-shadow: ${isSelected ? `0 0 0 1px rgba(0,0,0,0.5), 0 0 8px ${displayCss}99` : `0 0 3px ${displayCss}55`};
+        transition: transform 0.1s;
+        flex-shrink: 0;
+      `;
+      swatch.onmouseover = () => { swatch.style.transform = 'scale(1.2)'; };
+      swatch.onmouseout = () => { swatch.style.transform = 'scale(1)'; };
+
+      swatch.onclick = () => {
+        swatchGrid.querySelectorAll('button').forEach(el => {
+          const s = el as HTMLButtonElement;
+          s.dataset.selected = '0';
+          s.style.border = '2px solid transparent';
+          const sc = s.dataset.colorCss;
+          if (sc) s.style.boxShadow = `0 0 3px ${sc}55`;
+        });
+        swatch.dataset.selected = '1';
+        swatch.style.border = '2px solid #ffffff';
+        swatch.style.boxShadow = `0 0 0 1px rgba(0,0,0,0.5), 0 0 8px ${displayCss}99`;
+
+        colorBar.style.background = displayCss;
+        colorBar.style.boxShadow = `0 0 8px ${displayCss}`;
+
+        player.color = colorHex;
+
+        const inst = previewInstances.get(player.playerId);
+        if (inst) {
+          if (isPattern && patternId) {
+            if (inst.ball) {
+              const oldMat = inst.ball.material as THREE.Material;
+              inst.ball.material = createBallMaterial(patternId);
+              oldMat.dispose();
+            }
+            if (inst.aura?.material) {
+              (inst.aura.material as THREE.MeshStandardMaterial).color.setHex(getPatternEmissiveColor(patternId));
+            }
+          } else {
+            updatePreviewColor(inst, colorHex as number);
+          }
+        }
+
+        const store = useGameStore.getState();
+        if (player.playerId === 'player1') {
+          store.setPlayerColors(colorHex, store.p2Color);
+        } else {
+          store.setPlayerColors(store.p1Color, colorHex);
+        }
+        onPlayerStateChange?.(player.playerId, { color: colorHex });
+      };
+
+      swatchGrid.appendChild(swatch);
+    });
+  };
+
+  COLOR_CATS.forEach(({ key, label }) => {
+    const tab = document.createElement('button');
+    tab.type = 'button';
+    tab.textContent = label;
+    tab.dataset.catKey = key;
+    const isActive = key === activeCat;
+    tab.style.cssText = `
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: ${fontStack};
+      font-size: 0.57rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      border: 1px solid rgba(${accentRgb},${isActive ? '0.75' : '0.22'});
+      background: rgba(${accentRgb},${isActive ? '0.22' : '0.04'});
+      color: ${isActive ? accentCss : `rgba(${accentRgb},0.5)`};
+      transition: all 0.12s;
+    `;
+    tab.onclick = () => {
+      activeCat = key;
+      tabsRow.querySelectorAll('button').forEach(el => {
+        const t = el as HTMLButtonElement;
+        const active = t.dataset.catKey === key;
+        t.style.border = `1px solid rgba(${accentRgb},${active ? '0.75' : '0.22'})`;
+        t.style.background = `rgba(${accentRgb},${active ? '0.22' : '0.04'})`;
+        t.style.color = active ? accentCss : `rgba(${accentRgb},0.5)`;
+      });
+      renderSwatches(key);
+    };
+    tabsRow.appendChild(tab);
+  });
+
+  customSection.appendChild(tabsRow);
+  customSection.appendChild(swatchGrid);
+  renderSwatches(activeCat);
+
+  // --- HAT SELECTION ---
+  customSection.appendChild(makeSectionLabel('HEADGEAR'));
+
+  const hatRow = document.createElement('div');
+  hatRow.style.cssText = `display: flex; flex-wrap: wrap; gap: 4px;`;
+
+  let currentHat = player.hat;
+
+  HAT_VALUES.forEach(hatType => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.textContent = HAT_LABELS[hatType] ?? hatType;
+    chip.dataset.hatType = hatType;
+    const isSel = hatType === currentHat;
+    chip.style.cssText = `
+      padding: 3px 10px;
+      border-radius: 4px;
+      font-family: ${fontStack};
+      font-size: 0.67rem;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border: 1px solid rgba(${accentRgb},${isSel ? '0.85' : '0.22'});
+      background: rgba(${accentRgb},${isSel ? '0.28' : '0.04'});
+      color: ${isSel ? '#ffffff' : `rgba(${accentRgb},0.55)`};
+      transition: all 0.12s;
+    `;
+    chip.onclick = () => {
+      currentHat = hatType;
+      hatRow.querySelectorAll('button').forEach(el => {
+        const c = el as HTMLButtonElement;
+        const active = c.dataset.hatType === hatType;
+        c.style.border = `1px solid rgba(${accentRgb},${active ? '0.85' : '0.22'})`;
+        c.style.background = `rgba(${accentRgb},${active ? '0.28' : '0.04'})`;
+        c.style.color = active ? '#ffffff' : `rgba(${accentRgb},0.55)`;
+      });
+      const store = useGameStore.getState();
+      if (player.playerId === 'player1') {
+        store.setPlayerHats(hatType, store.p2Hat);
+      } else {
+        store.setPlayerHats(store.p1Hat, hatType);
+      }
+      const inst = previewInstances.get(player.playerId);
+      if (inst) updatePreviewHat(inst, hatType);
+      onPlayerStateChange?.(player.playerId, { hat: hatType });
+    };
+    hatRow.appendChild(chip);
+  });
+
+  customSection.appendChild(hatRow);
+  card.appendChild(customSection);
 
   return card;
 }
@@ -903,7 +924,7 @@ function initializePreview(canvas: HTMLCanvasElement, initialColor: number | str
   canvas.height = height;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x1a1a1a);
+  scene.background = new THREE.Color(0x060a14);
 
   const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
   camera.position.set(0, 2.5, 5);
@@ -919,15 +940,15 @@ function initializePreview(canvas: HTMLCanvasElement, initialColor: number | str
   renderer.setPixelRatio(window.devicePixelRatio);
   renderer.shadowMap.enabled = false;
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+  const ambientLight = new THREE.AmbientLight(0x1a2a4a, 0.9);
   scene.add(ambientLight);
 
-  const pointLight = new THREE.PointLight(0xffffff, 0.6);
-  pointLight.position.set(2, 2, 2);
+  const pointLight = new THREE.PointLight(0xffffff, 0.8);
+  pointLight.position.set(3, 4, 3);
   scene.add(pointLight);
 
-  const pointLight2 = new THREE.PointLight(0xffffff, 0.4);
-  pointLight2.position.set(-2, 3, 1);
+  const pointLight2 = new THREE.PointLight(0x4488cc, 0.35);
+  pointLight2.position.set(-3, 2, -1);
   scene.add(pointLight2);
 
   const ballGeometry = new THREE.SphereGeometry(sphereSize, 16, 16);
@@ -948,16 +969,20 @@ function initializePreview(canvas: HTMLCanvasElement, initialColor: number | str
   const aura = new THREE.Mesh(auraGeometry, auraMaterial);
   scene.add(aura);
 
-  const groundGeometry = new THREE.PlaneGeometry(6, 6);
+  const groundGeometry = new THREE.PlaneGeometry(8, 8);
   const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2a4a2a,
-    metalness: 0.0,
-    roughness: 0.8,
+    color: 0x050d1a,
+    metalness: 0.1,
+    roughness: 0.9,
   });
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -1.5;
   scene.add(ground);
+
+  const gridHelper = new THREE.GridHelper(8, 14, 0x0d2540, 0x091828);
+  gridHelper.position.y = -1.49;
+  scene.add(gridHelper);
 
   const hatResult: HatResult | null = createHatMesh(initialHat, sphereSize);
   let hatGroup: THREE.Group | null = null;
