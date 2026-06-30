@@ -494,16 +494,28 @@ export function createCharacterPreviewPanel(
   const playersContainer = document.createElement('div');
   playersContainer.style.cssText = `
     display: flex;
-    gap: 2rem;
+    gap: 0;
     width: 100%;
     max-width: 1000px;
     justify-content: center;
-    align-items: flex-start;
+    align-items: stretch;
     flex-shrink: 0;
   `;
 
-  players.forEach((player) => {
+  players.forEach((player, index) => {
     const playerCard = createPlayerCard(player, onPlayerStateChange as Function | undefined, isMultiplayer);
+
+    // Insert a single vertical divider line between P1 and P2
+    if (index === 1) {
+      const divider = document.createElement('div');
+      divider.style.cssText = `
+        width: 1px;
+        background: rgba(255,255,255,0.1);
+        flex-shrink: 0;
+        align-self: stretch;
+      `;
+      playersContainer.appendChild(divider);
+    }
 
     playersContainer.appendChild(playerCard);
 
@@ -539,9 +551,6 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
     flex-direction: column;
     gap: 0;
     background: rgba(7,9,18,0.92);
-    border: 1px solid rgba(${accentRgb},0.35);
-    border-radius: 10px;
-    box-shadow: 0 0 30px rgba(${accentRgb},0.1), inset 0 1px 0 rgba(255,255,255,0.04);
     overflow: hidden;
   `;
 
