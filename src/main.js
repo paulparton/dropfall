@@ -589,16 +589,18 @@ async function proceedFromNameEntry() {
     const state = useGameStore.getState();
     const isOnePlayer = state.gameMode === '1P';
     
-    const p1Name = (document.getElementById('p1-name-input')?.value.trim() || 'Player 1').substring(0, 12);
+    const p1Name = (state.p1Name || 'Player 1').substring(0, 12);
     let p2Name;
     
     if (isOnePlayer) {
         const diffLabel = state.difficulty.charAt(0).toUpperCase() + state.difficulty.slice(1);
         p2Name = `NPC ${diffLabel}`;
     } else {
-        p2Name = (document.getElementById('p2-name-input')?.value.trim() || 'Player 2').substring(0, 12);
+        p2Name = (state.p2Name || 'Player 2').substring(0, 12);
     }
     
+    // Names are already in the store from CharacterPreviewPanel's oninput handler,
+    // but ensure they're persisted to localStorage before the game starts.
     useGameStore.getState().setPlayerNames(p1Name, p2Name);
 
     // Persist level selection from the preview panel so restarts reuse the same arena.
@@ -980,12 +982,6 @@ function setupButtonHandlers() {
     document.getElementById('name-entry-menu-btn')?.addEventListener('click', () => {
         returnToMenu();
     });
-    ['p1-name-input', 'p2-name-input'].forEach(id => {
-        document.getElementById(id)?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') proceedFromNameEntry();
-        });
-    });
-
     // HUD
     document.getElementById('hud-restart-btn')?.addEventListener('click', () => {
         useGameStore.getState().resetScores();

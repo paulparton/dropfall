@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>001 · Player Setup Variants — Dropfall</title>
+<link rel="stylesheet" href="../themes/default.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Rajdhani:wght@500;600;700&family=Boogaloo&family=Cinzel+Decorative:wght@700&family=Oswald:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#111; overflow-x:hidden; }
+input { outline:none; }
+button { cursor:pointer; font-family:inherit; }
+
+/* ── Variant nav ─────────────────────────── */
+#vnav {
+  position:fixed; top:0; left:0; right:0; z-index:9998;
+  background:rgba(5,5,18,0.96); border-bottom:1px solid rgba(255,255,255,0.1);
+  padding:7px 16px; display:flex; gap:6px; align-items:center;
+  backdrop-filter:blur(14px);
+}
+.vtab {
+  background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);
+  color:rgba(255,255,255,0.5); padding:4px 14px; border-radius:5px;
+  cursor:pointer; font-size:11.5px; font-family:system-ui; transition:all .15s;
+}
+.vtab:hover { background:rgba(255,255,255,0.13); color:#fff; }
+.vtab.on { background:rgba(255,255,255,0.17); border-color:rgba(255,255,255,0.32); color:#fff; font-weight:600; }
+.vx { display:none; min-height:100vh; padding-top:44px; }
+.vx.on { display:block; }
+
+/* ── Sketch toolbar ──────────────────────── */
+#stool {
+  position:fixed; bottom:10px; right:10px; z-index:9999;
+  font-family:system-ui; font-size:11px; background:rgba(0,0,0,0.85);
+  color:#fff; padding:8px 11px; border-radius:7px; opacity:0.28; transition:opacity .2s;
+  white-space:nowrap;
+}
+#stool:hover { opacity:1; }
+#stool select, #stool button {
+  background:#222; color:#fff; border:1px solid #444; padding:2px 5px;
+  border-radius:3px; font-size:10px; margin-left:3px;
+}
+</style>
+</head>
+<body>
+
+<nav id="vnav">
+  <span style="color:rgba(255,255,255,0.25);font-size:10px;margin-right:4px;font-family:monospace;letter-spacing:1px;">001</span>
+  <button class="vtab on"  onclick="sv('a',this)">A: Mario Kart</button>
+  <button class="vtab"     onclick="sv('b',this)">B: Rocket League</button>
+  <button class="vtab"     onclick="sv('c',this)">C: Splatoon</button>
+  <button class="vtab"     onclick="sv('d',this)">D: Elden Ring</button>
+  <button class="vtab"     onclick="sv('e',this)">E: Overwatch</button>
+</nav>
+
+<div id="stool" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.28'">
+  Viewport:
+  <button onclick="setVP(375)">📱 375</button>
+  <button onclick="setVP(768)">📟 768</button>
+  <button onclick="setVP(0)">🖥 Full</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     A — MARIO KART CHARACTER SELECT
+═══════════════════════════════════════ -->
+<div id="vx-a" class="vx on">
+<style>
+#vx-a {
+  background: linear-gradient(170deg, #1879e8 0%, #0d4baa 55%, #1262d0 100%);
+  font-family:'Fredoka One','Arial Black',sans-serif;
+  min-height:100vh; overflow-x:hidden;
+}
+#vx-a::before {
+  content:''; position:fixed; top:44px; left:0; right:0; bottom:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(ellipse 130px 65px at  8% 18%, rgba(255,255,255,.22) 0%, transparent 60%),
+    radial-gradient(ellipse 100px 50px at 24% 13%, rgba(255,255,255,.17) 0%, transparent 60%),
+    radial-gradient(ellipse 150px 75px at 78% 22%, rgba(255,255,255,.2)  0%, transparent 60%),
+    radial-gradient(ellipse 110px 55px at 90% 14%, rgba(255,255,255,.16) 0%, transparent 60%),
+    radial-gradient(ellipse  80px 40px at 54%  8%, rgba(255,255,255,.14) 0%, transparent 60%);
+}
+
+#mk-h { text-align:center; padding:28px 20px 10px; position:relative; z-index:1; }
+#mk-h h1 {
+  font-size:clamp(36px,6.5vw,76px); color:#FFE900; letter-spacing:4px; line-height:1;
+  text-shadow: 3px 3px 0 #B8000A, -2px -2px 0 #B8000A, 2px -2px 0 #B8000A, -2px 2px 0 #B8000A,
+               0 5px 0 #7A0008, 0 8px 22px rgba(0,0,0,.55);
+}
+#mk-h p { color:rgba(255,255,255,.7); font-size:16px; margin-top:6px; letter-spacing:3px; font-family:system-ui; font-weight:700; }
+
+#mk-players {
+  display:flex; gap:20px; padding:14px 24px; justify-content:center;
+  position:relative; z-index:1; flex-wrap:wrap;
+}
+.mk-panel {
+  flex:1; min-width:280px; max-width:430px; border-radius:20px; padding:18px;
+  background:rgba(255,255,255,.09); backdrop-filter:blur(10px);
+}
+.mk-panel.p1 { border:3px solid #FF3030; box-shadow:0 0 32px rgba(255,48,48,.38), inset 0 0 20px rgba(255,48,48,.06); }
+.mk-panel.p2 { border:3px solid #3395FF; box-shadow:0 0 32px rgba(51,149,255,.38), inset 0 0 20px rgba(51,149,255,.06); }
+.mk-ph { font-size:20px; letter-spacing:3px; text-align:center; margin-bottom:12px; padding-bottom:9px; border-bottom:2px solid rgba(255,255,255,.18); }
+.mk-panel.p1 .mk-ph { color:#FF5555; }
+.mk-panel.p2 .mk-ph { color:#5599FF; }
+.mk-ni {
+  width:100%; background:rgba(0,0,0,.3); border:2px solid rgba(255,255,255,.22);
+  border-radius:11px; padding:8px 14px; color:#fff; font-size:15px; font-family:'Fredoka One',sans-serif;
+  letter-spacing:1px; margin-bottom:14px; transition:border-color .2s;
+}
+.mk-ni:focus { border-color:rgba(255,255,255,.55); }
+.mk-prev { display:flex; justify-content:center; margin-bottom:14px; min-height:120px; align-items:center; }
+.mk-prev svg { filter:drop-shadow(0 6px 18px rgba(0,0,0,.45)); }
+.mk-lbl { font-size:11px; color:rgba(255,255,255,.55); letter-spacing:2px; margin-bottom:8px; font-family:system-ui; font-weight:700; text-transform:uppercase; }
+.mk-chars { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:14px; }
+.mk-char {
+  background:rgba(255,255,255,.1); border:2px solid rgba(255,255,255,.18); border-radius:13px;
+  padding:7px; cursor:pointer; transition:all .18s; display:flex; flex-direction:column;
+  align-items:center; gap:4px; width:70px;
+}
+.mk-char:hover { background:rgba(255,255,255,.2); transform:scale(1.06); }
+.mk-char.sel { border-color:#FFE900; background:rgba(255,233,0,.18); box-shadow:0 0 18px rgba(255,233,0,.5); transform:scale(1.07); }
+.mk-char svg { width:54px; height:76px; }
+.mk-cname { font-size:9.5px; color:rgba(255,255,255,.8); text-align:center; line-height:1.1; }
+.mk-hats { display:flex; gap:7px; justify-content:center; flex-wrap:wrap; }
+.mk-hat {
+  background:rgba(255,255,255,.08); border:2px solid rgba(255,255,255,.18); border-radius:9px;
+  padding:6px 11px; cursor:pointer; transition:all .15s; font-size:12px;
+  color:rgba(255,255,255,.75); letter-spacing:.5px;
+}
+.mk-hat:hover { background:rgba(255,255,255,.18); color:#fff; }
+.mk-hat.sel { border-color:#FFE900; background:rgba(255,233,0,.18); color:#FFE900; }
+
+#mk-go {
+  display:block; margin:20px auto 32px; padding:16px 64px;
+  background:linear-gradient(135deg,#FF3D00,#FF6E00); color:#fff; border:none;
+  border-radius:50px; font-size:24px; font-family:'Fredoka One',sans-serif; letter-spacing:3px;
+  box-shadow:0 6px 0 #aa2000, 0 12px 32px rgba(255,61,0,.5); transition:all .15s;
+  position:relative; z-index:1;
+}
+#mk-go:hover { transform:translateY(-2px); box-shadow:0 8px 0 #aa2000, 0 18px 36px rgba(255,61,0,.55); }
+#mk-go:active { transform:translateY(4px); box-shadow:0 2px 0 #aa2000, 0 6px 18px rgba(255,61,0,.4); }
+</style>
+
+<div id="mk-h">
+  <h1>⭐ CHARACTER SELECT ⭐</h1>
+  <p>CHOOSE YOUR BALL</p>
+</div>
+
+<div id="mk-players">
+  <div class="mk-panel p1">
+    <div class="mk-ph">P1 — PLAYER 1</div>
+    <input class="mk-ni" type="text" value="Player 1" id="mk-p1-name">
+    <div class="mk-prev"><div id="mk-p1-prev"></div></div>
+    <div class="mk-lbl">Color</div>
+    <div class="mk-chars" id="mk-p1-chars"></div>
+    <div class="mk-lbl">Hat</div>
+    <div class="mk-hats" id="mk-p1-hats"></div>
+  </div>
+
+  <div class="mk-panel p2">
+    <div class="mk-ph">P2 — PLAYER 2</div>
+    <input class="mk-ni" type="text" value="Player 2" id="mk-p2-name">
+    <div class="mk-prev"><div id="mk-p2-prev"></div></div>
+    <div class="mk-lbl">Color</div>
+    <div class="mk-chars" id="mk-p2-chars"></div>
+    <div class="mk-lbl">Hat</div>
+    <div class="mk-hats" id="mk-p2-hats"></div>
+  </div>
+</div>
+
+<button id="mk-go" onclick="onGo()">LET'S RACE! ▶</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     B — ROCKET LEAGUE
+═══════════════════════════════════════ -->
+<div id="vx-b" class="vx">
+<style>
+#vx-b {
+  background:#07090f;
+  font-family:'Rajdhani','Impact',system-ui,sans-serif;
+  min-height:100vh; position:relative; overflow:hidden;
+}
+#vx-b::before {
+  content:''; position:fixed; bottom:0; left:0; right:0; height:42vh;
+  pointer-events:none; z-index:0;
+  background:
+    repeating-linear-gradient(90deg,rgba(0,180,255,.04) 0,rgba(0,180,255,.04) 1px,transparent 1px,transparent 58px),
+    repeating-linear-gradient(0deg,  rgba(0,180,255,.04) 0,rgba(0,180,255,.04) 1px,transparent 1px,transparent 58px);
+  transform:perspective(380px) rotateX(28deg); transform-origin:bottom;
+}
+#rl-h { text-align:center; padding:24px 20px 16px; position:relative; z-index:1; }
+#rl-h h1 {
+  font-size:clamp(20px,3.5vw,44px); color:#fff; letter-spacing:8px; font-weight:700;
+  text-shadow:0 0 35px rgba(0,180,255,.45);
+}
+#rl-h span { color:#00B4D8; }
+#rl-h p { font-size:11px; letter-spacing:5px; color:rgba(255,255,255,.3); margin-top:5px; }
+
+#rl-players { display:flex; position:relative; z-index:1; min-height:60vh; }
+#rl-players::after {
+  content:''; position:absolute; left:50%; top:0; bottom:0; width:1px; transform:translateX(-50%); z-index:3;
+  background:linear-gradient(180deg,transparent,rgba(0,180,255,.5) 25%,rgba(255,107,53,.5) 75%,transparent);
+  box-shadow:0 0 18px rgba(0,180,255,.25);
+}
+.rl-bay { flex:1; padding:20px 28px 30px; display:flex; flex-direction:column; align-items:center; gap:12px; }
+.rl-bay.p1 { border-right:1px solid rgba(0,180,255,.1); }
+.rl-ptag { font-size:10px; letter-spacing:5px; color:rgba(255,255,255,.35); font-weight:700; }
+.rl-ni {
+  width:100%; max-width:280px; background:rgba(255,255,255,.03); border:1px solid rgba(0,180,255,.25);
+  border-radius:3px; padding:8px 14px; color:#fff; font-size:16px; letter-spacing:2px;
+  font-family:'Rajdhani',sans-serif; font-weight:600; transition:border-color .2s;
+}
+.rl-ni:focus { border-color:rgba(0,180,255,.65); }
+.rl-bay.p2 .rl-ni { border-color:rgba(255,107,53,.25); }
+.rl-bay.p2 .rl-ni:focus { border-color:rgba(255,107,53,.65); }
+
+.rl-pw { position:relative; width:160px; height:178px; display:flex; align-items:center; justify-content:center; }
+.rl-glow { position:absolute; width:120px; height:120px; border-radius:50%; filter:blur(32px); opacity:.5; pointer-events:none; }
+.rl-pw svg { position:relative; z-index:1; }
+
+.rl-slbl { font-size:9px; letter-spacing:4px; color:rgba(255,255,255,.28); font-weight:700; text-align:center; margin-bottom:5px; }
+.rl-cats { display:flex; gap:4px; flex-wrap:wrap; justify-content:center; margin-bottom:6px; }
+.rl-cat {
+  font-size:9px; letter-spacing:2px; padding:3px 9px; border-radius:3px; cursor:pointer;
+  border:1px solid rgba(255,255,255,.13); color:rgba(255,255,255,.38);
+  background:transparent; font-family:'Rajdhani',sans-serif; font-weight:600; transition:all .15s;
+}
+.rl-cat:hover { color:#fff; border-color:rgba(255,255,255,.35); }
+.rl-cat.on { color:#fff; background:rgba(255,255,255,.1); border-color:rgba(255,255,255,.35); }
+.rl-colors { display:flex; gap:6px; flex-wrap:wrap; justify-content:center; max-width:310px; margin-bottom:4px; }
+.rl-sw {
+  width:30px; height:30px; border-radius:50%; cursor:pointer;
+  border:2px solid rgba(255,255,255,.1); transition:all .18s;
+}
+.rl-sw:hover { transform:scale(1.18); border-color:rgba(255,255,255,.45); }
+.rl-sw.sel { border:3px solid #fff; box-shadow:0 0 13px rgba(255,255,255,.45); transform:scale(1.18); }
+
+.rl-hats { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; max-width:330px; }
+.rl-hat {
+  padding:5px 11px; border-radius:3px; cursor:pointer;
+  border:1px solid rgba(255,255,255,.1); color:rgba(255,255,255,.42);
+  font-size:10px; letter-spacing:2px; font-weight:700; transition:all .15s;
+  background:rgba(255,255,255,.02);
+}
+.rl-hat:hover { border-color:rgba(255,255,255,.32); color:#fff; }
+.rl-hat.sel { border-color:#00B4D8; color:#00B4D8; background:rgba(0,180,216,.07); }
+.rl-bay.p2 .rl-hat.sel { border-color:#FF6B35; color:#FF6B35; background:rgba(255,107,53,.07); }
+
+#rl-ready {
+  display:block; margin:22px auto 32px; padding:14px 54px; background:transparent; position:relative; z-index:1;
+  border:2px solid #00B4D8; color:#00B4D8; font-size:18px; letter-spacing:6px;
+  font-family:'Rajdhani',sans-serif; font-weight:700; border-radius:3px; transition:all .2s;
+  box-shadow:0 0 22px rgba(0,180,216,.18), inset 0 0 18px rgba(0,180,216,.04);
+}
+#rl-ready:hover {
+  background:rgba(0,180,216,.09);
+  box-shadow:0 0 38px rgba(0,180,216,.38), inset 0 0 18px rgba(0,180,216,.09); color:#fff;
+}
+</style>
+
+<div id="rl-h">
+  <h1>PLAYER <span>SETUP</span></h1>
+  <p>CONFIGURE YOUR BALL</p>
+</div>
+<div id="rl-players">
+  <div class="rl-bay p1">
+    <div class="rl-ptag">PLAYER 1</div>
+    <input class="rl-ni" type="text" value="Player 1" id="rl-p1-name">
+    <div class="rl-pw">
+      <div class="rl-glow" id="rl-p1-glow"></div>
+      <div id="rl-p1-prev"></div>
+    </div>
+    <div class="rl-slbl">PAINT</div>
+    <div class="rl-cats" id="rl-p1-cats"></div>
+    <div class="rl-colors" id="rl-p1-colors"></div>
+    <div class="rl-slbl" style="margin-top:9px">HEADGEAR</div>
+    <div class="rl-hats" id="rl-p1-hats"></div>
+  </div>
+  <div class="rl-bay p2">
+    <div class="rl-ptag">PLAYER 2</div>
+    <input class="rl-ni" type="text" value="Player 2" id="rl-p2-name">
+    <div class="rl-pw">
+      <div class="rl-glow" id="rl-p2-glow"></div>
+      <div id="rl-p2-prev"></div>
+    </div>
+    <div class="rl-slbl">PAINT</div>
+    <div class="rl-cats" id="rl-p2-cats"></div>
+    <div class="rl-colors" id="rl-p2-colors"></div>
+    <div class="rl-slbl" style="margin-top:9px">HEADGEAR</div>
+    <div class="rl-hats" id="rl-p2-hats"></div>
+  </div>
+</div>
+<button id="rl-ready" onclick="onGo()">READY UP</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     C — SPLATOON
+═══════════════════════════════════════ -->
+<div id="vx-c" class="vx">
+<style>
+#vx-c {
+  background:#0d0d1a;
+  font-family:'Boogaloo','Trebuchet MS',system-ui,sans-serif;
+  min-height:100vh; position:relative; overflow:hidden;
+}
+#sp-bg { position:fixed; top:44px; left:0; right:0; bottom:0; pointer-events:none; z-index:0; overflow:hidden; }
+#sp-splat1 { position:absolute; top:0; left:-8%; width:52vw; height:78vh; border-radius:40% 60% 70% 30%/50% 40% 60% 55%; filter:blur(38px); opacity:.16; }
+#sp-splat2 { position:absolute; top:0; right:-8%; width:52vw; height:78vh; border-radius:60% 40% 30% 70%/40% 55% 50% 45%; filter:blur(38px); opacity:.16; }
+
+#sp-h { text-align:center; padding:22px 20px 8px; position:relative; z-index:1; }
+#sp-h h1 {
+  font-size:clamp(30px,5.5vw,62px); color:#fff; letter-spacing:4px;
+  text-shadow:4px 4px 0 #000,-2px -2px 0 #000,0 0 28px rgba(255,255,0,.4);
+}
+#sp-h p { font-size:16px; color:rgba(255,255,255,.5); letter-spacing:2px; margin-top:4px; font-style:italic; }
+
+#sp-players { display:flex; gap:22px; padding:10px 26px 20px; justify-content:center; position:relative; z-index:1; flex-wrap:wrap; }
+.sp-panel { flex:1; min-width:270px; max-width:410px; border-radius:22px; padding:18px; }
+.sp-panel.p1 { background:rgba(255,255,255,.055); border:3px solid rgba(255,255,0,.45); box-shadow:0 0 42px rgba(255,255,0,.12); }
+.sp-panel.p2 { background:rgba(255,255,255,.055); border:3px solid rgba(255,120,0,.45); box-shadow:0 0 42px rgba(255,120,0,.12); }
+.sp-badge { display:inline-block; padding:3px 14px; border-radius:22px; font-size:14px; letter-spacing:2px; margin-bottom:10px; font-weight:bold; }
+.sp-panel.p1 .sp-badge { background:#FFFF00; color:#111; }
+.sp-panel.p2 .sp-badge { background:#FF7800; color:#fff; }
+.sp-ni {
+  width:100%; background:rgba(255,255,255,.06); border:2px solid rgba(255,255,255,.18);
+  border-radius:14px; padding:8px 14px; color:#fff; font-size:16px; letter-spacing:1px;
+  font-family:'Boogaloo',sans-serif; margin-bottom:12px; transition:border-color .2s;
+}
+.sp-ni:focus { border-color:rgba(255,255,0,.5); }
+.sp-panel.p2 .sp-ni:focus { border-color:rgba(255,120,0,.5); }
+.sp-prev-area {
+  position:relative; height:130px; display:flex; justify-content:center; align-items:flex-end;
+  margin-bottom:14px; border-radius:14px; background:rgba(0,0,0,.22); overflow:hidden;
+}
+.sp-splash { position:absolute; bottom:-28px; left:50%; transform:translateX(-50%); width:120px; height:70px; border-radius:50%; filter:blur(10px); opacity:0; }
+.sp-prev-area svg { position:relative; z-index:1; margin-bottom:4px; }
+.sp-slbl { font-size:13px; color:rgba(255,255,255,.48); letter-spacing:1px; margin-bottom:8px; font-style:italic; }
+.sp-colors { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.sp-blob {
+  width:44px; height:44px; border-radius:50%; cursor:pointer;
+  border:3px solid rgba(255,255,255,.12); transition:all .18s; position:relative;
+}
+.sp-blob:hover { transform:scale(1.12); }
+.sp-blob.sel { border:3px solid #fff; box-shadow:0 0 0 2px rgba(0,0,0,.45),0 0 16px rgba(255,255,255,.38); transform:scale(1.14); }
+.sp-blob.sel::after { content:'✓'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:bold; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); }
+.sp-hats { display:flex; gap:6px; flex-wrap:wrap; }
+.sp-hat {
+  padding:6px 13px; border-radius:22px; cursor:pointer; font-size:13px;
+  border:2px solid rgba(255,255,255,.14); color:rgba(255,255,255,.56);
+  background:rgba(255,255,255,.04); transition:all .15s;
+}
+.sp-hat:hover { background:rgba(255,255,255,.12); color:#fff; }
+.sp-hat.sel { background:#FFFF00; color:#111; border-color:#FFFF00; font-weight:bold; }
+.sp-panel.p2 .sp-hat.sel { background:#FF7800; color:#fff; border-color:#FF7800; }
+
+#sp-go {
+  display:block; margin:12px auto 32px; padding:15px 58px;
+  background:linear-gradient(90deg,#FFFF00,#FFCC00); color:#111; border:none;
+  border-radius:50px; font-size:22px; font-family:'Boogaloo',sans-serif; letter-spacing:2px;
+  box-shadow:0 6px 0 #886600, 0 10px 26px rgba(255,200,0,.48); transition:all .15s; position:relative; z-index:1;
+}
+#sp-go:hover { transform:translateY(-3px); box-shadow:0 9px 0 #886600, 0 15px 32px rgba(255,200,0,.55); }
+#sp-go:active { transform:translateY(3px); box-shadow:0 3px 0 #886600; }
+</style>
+
+<div id="sp-bg">
+  <div id="sp-splat1"></div>
+  <div id="sp-splat2"></div>
+</div>
+<div id="sp-h">
+  <h1>⚡ FRESH FITS ⚡</h1>
+  <p>Looking fresh is half the battle</p>
+</div>
+<div id="sp-players">
+  <div class="sp-panel p1">
+    <div class="sp-badge">PLAYER 1</div>
+    <input class="sp-ni" type="text" value="Player 1" id="sp-p1-name">
+    <div class="sp-prev-area" id="sp-p1-area">
+      <div class="sp-splash" id="sp-p1-splash"></div>
+      <div id="sp-p1-prev"></div>
+    </div>
+    <div class="sp-slbl">Ink Color</div>
+    <div class="sp-colors" id="sp-p1-colors"></div>
+    <div class="sp-slbl">Headgear</div>
+    <div class="sp-hats" id="sp-p1-hats"></div>
+  </div>
+  <div class="sp-panel p2">
+    <div class="sp-badge">PLAYER 2</div>
+    <input class="sp-ni" type="text" value="Player 2" id="sp-p2-name">
+    <div class="sp-prev-area" id="sp-p2-area">
+      <div class="sp-splash" id="sp-p2-splash"></div>
+      <div id="sp-p2-prev"></div>
+    </div>
+    <div class="sp-slbl">Ink Color</div>
+    <div class="sp-colors" id="sp-p2-colors"></div>
+    <div class="sp-slbl">Headgear</div>
+    <div class="sp-hats" id="sp-p2-hats"></div>
+  </div>
+</div>
+<button id="sp-go" onclick="onGo()">Let's Splat! 🎉</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     D — ELDEN RING / DARK SOULS
+═══════════════════════════════════════ -->
+<div id="vx-d" class="vx">
+<style>
+#vx-d {
+  background:radial-gradient(ellipse at 50% 30%,#1a0e06 0%,#080503 100%);
+  font-family:'Cinzel Decorative','Palatino Linotype',Georgia,serif;
+  min-height:100vh; position:relative; overflow:hidden;
+}
+#er-embers {
+  position:fixed; top:44px; left:0; right:0; bottom:0; pointer-events:none; z-index:0;
+  background-image:
+    radial-gradient(2px 2px at 18% 30%,rgba(255,120,0,.7) 50%,transparent 50%),
+    radial-gradient(1px 2px at 34% 68%,rgba(255, 80,0,.55) 50%,transparent 50%),
+    radial-gradient(2px 1px at 64% 24%,rgba(255,160,0,.55) 50%,transparent 50%),
+    radial-gradient(1px 1px at 81% 52%,rgba(255,100,0,.45) 50%,transparent 50%),
+    radial-gradient(2px 2px at 11% 78%,rgba(255,140,0,.45) 50%,transparent 50%),
+    radial-gradient(1px 2px at 88% 84%,rgba(255, 60,0,.5)  50%,transparent 50%),
+    radial-gradient(2px 1px at 46% 56%,rgba(255, 90,0,.4)  50%,transparent 50%),
+    radial-gradient(1px 2px at 72% 38%,rgba(255,180,0,.4)  50%,transparent 50%);
+}
+#vx-d::before {
+  content:''; position:fixed; bottom:0; left:0; right:0; height:55vh;
+  background:radial-gradient(ellipse at 50% 110%,rgba(255,70,0,.11) 0%,transparent 60%);
+  pointer-events:none; z-index:0;
+}
+
+#er-h { text-align:center; padding:30px 20px 18px; position:relative; z-index:1; }
+#er-h h1 {
+  font-size:clamp(20px,3.5vw,46px); color:#C8A96E; letter-spacing:5px;
+  text-shadow:0 0 44px rgba(200,120,0,.48),2px 2px 5px rgba(0,0,0,.8);
+}
+#er-h .sub { font-size:11px; letter-spacing:6px; color:rgba(200,160,80,.42); margin-top:9px; font-style:italic; font-family:Georgia,serif; }
+
+.er-div { display:flex; align-items:center; gap:12px; margin:14px 40px; position:relative; z-index:1; }
+.er-div::before,.er-div::after { content:''; flex:1; height:1px; background:linear-gradient(90deg,transparent,rgba(200,160,80,.38),transparent); }
+.er-gem { width:8px; height:8px; background:#C8A96E; transform:rotate(45deg); box-shadow:0 0 9px rgba(200,160,80,.5); }
+
+#er-players { display:flex; gap:0; position:relative; z-index:1; padding:0 20px; }
+#er-players::after {
+  content:''; position:absolute; left:50%; top:0; bottom:0; width:2px; transform:translateX(-50%); z-index:3;
+  background:linear-gradient(180deg,transparent,rgba(200,160,80,.35) 20%,rgba(200,160,80,.55) 50%,rgba(200,160,80,.35) 80%,transparent);
+  box-shadow:0 0 14px rgba(200,120,0,.28);
+}
+.er-pillar { flex:1; padding:18px 22px; background:rgba(0,0,0,.38); border:1px solid rgba(200,160,80,.12); }
+.er-pillar.p1 { border-right:none; border-radius:4px 0 0 4px; }
+.er-pillar.p2 { border-left:none; border-radius:0 4px 4px 0; }
+.er-ptag { font-size:10px; letter-spacing:5px; color:rgba(200,160,80,.45); margin-bottom:12px; text-align:center; }
+.er-ni {
+  width:100%; background:rgba(200,160,80,.04);
+  border:none; border-bottom:2px solid rgba(200,160,80,.3);
+  padding:8px 14px; color:#C8A96E; font-size:14px; letter-spacing:3px;
+  font-family:'Cinzel Decorative',Georgia,serif; margin-bottom:16px; transition:border-color .2s;
+}
+.er-ni:focus { border-bottom-color:#C8A96E; }
+.er-prev { display:flex; justify-content:center; margin-bottom:16px; filter:drop-shadow(0 8px 32px rgba(200,100,0,.28)); }
+.er-albl { font-size:9px; letter-spacing:5px; color:rgba(200,160,80,.38); margin-bottom:7px; text-align:center; }
+.er-origs { display:flex; gap:4px; flex-wrap:wrap; margin-bottom:7px; }
+.er-orig {
+  flex:1; min-width:55px; padding:5px 7px; text-align:center;
+  border:1px solid rgba(200,160,80,.14); color:rgba(200,160,80,.38);
+  font-size:8px; letter-spacing:2px; cursor:pointer; transition:all .15s;
+  background:transparent; font-family:'Cinzel Decorative',serif; border-radius:2px;
+}
+.er-orig:hover { border-color:rgba(200,160,80,.4); color:rgba(200,160,80,.72); }
+.er-orig.on { border-color:#C8A96E; color:#C8A96E; background:rgba(200,160,80,.07); }
+.er-stones { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:14px; }
+.er-stone {
+  width:36px; height:36px; border-radius:3px; cursor:pointer;
+  border:1px solid rgba(200,160,80,.14); transition:all .18s;
+}
+.er-stone:hover { border-color:rgba(200,160,80,.5); transform:scale(1.09); }
+.er-stone.sel { border:2px solid #C8A96E; box-shadow:0 0 13px rgba(200,160,80,.38); transform:scale(1.09); }
+.er-helms { display:flex; gap:5px; flex-wrap:wrap; }
+.er-helm {
+  padding:5px 10px; border:1px solid rgba(200,160,80,.14); color:rgba(200,160,80,.38);
+  font-size:8px; letter-spacing:2px; cursor:pointer; transition:all .15s;
+  border-radius:2px; font-family:'Cinzel Decorative',serif; background:transparent;
+}
+.er-helm:hover { border-color:rgba(200,160,80,.4); color:rgba(200,160,80,.8); }
+.er-helm.sel { border-color:#C8A96E; color:#C8A96E; background:rgba(200,160,80,.07); }
+.er-lore {
+  margin-top:10px; font-size:9px; color:rgba(200,160,80,.3); font-style:italic;
+  font-family:Georgia,serif; text-align:center; letter-spacing:1px; line-height:1.7;
+  min-height:2.5em;
+}
+
+#er-enter {
+  display:block; margin:20px auto 32px; padding:14px 50px; position:relative; z-index:1;
+  background:linear-gradient(135deg,#130e07,#221508); border:1px solid #C8A96E;
+  color:#C8A96E; font-size:12px; letter-spacing:6px; font-family:'Cinzel Decorative',serif;
+  border-radius:3px; transition:all .2s;
+  box-shadow:0 0 28px rgba(200,120,0,.18),inset 0 0 22px rgba(200,120,0,.05);
+}
+#er-enter:hover {
+  background:linear-gradient(135deg,#221508,#322010); color:#E8C07E;
+  box-shadow:0 0 46px rgba(200,120,0,.34),inset 0 0 22px rgba(200,120,0,.1);
+}
+</style>
+
+<div id="er-embers"></div>
+<div id="er-h">
+  <h1>⚔ CHOOSE THY VESSEL ⚔</h1>
+  <div class="sub">— Two shall enter. One shall fall. —</div>
+</div>
+<div class="er-div"><div class="er-gem"></div></div>
+
+<div id="er-players">
+  <div class="er-pillar p1">
+    <div class="er-ptag">FIRST WARRIOR</div>
+    <input class="er-ni" type="text" value="Player 1" id="er-p1-name">
+    <div class="er-prev"><div id="er-p1-prev"></div></div>
+    <div class="er-albl">BLOODSTONE (COLOR)</div>
+    <div class="er-origs" id="er-p1-origs"></div>
+    <div class="er-stones" id="er-p1-stones"></div>
+    <div class="er-albl">HELM</div>
+    <div class="er-helms" id="er-p1-hats"></div>
+    <div class="er-lore" id="er-p1-lore">Select your bloodstone to reveal your lineage...</div>
+  </div>
+  <div class="er-pillar p2">
+    <div class="er-ptag">SECOND WARRIOR</div>
+    <input class="er-ni" type="text" value="Player 2" id="er-p2-name">
+    <div class="er-prev"><div id="er-p2-prev"></div></div>
+    <div class="er-albl">BLOODSTONE (COLOR)</div>
+    <div class="er-origs" id="er-p2-origs"></div>
+    <div class="er-stones" id="er-p2-stones"></div>
+    <div class="er-albl">HELM</div>
+    <div class="er-helms" id="er-p2-hats"></div>
+    <div class="er-lore" id="er-p2-lore">Select your bloodstone to reveal your lineage...</div>
+  </div>
+</div>
+<div class="er-div"><div class="er-gem"></div></div>
+<button id="er-enter" onclick="onGo()">ENTER THE PIT</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     E — OVERWATCH HERO SELECT
+═══════════════════════════════════════ -->
+<div id="vx-e" class="vx">
+<style>
+#vx-e {
+  background:#111820;
+  font-family:'Oswald','Impact',system-ui,sans-serif;
+  min-height:100vh;
+}
+#ow-topbar {
+  padding:18px 26px 14px; display:flex; align-items:flex-start; justify-content:space-between;
+  border-bottom:1px solid rgba(255,255,255,.07);
+}
+#ow-topbar h1 { font-size:clamp(18px,2.8vw,32px); color:#fff; letter-spacing:5px; font-weight:700; }
+#ow-topbar .sub { font-size:10px; letter-spacing:4px; color:rgba(255,255,255,.3); margin-top:4px; font-weight:400; }
+
+#ow-sel-bar {
+  display:flex; gap:16px; padding:12px 26px;
+  background:rgba(255,255,255,.025); border-bottom:1px solid rgba(255,255,255,.07);
+}
+.ow-sp {
+  flex:1; display:flex; gap:12px; align-items:center; padding:9px 14px;
+  border-radius:5px; background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08);
+}
+.ow-sp-ball { width:56px; height:78px; flex-shrink:0; }
+.ow-sp-info { flex:1; }
+.ow-sp-tag { display:flex; align-items:center; gap:6px; margin-bottom:5px; }
+.ow-dot { width:7px; height:7px; border-radius:50%; }
+.ow-p1c { background:#4FC3F7; }
+.ow-p2c { background:#FF8A65; }
+.ow-dot-lbl { font-size:9px; letter-spacing:3px; color:rgba(255,255,255,.3); }
+.ow-act-tag { font-size:9px; letter-spacing:2px; padding:2px 7px; border-radius:3px; margin-left:4px; }
+.ow-act-p1 { background:rgba(79,195,247,.18); color:#4FC3F7; }
+.ow-act-p2 { background:rgba(255,138,101,.18); color:#FF8A65; }
+.ow-sp-ni {
+  background:transparent; border:none; border-bottom:1px solid rgba(255,255,255,.18);
+  color:#fff; font-size:16px; font-family:'Oswald',sans-serif; letter-spacing:2px;
+  width:100%; padding:2px 0; transition:border-color .18s;
+}
+.ow-sp-ni:focus { border-bottom-color:rgba(255,255,255,.5); }
+.ow-sp-detail { font-size:10px; color:rgba(255,255,255,.35); margin-top:4px; letter-spacing:1px; }
+
+#ow-sel-who {
+  padding:7px 26px; display:flex; align-items:center; gap:8px;
+  border-bottom:1px solid rgba(79,195,247,.1);
+  font-size:10px; letter-spacing:3px; color:#4FC3F7;
+  background:rgba(79,195,247,.04);
+  transition:all .2s;
+}
+#ow-sel-who button {
+  margin-left:auto; background:rgba(79,195,247,.1); border:1px solid rgba(79,195,247,.28);
+  color:#4FC3F7; padding:3px 10px; border-radius:3px; font-size:9px; letter-spacing:2px;
+  font-family:'Oswald',sans-serif; transition:all .15s;
+}
+#ow-sel-who button:hover { background:rgba(79,195,247,.2); }
+
+#ow-filters {
+  padding:10px 26px; display:flex; gap:7px; align-items:center; flex-wrap:wrap;
+  border-bottom:1px solid rgba(255,255,255,.05);
+}
+.ow-flbl { font-size:9px; letter-spacing:3px; color:rgba(255,255,255,.28); margin-right:4px; }
+.ow-f {
+  padding:3px 11px; border:1px solid rgba(255,255,255,.1); border-radius:3px;
+  color:rgba(255,255,255,.38); font-size:9px; letter-spacing:2px; cursor:pointer;
+  background:transparent; font-family:'Oswald',sans-serif; transition:all .15s;
+}
+.ow-f:hover { border-color:rgba(255,255,255,.28); color:#fff; }
+.ow-f.on { border-color:#4FC3F7; color:#4FC3F7; background:rgba(79,195,247,.07); }
+
+#ow-grid {
+  padding:14px 26px 26px;
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(96px,1fr)); gap:7px;
+}
+.ow-hero {
+  aspect-ratio:3/4; border-radius:5px; overflow:hidden; cursor:pointer;
+  border:2px solid rgba(255,255,255,.05); position:relative; transition:all .18s;
+  background:rgba(255,255,255,.03); display:flex; flex-direction:column; align-items:center; justify-content:flex-end;
+}
+.ow-hero:hover { border-color:rgba(255,255,255,.22); transform:scale(1.04); background:rgba(255,255,255,.07); }
+.ow-hero.p1s { border-color:#4FC3F7; box-shadow:0 0 13px rgba(79,195,247,.32); }
+.ow-hero.p2s { border-color:#FF8A65; box-shadow:0 0 13px rgba(255,138,101,.32); }
+.ow-hero svg { width:76%; height:auto; }
+.ow-hname { font-size:8.5px; letter-spacing:.8px; color:rgba(255,255,255,.52); padding:3px 4px 5px; text-align:center; width:100%; background:rgba(0,0,0,.38); line-height:1.1; }
+.ow-sdots { position:absolute; top:4px; right:4px; display:flex; gap:3px; }
+.ow-sd1,.ow-sd2 { width:6px; height:6px; border-radius:50%; display:none; }
+.ow-sd1 { background:#4FC3F7; }
+.ow-sd2 { background:#FF8A65; }
+.ow-hero.p1s .ow-sd1 { display:block; }
+.ow-hero.p2s .ow-sd2 { display:block; }
+
+#ow-lock {
+  display:block; margin:6px auto 26px; padding:13px 50px;
+  background:linear-gradient(135deg,#15478C,#0d3268); position:relative; z-index:1;
+  border:1px solid rgba(79,195,247,.35); color:#fff; font-size:15px; letter-spacing:5px;
+  font-family:'Oswald',sans-serif; border-radius:4px; transition:all .2s;
+  box-shadow:0 0 24px rgba(79,195,247,.17),inset 0 0 20px rgba(79,195,247,.04);
+}
+#ow-lock:hover { background:linear-gradient(135deg,#1a56a0,#1042a0); box-shadow:0 0 38px rgba(79,195,247,.32); }
+</style>
+
+<div id="ow-topbar">
+  <div>
+    <h1>BALL ROSTER</h1>
+    <div class="sub">SELECT YOUR FIGHTER</div>
+  </div>
+</div>
+
+<div id="ow-sel-bar">
+  <div class="ow-sp">
+    <div class="ow-sp-ball"><div id="ow-p1-prev"></div></div>
+    <div class="ow-sp-info">
+      <div class="ow-sp-tag">
+        <div class="ow-dot ow-p1c"></div>
+        <span class="ow-dot-lbl">PLAYER 1</span>
+        <span class="ow-act-tag ow-act-p1" id="ow-p1-tag">SELECTING</span>
+      </div>
+      <input class="ow-sp-ni" type="text" value="Player 1" id="ow-p1-name">
+      <div class="ow-sp-detail" id="ow-p1-detail">Choose from the roster below</div>
+    </div>
+  </div>
+  <div class="ow-sp">
+    <div class="ow-sp-ball"><div id="ow-p2-prev"></div></div>
+    <div class="ow-sp-info">
+      <div class="ow-sp-tag">
+        <div class="ow-dot ow-p2c"></div>
+        <span class="ow-dot-lbl">PLAYER 2</span>
+        <span class="ow-act-tag ow-act-p2" id="ow-p2-tag"></span>
+      </div>
+      <input class="ow-sp-ni" type="text" value="Player 2" id="ow-p2-name">
+      <div class="ow-sp-detail" id="ow-p2-detail">Choose from the roster below</div>
+    </div>
+  </div>
+</div>
+
+<div id="ow-sel-who">
+  <div class="ow-dot ow-p1c" id="ow-who-dot"></div>
+  <span id="ow-who-txt">Selecting for PLAYER 1 — click a hero to assign</span>
+  <button onclick="owTogglePlayer()">SWITCH PLAYER</button>
+</div>
+
+<div id="ow-filters">
+  <span class="ow-flbl">FILTER:</span>
+  <button class="ow-f on" onclick="owFilter(this,'all')">ALL</button>
+  <button class="ow-f" onclick="owFilter(this,'neon')">NEON</button>
+  <button class="ow-f" onclick="owFilter(this,'metallic')">METALLIC</button>
+  <button class="ow-f" onclick="owFilter(this,'jewel')">JEWEL</button>
+  <button class="ow-f" onclick="owFilter(this,'dark')">DARK</button>
+  <button class="ow-f" onclick="owFilter(this,'special')">SPECIAL</button>
+</div>
+
+<div id="ow-grid"></div>
+<button id="ow-lock" onclick="onGo()">LOCK IN</button>
+</div>
+
+
+<!-- ═══════════════════════════════════════
+     SHARED JAVASCRIPT
+═══════════════════════════════════════ -->
+<script>
+// ── Data ─────────────────────────────────────────────────
+const COLORS = [
+  {name:'Cyan',     hex:'#00ffff',light:'#80ffff',dark:'#009999',cat:'neon'},
+  {name:'Lime',     hex:'#00ff00',light:'#80ff80',dark:'#008800',cat:'neon'},
+  {name:'Magenta',  hex:'#ff00ff',light:'#ff80ff',dark:'#990099',cat:'neon'},
+  {name:'Gold',     hex:'#ffd700',light:'#ffe880',dark:'#997700',cat:'metallic'},
+  {name:'Silver',   hex:'#c0c0c0',light:'#e8e8e8',dark:'#686868',cat:'metallic'},
+  {name:'Copper',   hex:'#b87333',light:'#d89060',dark:'#6b3614',cat:'metallic'},
+  {name:'Ruby',     hex:'#e0115f',light:'#ff6090',dark:'#880030',cat:'jewel'},
+  {name:'Emerald',  hex:'#50c878',light:'#90e0a8',dark:'#22673c',cat:'jewel'},
+  {name:'Sapphire', hex:'#0f52ba',light:'#6090d8',dark:'#061e78',cat:'jewel'},
+  {name:'Navy',     hex:'#000080',light:'#4040cc',dark:'#000030',cat:'dark'},
+  {name:'Burgundy', hex:'#800020',light:'#cc4060',dark:'#400010',cat:'dark'},
+  {name:'Charcoal', hex:'#3a3a3a',light:'#909090',dark:'#0a0a0a',cat:'dark'},
+  {name:'Chrome',   hex:'#d0d0d0',light:'#ffffff',dark:'#888888',cat:'special'},
+  {name:'Lava',     hex:'#ff4500',light:'#ff8844',dark:'#880000',cat:'special'},
+  {name:'Void',     hex:'#7700cc',light:'#cc66ff',dark:'#330066',cat:'special'},
+  {name:'Holo',     hex:'#ff44cc',light:'#ff99ee',dark:'#880055',cat:'special'},
+];
+
+const CAT_LABELS = {neon:'Neon',metallic:'Metallic',jewel:'Jewel',dark:'Dark',special:'Special'};
+
+const HATS = [
+  {name:'None',  id:'none'},
+  {name:'Santa', id:'santa'},
+  {name:'Cowboy',id:'cowboy'},
+  {name:'Afro',  id:'afro'},
+  {name:'Crown', id:'crown'},
+  {name:'Dunce', id:'dunce'},
+];
+
+const LORE = {
+  neon:     '"Born of plasma and starlight, the Neon-forged cleave through darkness with chromatic brilliance."',
+  metallic: '"Hammered in the deepest furnaces, the Metal-cast endure where flesh and light would wither."',
+  jewel:    '"Crystallized by aeons of pressure beneath forgotten mountains, the Gem-touched refract fate itself."',
+  dark:     '"From the lightless depths they came — shadow given form, purpose given to the void."',
+  special:  '"These ancient ones defy all classification. Their origins are lost to legend and ash."',
+};
+
+const HERO_NAMES = {
+  'Cyan+none':'Cyclone',    'Cyan+santa':'Frost Saint',  'Cyan+cowboy':'Ice Marshal',
+  'Cyan+afro':'Cool Vibes', 'Cyan+crown':'Frost Queen',  'Cyan+dunce':'Brain Freeze',
+  'Lime+none':'Venom',      'Lime+santa':'Holly Jolly',  'Lime+cowboy':'Swamp Ranger',
+  'Lime+afro':'Wild Growth','Lime+crown':'Weed King',    'Lime+dunce':'Silly Seed',
+  'Magenta+none':'Pixel',   'Magenta+santa':'Neon Claus','Magenta+cowboy':'Pink Ranger',
+  'Magenta+afro':'Disco Ball','Magenta+crown':'Pink Queen','Magenta+dunce':'Airhead',
+  'Gold+none':'Bullion',    'Gold+santa':'Gilded Elf',   'Gold+cowboy':'Gold Rush',
+  'Gold+afro':'Bling Lord', 'Gold+crown':'Midas Rex',    'Gold+dunce':'Fool\'s Gold',
+  'Silver+none':'Mercury',  'Silver+santa':'Tin Claus',  'Silver+cowboy':'Silverado',
+  'Silver+afro':'Quicksilver','Silver+crown':'Silver King','Silver+dunce':'Tin Hat',
+  'Ruby+none':'Bloodstone', 'Ruby+santa':'Red Nick',     'Ruby+cowboy':'Crimson Rider',
+  'Ruby+afro':'Red Fro',    'Ruby+crown':'Ruby Queen',   'Ruby+dunce':'Fool\'s Ruby',
+  'Emerald+none':'Jade',    'Emerald+santa':'Green Nick','Emerald+cowboy':'Jade Ranger',
+  'Emerald+afro':'Verdant', 'Emerald+crown':'Gem King',  'Emerald+dunce':'Silly Jade',
+};
+
+// ── State ────────────────────────────────────────────────
+const S = {
+  p1: { ci:0, hi:0 },
+  p2: { ci:1, hi:0 },
+  owFor: 1,
+};
+
+// ── SVG Ball Renderer ────────────────────────────────────
+let _gid = 0;
+
+function ballSVG(c, hatId, w, h) {
+  if (!c) c = COLORS[0];
+  const id = 'g' + (++_gid);
+  const {hex, light, dark} = c;
+  const HAT = {
+    santa: `
+      <polygon points="50,10 26,64 74,64" fill="#CC0000" stroke="#990000" stroke-width="1"/>
+      <ellipse cx="50" cy="64" rx="26" ry="8" fill="white"/>
+      <circle cx="50" cy="10" r="8" fill="white"/>`,
+    cowboy: `
+      <path d="M34,63 L34,40 Q34,27 50,27 Q66,27 66,40 L66,63" fill="#8B5E3C" stroke="#5a3010" stroke-width="1"/>
+      <ellipse cx="50" cy="63" rx="34" ry="9" fill="#8B5E3C" stroke="#5a3010" stroke-width="1"/>
+      <rect x="34" y="56" width="32" height="8" fill="#6B4226"/>`,
+    afro: `
+      <ellipse cx="50" cy="47" rx="32" ry="27" fill="#2A1508"/>
+      <circle cx="29" cy="43" r="15" fill="#3C2010"/>
+      <circle cx="71" cy="43" r="15" fill="#3C2010"/>
+      <circle cx="50" cy="23" r="18" fill="#3C2010"/>
+      <circle cx="35" cy="30" r="13" fill="#2A1508"/>
+      <circle cx="65" cy="30" r="13" fill="#2A1508"/>`,
+    crown: `
+      <path d="M22,62 L22,46 L31,59 L41,37 L50,53 L59,37 L69,59 L78,46 L78,62 Z" fill="#FFD700" stroke="#AA8800" stroke-width="1.5"/>
+      <rect x="22" y="55" width="56" height="10" rx="3" fill="#FFD700" stroke="#AA8800" stroke-width="1"/>
+      <circle cx="38" cy="47" r="4" fill="#FF3344"/>
+      <circle cx="50" cy="41" r="4" fill="#3399FF"/>
+      <circle cx="62" cy="47" r="4" fill="#FF3344"/>`,
+    dunce: `
+      <polygon points="50,6 27,63 73,63" fill="#E0E0E0" stroke="#AAAAAA" stroke-width="1.5"/>
+      <text x="50" y="44" text-anchor="middle" font-family="Arial Black,sans-serif" font-size="22" font-weight="900" fill="#AAAAAA">D</text>`,
+    none: '',
+  };
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 140" width="${w||100}" height="${h||140}" style="overflow:visible">
+    <defs><radialGradient id="${id}" cx="36%" cy="29%" r="65%">
+      <stop offset="0%" stop-color="${light}"/>
+      <stop offset="50%" stop-color="${hex}"/>
+      <stop offset="100%" stop-color="${dark}"/>
+    </radialGradient></defs>
+    ${HAT[hatId] || ''}
+    <circle cx="50" cy="100" r="37" fill="url(#${id})"/>
+    <ellipse cx="36" cy="87" rx="9" ry="5.5" fill="rgba(255,255,255,0.33)" transform="rotate(-25,36,87)"/>
+  </svg>`;
+}
+
+// ── Variant switcher ──────────────────────────────────────
+function sv(id, btn) {
+  document.querySelectorAll('.vx').forEach(e => e.classList.remove('on'));
+  document.querySelectorAll('.vtab').forEach(e => e.classList.remove('on'));
+  document.getElementById('vx-' + id).classList.add('on');
+  btn.classList.add('on');
+}
+function setVP(w) {
+  document.querySelectorAll('.vx').forEach(e => {
+    e.style.maxWidth = w ? w + 'px' : '';
+    e.style.margin = w ? '0 auto' : '';
+  });
+}
+function onGo() {
+  const p1 = COLORS[S.p1.ci].name + ' + ' + HATS[S.p1.hi].name;
+  const p2 = COLORS[S.p2.ci].name + ' + ' + HATS[S.p2.hi].name;
+  alert('Ready to play!\n\nP1: ' + p1 + '\nP2: ' + p2 + '\n\n[Would start the game]');
+}
+
+// ── Variant A — Mario Kart ────────────────────────────────
+function mkRenderChars(p) {
+  const el = document.getElementById('mk-' + p + '-chars');
+  el.innerHTML = '';
+  COLORS.forEach((c, i) => {
+    const div = document.createElement('div');
+    div.className = 'mk-char' + (i === S[p].ci ? ' sel' : '');
+    div.innerHTML = ballSVG(c, HATS[S[p].hi].id, 54, 76) + '<div class="mk-cname">' + c.name + '</div>';
+    div.onclick = () => {
+      S[p].ci = i;
+      document.querySelectorAll('#mk-' + p + '-chars .mk-char').forEach((e, j) => e.classList.toggle('sel', j === i));
+      mkUpdatePrev(p);
+    };
+    el.appendChild(div);
+  });
+}
+function mkUpdatePrev(p) {
+  document.getElementById('mk-' + p + '-prev').innerHTML = ballSVG(COLORS[S[p].ci], HATS[S[p].hi].id, 100, 140);
+}
+function mkInit() {
+  ['p1','p2'].forEach((p, pi) => {
+    S[p].ci = pi;
+    mkRenderChars(p);
+    const hatsEl = document.getElementById('mk-' + p + '-hats');
+    HATS.forEach((h, i) => {
+      const btn = document.createElement('div');
+      btn.className = 'mk-hat' + (i === 0 ? ' sel' : '');
+      btn.textContent = h.name;
+      btn.onclick = () => {
+        S[p].hi = i;
+        hatsEl.querySelectorAll('.mk-hat').forEach((e, j) => e.classList.toggle('sel', j === i));
+        mkRenderChars(p);
+        mkUpdatePrev(p);
+      };
+      hatsEl.appendChild(btn);
+    });
+    mkUpdatePrev(p);
+  });
+}
+
+// ── Variant B — Rocket League ─────────────────────────────
+function rlRenderColors(p, cat) {
+  const el = document.getElementById('rl-' + p + '-colors');
+  el.innerHTML = '';
+  const list = cat === 'all' ? COLORS : COLORS.filter(c => c.cat === cat);
+  list.forEach(c => {
+    const i = COLORS.indexOf(c);
+    const div = document.createElement('div');
+    div.className = 'rl-sw' + (i === S[p].ci ? ' sel' : '');
+    div.style.background = c.hex;
+    div.title = c.name;
+    div.onclick = () => {
+      S[p].ci = i;
+      el.querySelectorAll('.rl-sw').forEach(e => e.classList.remove('sel'));
+      div.classList.add('sel');
+      rlUpdatePrev(p);
+    };
+    el.appendChild(div);
+  });
+}
+function rlUpdatePrev(p) {
+  const c = COLORS[S[p].ci];
+  document.getElementById('rl-' + p + '-prev').innerHTML = ballSVG(c, HATS[S[p].hi].id, 130, 182);
+  document.getElementById('rl-' + p + '-glow').style.background = c.hex;
+}
+function rlInit() {
+  ['p1','p2'].forEach((p, pi) => {
+    S[p].ci = pi;
+    const catsEl = document.getElementById('rl-' + p + '-cats');
+    ['all',...Object.keys(CAT_LABELS)].forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'rl-cat' + (cat === 'all' ? ' on' : '');
+      btn.textContent = cat === 'all' ? 'ALL' : CAT_LABELS[cat];
+      btn.onclick = () => {
+        catsEl.querySelectorAll('.rl-cat').forEach(e => e.classList.remove('on'));
+        btn.classList.add('on');
+        rlRenderColors(p, cat);
+      };
+      catsEl.appendChild(btn);
+    });
+    rlRenderColors(p, 'all');
+    const hatsEl = document.getElementById('rl-' + p + '-hats');
+    HATS.forEach((h, i) => {
+      const btn = document.createElement('div');
+      btn.className = 'rl-hat' + (i === 0 ? ' sel' : '');
+      btn.textContent = h.name.toUpperCase();
+      btn.onclick = () => {
+        S[p].hi = i;
+        hatsEl.querySelectorAll('.rl-hat').forEach((e, j) => e.classList.toggle('sel', j === i));
+        rlUpdatePrev(p);
+      };
+      hatsEl.appendChild(btn);
+    });
+    rlUpdatePrev(p);
+  });
+}
+
+// ── Variant C — Splatoon ──────────────────────────────────
+function spUpdatePrev(p) {
+  const c = COLORS[S[p].ci];
+  document.getElementById('sp-' + p + '-prev').innerHTML = ballSVG(c, HATS[S[p].hi].id, 100, 120);
+  document.getElementById('sp-' + p + '-splash').style.background = c.hex;
+  document.getElementById('sp-' + p + '-splash').style.opacity = '.55';
+  document.getElementById('sp-splat' + (p === 'p1' ? 1 : 2)).style.background = c.hex;
+}
+function spInit() {
+  ['p1','p2'].forEach((p, pi) => {
+    S[p].ci = pi;
+    const clrs = document.getElementById('sp-' + p + '-colors');
+    COLORS.forEach((c, i) => {
+      const div = document.createElement('div');
+      div.className = 'sp-blob' + (i === S[p].ci ? ' sel' : '');
+      div.style.background = c.hex;
+      div.title = c.name;
+      div.onclick = () => {
+        S[p].ci = i;
+        clrs.querySelectorAll('.sp-blob').forEach(e => e.classList.remove('sel'));
+        div.classList.add('sel');
+        spUpdatePrev(p);
+      };
+      clrs.appendChild(div);
+    });
+    const hatsEl = document.getElementById('sp-' + p + '-hats');
+    HATS.forEach((h, i) => {
+      const btn = document.createElement('div');
+      btn.className = 'sp-hat' + (i === 0 ? ' sel' : '');
+      btn.textContent = h.name;
+      btn.onclick = () => {
+        S[p].hi = i;
+        hatsEl.querySelectorAll('.sp-hat').forEach((e, j) => e.classList.toggle('sel', j === i));
+        spUpdatePrev(p);
+      };
+      hatsEl.appendChild(btn);
+    });
+    spUpdatePrev(p);
+  });
+}
+
+// ── Variant D — Elden Ring ────────────────────────────────
+function erRenderStones(p, cat) {
+  const el = document.getElementById('er-' + p + '-stones');
+  el.innerHTML = '';
+  const list = COLORS.filter(c => c.cat === cat);
+  if (list.length > 0) { S[p].ci = COLORS.indexOf(list[0]); }
+  list.forEach(c => {
+    const i = COLORS.indexOf(c);
+    const div = document.createElement('div');
+    div.className = 'er-stone' + (i === S[p].ci ? ' sel' : '');
+    div.style.background = 'linear-gradient(135deg,' + c.light + ',' + c.hex + ',' + c.dark + ')';
+    div.title = c.name;
+    div.onclick = () => {
+      S[p].ci = i;
+      el.querySelectorAll('.er-stone').forEach(e => e.classList.remove('sel'));
+      div.classList.add('sel');
+      erUpdatePrev(p);
+    };
+    el.appendChild(div);
+  });
+  document.getElementById('er-' + p + '-lore').textContent = LORE[cat] || '';
+  erUpdatePrev(p);
+}
+function erUpdatePrev(p) {
+  document.getElementById('er-' + p + '-prev').innerHTML = ballSVG(COLORS[S[p].ci], HATS[S[p].hi].id, 90, 126);
+}
+function erInit() {
+  ['p1','p2'].forEach((p, pi) => {
+    S[p].ci = pi;
+    const origsEl = document.getElementById('er-' + p + '-origs');
+    Object.entries(CAT_LABELS).forEach(([cat, lbl], idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'er-orig' + (idx === 0 ? ' on' : '');
+      btn.textContent = lbl;
+      btn.onclick = () => {
+        origsEl.querySelectorAll('.er-orig').forEach(e => e.classList.remove('on'));
+        btn.classList.add('on');
+        erRenderStones(p, cat);
+      };
+      origsEl.appendChild(btn);
+    });
+    erRenderStones(p, 'neon');
+    const hatsEl = document.getElementById('er-' + p + '-hats');
+    const helmlore = {none:'Unadorned, unbowed.',santa:'The Festive Skull of the Fallen Saint.',cowboy:'A dusty trail-worn brim from the Ashen Plains.',afro:'The Fro of Ages — volume beyond reason.',crown:'Crown of the Fallen King (unclaimed).',dunce:'Cap of Shame — worn ironically.'};
+    HATS.forEach((h, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'er-helm' + (i === 0 ? ' sel' : '');
+      btn.textContent = h.name.toUpperCase();
+      btn.title = helmlore[h.id] || '';
+      btn.onclick = () => {
+        S[p].hi = i;
+        hatsEl.querySelectorAll('.er-helm').forEach((e, j) => e.classList.toggle('sel', j === i));
+        erUpdatePrev(p);
+      };
+      hatsEl.appendChild(btn);
+    });
+  });
+}
+
+// ── Variant E — Overwatch ─────────────────────────────────
+function owBuildGrid(filter) {
+  const grid = document.getElementById('ow-grid');
+  grid.innerHTML = '';
+  COLORS.filter(c => filter === 'all' || c.cat === filter).forEach(c => {
+    HATS.forEach(h => {
+      const ci = COLORS.indexOf(c);
+      const hi = HATS.indexOf(h);
+      const key = c.name + '+' + h.id;
+      const name = HERO_NAMES[key] || (c.name + ' ' + h.name);
+      const div = document.createElement('div');
+      div.className = 'ow-hero' +
+        (ci===S.p1.ci&&hi===S.p1.hi?' p1s':'') +
+        (ci===S.p2.ci&&hi===S.p2.hi?' p2s':'');
+      div.dataset.ci = ci; div.dataset.hi = hi;
+      div.innerHTML = '<div class="ow-sdots"><div class="ow-sd1"></div><div class="ow-sd2"></div></div>' +
+        ballSVG(c, h.id, 76, 106) +
+        '<div class="ow-hname">' + name + '</div>';
+      div.onclick = () => owPickHero(ci, hi, name, c.name, h.name);
+      div.onmouseenter = () => { document.getElementById('ow-p' + S.owFor + '-detail').textContent = name + ' — ' + c.name + ' + ' + h.name; };
+      grid.appendChild(div);
+    });
+  });
+}
+function owPickHero(ci, hi, heroName, colorName, hatName) {
+  const p = S.owFor;
+  S['p' + p].ci = ci; S['p' + p].hi = hi;
+  document.querySelectorAll('.ow-hero').forEach(el => {
+    const ec = +el.dataset.ci; const eh = +el.dataset.hi;
+    el.classList.toggle('p1s', ec===S.p1.ci && eh===S.p1.hi);
+    el.classList.toggle('p2s', ec===S.p2.ci && eh===S.p2.hi);
+  });
+  document.getElementById('ow-p' + p + '-prev').innerHTML = ballSVG(COLORS[ci], HATS[hi].id, 56, 78);
+  document.getElementById('ow-p' + p + '-detail').textContent = heroName + ' — ' + colorName + ' + ' + hatName;
+  S.owFor = p === 1 ? 2 : 1;
+  owUpdateWho();
+}
+function owUpdateWho() {
+  const p = S.owFor;
+  const el = document.getElementById('ow-sel-who');
+  const isP1 = p === 1;
+  el.style.color = isP1 ? '#4FC3F7' : '#FF8A65';
+  el.style.background = isP1 ? 'rgba(79,195,247,.04)' : 'rgba(255,138,101,.04)';
+  el.style.borderBottomColor = isP1 ? 'rgba(79,195,247,.1)' : 'rgba(255,138,101,.1)';
+  document.getElementById('ow-who-dot').className = 'ow-dot ' + (isP1 ? 'ow-p1c' : 'ow-p2c');
+  document.getElementById('ow-who-txt').textContent = 'Selecting for PLAYER ' + p + ' — click a hero to assign';
+  el.querySelector('button').style.color = isP1 ? '#4FC3F7' : '#FF8A65';
+  document.getElementById('ow-p1-tag').textContent = p===1 ? 'SELECTING' : '';
+  document.getElementById('ow-p2-tag').textContent = p===2 ? 'SELECTING' : '';
+}
+function owTogglePlayer() { S.owFor = S.owFor === 1 ? 2 : 1; owUpdateWho(); }
+function owFilter(btn, cat) {
+  document.querySelectorAll('.ow-f').forEach(e => e.classList.remove('on'));
+  btn.classList.add('on');
+  owBuildGrid(cat);
+}
+function owInit() {
+  ['p1','p2'].forEach((p, pi) => {
+    S[p].ci = pi; S[p].hi = 0;
+    document.getElementById('ow-' + p + '-prev').innerHTML = ballSVG(COLORS[pi], HATS[0].id, 56, 78);
+  });
+  owBuildGrid('all');
+  owUpdateWho();
+}
+
+// ── Boot ──────────────────────────────────────────────────
+mkInit();
+rlInit();
+spInit();
+erInit();
+owInit();
+</script>
+</body>
+</html>

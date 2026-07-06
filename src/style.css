@@ -264,7 +264,7 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
 }
 
 /* Name Entry Screen */
-#name-entry { background: rgba(0,0,0,0.88); pointer-events: auto; gap: 0; justify-content: center; }
+#name-entry { background: rgba(7,9,15,0.95); pointer-events: auto; gap: 0; justify-content: flex-start; padding-top: 1.5rem; }
 .name-entry-fields { display: flex; align-items: center; gap: 2rem; margin-top: 0; }
 .name-entry-field { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
 .name-entry-field label { font-size: 1.1rem; font-family: 'Courier New', monospace; text-transform: uppercase; letter-spacing: 4px; font-weight: bold; }
@@ -914,4 +914,77 @@ button { padding: 1rem 2rem; font-size: 1.5rem; background-color: transparent; c
     .controls-display {
         gap: 1.5rem;
     }
+}
+
+/* Player Setup Screen — Rocket League aesthetic */
+#name-entry { background: linear-gradient(180deg, #07090f 0%, #05070d 100%) !important; }
+
+.player-setup-title {
+    font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+    font-size: clamp(1.6rem, 3.6vw, 2.6rem);
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin: 0;
+    line-height: 1.1;
+    text-shadow: 0 0 30px rgba(0, 180, 216, 0.45);
+}
+
+.player-setup-title span {
+    color: #00B4D8;
+}
+
+.player-setup-subtitle {
+    font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+    font-size: clamp(0.7rem, 1.4vw, 0.88rem);
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.42);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin: 0.25rem 0 0 0;
+}
+
+.rl-ready-btn {
+    font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #ffffff;
+    background: linear-gradient(135deg, rgba(0, 180, 216, 0.9), rgba(0, 120, 160, 0.9));
+    border: 1.5px solid rgba(0, 180, 216, 0.85);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.18s, background 0.18s;
+    box-shadow: 0 0 24px rgba(0, 180, 216, 0.35), inset 0 0 16px rgba(255, 255, 255, 0.12);
+}
+
+.rl-ready-btn:hover {
+    background: linear-gradient(135deg, rgba(0, 200, 240, 1), rgba(0, 140, 180, 1));
+    box-shadow: 0 0 40px rgba(0, 180, 216, 0.6), inset 0 0 18px rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+}
+
+.rl-ready-btn:active {
+    transform: translateY(1px);
+    box-shadow: 0 0 18px rgba(0, 180, 216, 0.4);
+}
+
+.rl-back-btn {
+    font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.rl-back-btn:hover {
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.5);
+    background: rgba(255, 255, 255, 0.06);
 }

@@ -148,47 +148,68 @@ export function createCharacterPreviewPanel(
     height: 100%;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.85rem;
     align-items: center;
     justify-content: flex-start;
-    padding: 1rem;
+    padding: 0.75rem 1rem 1rem;
     overflow-y: auto;
-    background: rgba(0, 0, 0, 0.3);
+    background:
+      radial-gradient(ellipse 60% 40% at 18% 8%, rgba(0,180,216,0.10) 0%, transparent 70%),
+      radial-gradient(ellipse 60% 40% at 82% 8%, rgba(255,107,53,0.10) 0%, transparent 70%),
+      linear-gradient(180deg, #07090f 0%, #05070d 100%);
+    position: relative;
   `;
 
-  const colorStripStyles = document.createElement('style');
-  colorStripStyles.textContent = `
-    .rl-swatch-grid::-webkit-scrollbar { width: 3px; }
+  const panelStyles = document.createElement('style');
+  panelStyles.textContent = `
+    #character-preview-panel::before {
+      content: ''; position: fixed; left: 0; right: 0; bottom: 0; height: 38vh;
+      pointer-events: none; z-index: 0; opacity: 0.55;
+      background:
+        repeating-linear-gradient(90deg, rgba(0,180,255,0.07) 0, rgba(0,180,255,0.07) 1px, transparent 1px, transparent 64px),
+        repeating-linear-gradient(0deg, rgba(0,180,255,0.07) 0, rgba(0,180,255,0.07) 1px, transparent 1px, transparent 64px);
+      transform: perspective(420px) rotateX(26deg); transform-origin: bottom;
+    }
+    #character-preview-panel > * { position: relative; z-index: 1; }
+    .rl-swatch-grid::-webkit-scrollbar { width: 5px; }
     .rl-swatch-grid::-webkit-scrollbar-track { background: transparent; }
-    .rl-swatch-grid::-webkit-scrollbar-thumb { background: rgba(100,160,220,0.3); border-radius: 2px; }
+    .rl-swatch-grid::-webkit-scrollbar-thumb { background: rgba(120,170,220,0.35); border-radius: 3px; }
+    .rl-swatch-grid::-webkit-scrollbar-thumb:hover { background: rgba(120,170,220,0.55); }
+    .rl-swatch-grid { scrollbar-width: thin; }
+    @media screen and (max-width: 720px) {
+      #character-preview-panel::before { height: 26vh; opacity: 0.4; }
+    }
   `;
-  container.appendChild(colorStripStyles);
+  container.appendChild(panelStyles);
 
   // ===== TOP: DIFFICULTY SELECTOR (Single player only) =====
   if (!isMultiplayer) {
     const difficultySection = document.createElement('div');
     difficultySection.style.cssText = `
       width: 100%;
-      max-width: 600px;
-      padding: 0.8rem;
-      background: rgba(0, 255, 255, 0.05);
-      border: 2px solid #0ff;
+      max-width: 1180px;
+      padding: 0.7rem 1.1rem;
+      background: rgba(0, 180, 216, 0.04);
+      border: 1px solid rgba(0, 180, 216, 0.22);
       border-radius: 8px;
       display: flex;
-      flex-direction: column;
-      gap: 0.5rem;
+      flex-direction: row;
+      align-items: center;
+      gap: 1rem;
+      box-sizing: border-box;
     `;
 
     const diffTitle = document.createElement('h3');
     diffTitle.textContent = 'DIFFICULTY';
     diffTitle.style.cssText = `
-      color: #0ff;
+      color: #00B4D8;
       margin: 0;
-      text-align: center;
-      font-size: 0.9rem;
+      font-size: 0.8rem;
       text-transform: uppercase;
-      letter-spacing: 1px;
-      text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+      letter-spacing: 3px;
+      text-shadow: 0 0 8px rgba(0, 180, 216, 0.5);
+      white-space: nowrap;
+      flex-shrink: 0;
     `;
     difficultySection.appendChild(diffTitle);
 
@@ -196,23 +217,24 @@ export function createCharacterPreviewPanel(
     diffButtons.style.cssText = `
       display: flex;
       gap: 0.5rem;
-      justify-content: center;
+      justify-content: stretch;
+      flex: 1;
     `;
 
     let selectedDifficulty = String(useGameStore.getState().difficulty ?? 'normal');
     const setDifficultyButtonInactive = (btn: HTMLButtonElement): void => {
-      btn.style.background = 'rgba(0, 255, 255, 0.2)';
-      btn.style.color = '#0ff';
-      btn.style.borderColor = '#0ff';
+      btn.style.background = 'rgba(0, 180, 216, 0.12)';
+      btn.style.color = '#00B4D8';
+      btn.style.borderColor = 'rgba(0, 180, 216, 0.5)';
       btn.style.boxShadow = 'none';
       btn.style.textShadow = 'none';
     };
     const setDifficultyButtonActive = (btn: HTMLButtonElement): void => {
-      btn.style.background = '#0ff';
-      btn.style.color = '#000';
-      btn.style.borderColor = '#00ffff';
-      btn.style.boxShadow = '0 0 30px #0ff, inset 0 0 20px rgba(255, 255, 255, 0.5)';
-      btn.style.textShadow = '0 0 10px rgba(0, 255, 255, 0.8)';
+      btn.style.background = 'linear-gradient(135deg, #00B4D8, #0090B0)';
+      btn.style.color = '#031018';
+      btn.style.borderColor = '#00B4D8';
+      btn.style.boxShadow = '0 0 22px rgba(0,180,216,0.55), inset 0 0 14px rgba(255,255,255,0.25)';
+      btn.style.textShadow = '0 0 8px rgba(255,255,255,0.4)';
     };
 
     ['easy', 'normal', 'hard'].forEach((diff) => {
@@ -221,16 +243,18 @@ export function createCharacterPreviewPanel(
       btn.textContent = diff.toUpperCase();
       btn.style.cssText = `
         flex: 1;
-        padding: 0.5rem 1rem;
-        background: rgba(0, 255, 255, 0.2);
-        color: #0ff;
-        border: 1px solid #0ff;
-        border-radius: 4px;
+        padding: 0.55rem 1rem;
+        background: rgba(0, 180, 216, 0.12);
+        color: #00B4D8;
+        border: 1px solid rgba(0, 180, 216, 0.5);
+        border-radius: 5px;
         cursor: pointer;
-        font-size: 0.85rem;
-        font-weight: bold;
+        font-size: 0.82rem;
+        font-weight: 700;
+        font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+        letter-spacing: 2px;
         text-transform: uppercase;
-        transition: all 0.2s;
+        transition: all 0.18s;
       `;
 
       if (diff === selectedDifficulty) {
@@ -241,7 +265,7 @@ export function createCharacterPreviewPanel(
         if (btn.dataset.difficulty === selectedDifficulty) {
           return;
         }
-        btn.style.background = 'rgba(0, 255, 255, 0.3)';
+        btn.style.background = 'rgba(0, 180, 216, 0.22)';
       };
       btn.onmouseout = () => {
         if (btn.dataset.difficulty === selectedDifficulty) {
@@ -271,27 +295,28 @@ export function createCharacterPreviewPanel(
   const levelSection = document.createElement('div');
   levelSection.style.cssText = `
     width: 100%;
-    max-width: 600px;
-    padding: 0.8rem;
-    background: rgba(0, 255, 255, 0.05);
-    border: 2px solid #0ff;
+    max-width: 1180px;
+    padding: 0.7rem 1.1rem;
+    background: rgba(0, 180, 216, 0.04);
+    border: 1px solid rgba(0, 180, 216, 0.22);
     border-radius: 8px;
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.9rem;
     box-sizing: border-box;
   `;
 
   const levelLabel = document.createElement('h3');
   levelLabel.textContent = 'ARENA';
   levelLabel.style.cssText = `
-    color: #0ff;
+    color: #00B4D8;
     margin: 0;
     font-size: 0.8rem;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+    letter-spacing: 3px;
+    text-shadow: 0 0 8px rgba(0, 180, 216, 0.5);
     white-space: nowrap;
+    flex-shrink: 0;
   `;
   levelSection.appendChild(levelLabel);
 
@@ -299,23 +324,24 @@ export function createCharacterPreviewPanel(
   levelInfo.style.cssText = `
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.7rem;
     min-width: 0;
     flex: 1;
   `;
 
   const levelThumbnailWrap = document.createElement('div');
   levelThumbnailWrap.style.cssText = `
-    width: 72px;
-    height: 44px;
-    border: 1px solid rgba(0, 255, 255, 0.35);
-    border-radius: 4px;
-    background: rgba(0, 0, 0, 0.45);
+    width: 88px;
+    height: 52px;
+    border: 1px solid rgba(0, 180, 216, 0.45);
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.5);
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
     flex-shrink: 0;
+    box-shadow: inset 0 0 12px rgba(0,180,216,0.15);
   `;
 
   const levelName = document.createElement('div');
@@ -323,9 +349,10 @@ export function createCharacterPreviewPanel(
   levelName.title = 'Default Arena';
   levelName.style.cssText = `
     color: #ffffff;
-    font-size: 0.9rem;
-    font-weight: bold;
-    letter-spacing: 0.4px;
+    font-size: 1rem;
+    font-weight: 600;
+    font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+    letter-spacing: 1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -334,10 +361,11 @@ export function createCharacterPreviewPanel(
   const levelFallbackText = document.createElement('span');
   levelFallbackText.textContent = 'NO PREVIEW';
   levelFallbackText.style.cssText = `
-    color: rgba(0, 255, 255, 0.6);
-    font-size: 0.55rem;
+    color: rgba(0, 180, 216, 0.6);
+    font-size: 0.6rem;
     letter-spacing: 1px;
     text-transform: uppercase;
+    font-family: 'Rajdhani', system-ui, sans-serif;
   `;
   levelThumbnailWrap.appendChild(levelFallbackText);
 
@@ -348,26 +376,30 @@ export function createCharacterPreviewPanel(
   levelButton.type = 'button';
   levelButton.textContent = 'SELECT';
   levelButton.style.cssText = `
-    padding: 0.45rem 0.8rem;
-    background: rgba(0, 255, 255, 0.2);
-    color: #0ff;
-    border: 1px solid #0ff;
-    border-radius: 4px;
+    padding: 0.5rem 1.2rem;
+    background: rgba(0, 180, 216, 0.14);
+    color: #00B4D8;
+    border: 1px solid rgba(0, 180, 216, 0.55);
+    border-radius: 5px;
     cursor: pointer;
-    font-size: 0.78rem;
-    font-weight: bold;
+    font-size: 0.82rem;
+    font-weight: 700;
+    font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+    letter-spacing: 2px;
     text-transform: uppercase;
-    transition: all 0.2s;
+    transition: all 0.18s;
     flex-shrink: 0;
   `;
   levelButton.onmouseover = () => {
     if (!levelButton.disabled) {
-      levelButton.style.background = 'rgba(0, 255, 255, 0.3)';
+      levelButton.style.background = 'rgba(0, 180, 216, 0.28)';
+      levelButton.style.boxShadow = '0 0 16px rgba(0,180,216,0.35)';
     }
   };
   levelButton.onmouseout = () => {
     if (!levelButton.disabled) {
-      levelButton.style.background = 'rgba(0, 255, 255, 0.2)';
+      levelButton.style.background = 'rgba(0, 180, 216, 0.14)';
+      levelButton.style.boxShadow = 'none';
     }
   };
   levelSection.appendChild(levelButton);
@@ -382,7 +414,7 @@ export function createCharacterPreviewPanel(
       return;
     }
 
-    const thumbnailCanvas = createLevelThumbnailCanvas(tiles, 72, 44);
+    const thumbnailCanvas = createLevelThumbnailCanvas(tiles, 88, 52);
     thumbnailCanvas.style.cssText = 'width: 100%; height: 100%; display: block;';
     levelThumbnailWrap.appendChild(thumbnailCanvas);
   };
@@ -496,23 +528,30 @@ export function createCharacterPreviewPanel(
     display: flex;
     gap: 0;
     width: 100%;
-    max-width: 1000px;
+    max-width: 1180px;
     justify-content: center;
     align-items: stretch;
     flex-shrink: 0;
+    position: relative;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(4,6,12,0.6);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 18px 60px rgba(0,0,0,0.55);
   `;
 
   players.forEach((player, index) => {
     const playerCard = createPlayerCard(player, onPlayerStateChange as Function | undefined, isMultiplayer);
 
-    // Insert a single vertical divider line between P1 and P2
+    // Insert a glowing vertical divider line between P1 and P2
     if (index === 1) {
       const divider = document.createElement('div');
       divider.style.cssText = `
-        width: 1px;
-        background: rgba(255,255,255,0.1);
+        width: 2px;
+        background: linear-gradient(180deg, transparent 0%, rgba(0,180,216,0.55) 25%, rgba(255,107,53,0.55) 75%, transparent 100%);
         flex-shrink: 0;
         align-self: stretch;
+        box-shadow: 0 0 14px rgba(0,180,216,0.25);
       `;
       playersContainer.appendChild(divider);
     }
@@ -545,24 +584,36 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   const card = document.createElement('div');
   card.style.cssText = `
     flex: 1 1 0;
-    max-width: 420px;
-    min-width: 280px;
+    max-width: 580px;
+    min-width: 340px;
     display: flex;
     flex-direction: column;
     gap: 0;
-    background: rgba(7,9,18,0.92);
+    background: rgba(7,9,18,0.55);
     overflow: hidden;
+    position: relative;
   `;
+
+  // Accent top edge
+  const accentEdge = document.createElement('div');
+  accentEdge.style.cssText = `
+    height: 3px;
+    width: 100%;
+    background: linear-gradient(90deg, transparent 0%, ${accentCss} 50%, transparent 100%);
+    box-shadow: 0 0 12px ${accentCss};
+    flex-shrink: 0;
+  `;
+  card.appendChild(accentEdge);
 
   // Header bar
   const header = document.createElement('div');
   header.style.cssText = `
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.55rem 0.85rem;
-    background: rgba(${accentRgb},0.1);
-    border-bottom: 1px solid rgba(${accentRgb},0.2);
+    gap: 0.85rem;
+    padding: 0.7rem 1rem;
+    background: linear-gradient(180deg, rgba(${accentRgb},0.16) 0%, rgba(${accentRgb},0.04) 100%);
+    border-bottom: 1px solid rgba(${accentRgb},0.22);
   `;
 
   const labelBadge = document.createElement('span');
@@ -570,14 +621,16 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   labelBadge.style.cssText = `
     color: ${accentCss};
     font-family: ${fontStack};
-    font-size: 0.68rem;
+    font-size: 0.82rem;
     font-weight: 700;
     letter-spacing: 4px;
     text-transform: uppercase;
     flex-shrink: 0;
-    padding: 2px 7px;
-    border: 1px solid rgba(${accentRgb},0.5);
-    border-radius: 3px;
+    padding: 4px 10px;
+    border: 1px solid rgba(${accentRgb},0.6);
+    border-radius: 4px;
+    background: rgba(${accentRgb},0.1);
+    text-shadow: 0 0 8px rgba(${accentRgb},0.55);
   `;
   header.appendChild(labelBadge);
 
@@ -588,19 +641,20 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   nameInput.value = player.playerName;
   nameInput.style.cssText = `
     flex: 1;
-    background: rgba(0,0,0,0.35);
-    border: 1px solid rgba(${accentRgb},0.22);
-    color: #e8e8f0;
+    background: rgba(0,0,0,0.4);
+    border: 1px solid rgba(${accentRgb},0.28);
+    color: #eef2f8;
     font-family: ${fontStack};
-    font-size: 0.95rem;
+    font-size: 1.1rem;
     font-weight: 600;
     letter-spacing: 2px;
     text-transform: uppercase;
-    padding: 4px 10px;
-    border-radius: 4px;
+    padding: 7px 12px;
+    border-radius: 5px;
     box-sizing: border-box;
     outline: none;
     min-width: 0;
+    transition: border-color 0.18s, box-shadow 0.18s;
   `;
   nameInput.onfocus = () => {
     nameInput.style.borderColor = accentCss;
@@ -624,12 +678,14 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   header.appendChild(nameInput);
   card.appendChild(header);
 
-  // Canvas container with fixed height
+  // Canvas container with responsive hero-preview height and accent glow
   const canvasContainer = document.createElement('div');
   canvasContainer.style.cssText = `
     width: 100%;
-    height: 240px;
-    background: #060a14;
+    height: clamp(220px, 30vh, 340px);
+    background:
+      radial-gradient(ellipse 70% 60% at 50% 55%, rgba(${accentRgb},0.16) 0%, transparent 65%),
+      linear-gradient(180deg, #050811 0%, #02040a 100%);
     position: relative;
     flex-shrink: 0;
   `;
@@ -646,9 +702,9 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
     bottom: 0;
     left: 0;
     right: 0;
-    height: 3px;
+    height: 4px;
     background: ${initialDisplayColor};
-    box-shadow: 0 0 8px ${initialDisplayColor};
+    box-shadow: 0 0 12px ${initialDisplayColor}, 0 0 22px ${initialDisplayColor}88;
   `;
   canvasContainer.appendChild(colorBar);
   card.appendChild(canvasContainer);
@@ -672,20 +728,20 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   // Customization section
   const customSection = document.createElement('div');
   customSection.style.cssText = `
-    padding: 0.65rem 0.75rem;
+    padding: 0.8rem 1rem 1rem;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
-    border-top: 1px solid rgba(${accentRgb},0.12);
+    gap: 0.55rem;
+    border-top: 1px solid rgba(${accentRgb},0.14);
   `;
 
   const makeSectionLabel = (text: string): HTMLElement => {
     const el = document.createElement('div');
     el.textContent = text;
     el.style.cssText = `
-      color: rgba(${accentRgb},0.6);
+      color: rgba(${accentRgb},0.72);
       font-family: ${fontStack};
-      font-size: 0.58rem;
+      font-size: 0.72rem;
       font-weight: 700;
       letter-spacing: 3px;
       text-transform: uppercase;
@@ -706,19 +762,19 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   ];
 
   const tabsRow = document.createElement('div');
-  tabsRow.style.cssText = `display: flex; gap: 3px; flex-wrap: wrap;`;
+  tabsRow.style.cssText = `display: flex; gap: 5px; flex-wrap: wrap;`;
 
   const swatchGrid = document.createElement('div');
   swatchGrid.className = 'rl-swatch-grid';
   swatchGrid.style.cssText = `
     display: flex;
     flex-wrap: wrap;
-    gap: 5px;
-    padding: 4px 0;
-    max-height: 96px;
+    gap: 7px;
+    padding: 6px 0 2px;
+    max-height: 124px;
     overflow-y: auto;
     scrollbar-width: thin;
-    scrollbar-color: rgba(${accentRgb},0.3) transparent;
+    scrollbar-color: rgba(${accentRgb},0.35) transparent;
     align-items: flex-start;
   `;
 
@@ -765,37 +821,38 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
       }
 
       swatch.style.cssText = `
-        width: 26px;
-        height: 26px;
-        min-width: 26px;
-        min-height: 26px;
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        min-height: 34px;
         padding: 0;
         box-sizing: border-box;
         border-radius: 50%;
         cursor: pointer;
         border: 2px solid ${isSelected ? '#ffffff' : 'transparent'};
         ${bgStyle}
-        box-shadow: ${isSelected ? `0 0 0 1px rgba(0,0,0,0.5), 0 0 8px ${displayCss}99` : `0 0 3px ${displayCss}55`};
-        transition: transform 0.1s;
+        box-shadow: ${isSelected ? `0 0 0 1px rgba(0,0,0,0.55), 0 0 10px ${displayCss}, 0 0 18px ${displayCss}88` : `0 0 4px ${displayCss}66`};
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
         flex-shrink: 0;
       `;
-      swatch.onmouseover = () => { swatch.style.transform = 'scale(1.2)'; };
-      swatch.onmouseout = () => { swatch.style.transform = 'scale(1)'; };
+      swatch.onmouseover = () => { swatch.style.transform = 'scale(1.18)'; };
+      swatch.onmouseout = () => { if (swatch.dataset.selected !== '1') swatch.style.transform = 'scale(1)'; };
 
       swatch.onclick = () => {
         swatchGrid.querySelectorAll('button').forEach(el => {
           const s = el as HTMLButtonElement;
           s.dataset.selected = '0';
           s.style.border = '2px solid transparent';
+          s.style.transform = 'scale(1)';
           const sc = s.dataset.colorCss;
-          if (sc) s.style.boxShadow = `0 0 3px ${sc}55`;
+          if (sc) s.style.boxShadow = `0 0 4px ${sc}66`;
         });
         swatch.dataset.selected = '1';
         swatch.style.border = '2px solid #ffffff';
-        swatch.style.boxShadow = `0 0 0 1px rgba(0,0,0,0.5), 0 0 8px ${displayCss}99`;
+        swatch.style.boxShadow = `0 0 0 1px rgba(0,0,0,0.55), 0 0 10px ${displayCss}, 0 0 18px ${displayCss}88`;
 
         colorBar.style.background = displayCss;
-        colorBar.style.boxShadow = `0 0 8px ${displayCss}`;
+        colorBar.style.boxShadow = `0 0 12px ${displayCss}, 0 0 22px ${displayCss}88`;
 
         player.color = colorHex;
 
@@ -835,26 +892,27 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
     tab.dataset.catKey = key;
     const isActive = key === activeCat;
     tab.style.cssText = `
-      padding: 2px 6px;
-      border-radius: 3px;
+      padding: 4px 10px;
+      border-radius: 4px;
       font-family: ${fontStack};
-      font-size: 0.57rem;
+      font-size: 0.7rem;
       font-weight: 700;
-      letter-spacing: 0.5px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
       cursor: pointer;
-      border: 1px solid rgba(${accentRgb},${isActive ? '0.75' : '0.22'});
-      background: rgba(${accentRgb},${isActive ? '0.22' : '0.04'});
-      color: ${isActive ? accentCss : `rgba(${accentRgb},0.5)`};
-      transition: all 0.12s;
+      border: 1px solid rgba(${accentRgb},${isActive ? '0.85' : '0.28'});
+      background: rgba(${accentRgb},${isActive ? '0.24' : '0.05'});
+      color: ${isActive ? accentCss : `rgba(${accentRgb},0.6)`};
+      transition: all 0.14s;
     `;
     tab.onclick = () => {
       activeCat = key;
       tabsRow.querySelectorAll('button').forEach(el => {
         const t = el as HTMLButtonElement;
         const active = t.dataset.catKey === key;
-        t.style.border = `1px solid rgba(${accentRgb},${active ? '0.75' : '0.22'})`;
-        t.style.background = `rgba(${accentRgb},${active ? '0.22' : '0.04'})`;
-        t.style.color = active ? accentCss : `rgba(${accentRgb},0.5)`;
+        t.style.border = `1px solid rgba(${accentRgb},${active ? '0.85' : '0.28'})`;
+        t.style.background = `rgba(${accentRgb},${active ? '0.24' : '0.05'})`;
+        t.style.color = active ? accentCss : `rgba(${accentRgb},0.6)`;
       });
       renderSwatches(key);
     };
@@ -869,7 +927,7 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   customSection.appendChild(makeSectionLabel('HEADGEAR'));
 
   const hatRow = document.createElement('div');
-  hatRow.style.cssText = `display: flex; flex-wrap: wrap; gap: 4px;`;
+  hatRow.style.cssText = `display: flex; flex-wrap: wrap; gap: 6px;`;
 
   let currentHat = player.hat;
 
@@ -880,27 +938,31 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
     chip.dataset.hatType = hatType;
     const isSel = hatType === currentHat;
     chip.style.cssText = `
-      padding: 3px 10px;
-      border-radius: 4px;
+      padding: 5px 12px;
+      border-radius: 5px;
       font-family: ${fontStack};
-      font-size: 0.67rem;
+      font-size: 0.78rem;
       font-weight: 700;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
       text-transform: uppercase;
       cursor: pointer;
-      border: 1px solid rgba(${accentRgb},${isSel ? '0.85' : '0.22'});
-      background: rgba(${accentRgb},${isSel ? '0.28' : '0.04'});
-      color: ${isSel ? '#ffffff' : `rgba(${accentRgb},0.55)`};
-      transition: all 0.12s;
+      border: 1px solid rgba(${accentRgb},${isSel ? '0.9' : '0.28'});
+      background: rgba(${accentRgb},${isSel ? '0.3' : '0.05'});
+      color: ${isSel ? '#ffffff' : `rgba(${accentRgb},0.65)`};
+      box-shadow: ${isSel ? `0 0 12px rgba(${accentRgb},0.35)` : 'none'};
+      text-shadow: ${isSel ? `0 0 8px rgba(${accentRgb},0.5)` : 'none'};
+      transition: all 0.14s;
     `;
     chip.onclick = () => {
       currentHat = hatType;
       hatRow.querySelectorAll('button').forEach(el => {
         const c = el as HTMLButtonElement;
         const active = c.dataset.hatType === hatType;
-        c.style.border = `1px solid rgba(${accentRgb},${active ? '0.85' : '0.22'})`;
-        c.style.background = `rgba(${accentRgb},${active ? '0.28' : '0.04'})`;
-        c.style.color = active ? '#ffffff' : `rgba(${accentRgb},0.55)`;
+        c.style.border = `1px solid rgba(${accentRgb},${active ? '0.9' : '0.28'})`;
+        c.style.background = `rgba(${accentRgb},${active ? '0.3' : '0.05'})`;
+        c.style.color = active ? '#ffffff' : `rgba(${accentRgb},0.65)`;
+        c.style.boxShadow = active ? `0 0 12px rgba(${accentRgb},0.35)` : 'none';
+        c.style.textShadow = active ? `0 0 8px rgba(${accentRgb},0.5)` : 'none';
       });
       const store = useGameStore.getState();
       if (player.playerId === 'player1') {

@@ -1,0 +1,40 @@
+/* Dropfall Game Theme */
+:root {
+  --color-bg: #0a0a12;
+  --color-surface: #13131f;
+  --color-border: rgba(0,230,255,0.2);
+  --color-text: #e8e8f0;
+  --color-text-muted: rgba(232,232,240,0.45);
+  --color-primary: #00e5ff;
+  --color-primary-hover: #00b4d8;
+  --color-accent: #ff6b35;
+  --color-danger: #ff3347;
+  --color-success: #00ff88;
+
+  --font-sans: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif;
+  --font-display: 'Fredoka One', 'Arial Black', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --text-xs: 0.7rem;
+  --text-sm: 0.85rem;
+  --text-base: 1rem;
+  --text-lg: 1.2rem;
+  --text-xl: 1.5rem;
+  --text-2xl: 2rem;
+  --text-3xl: 3rem;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --shadow-glow: 0 0 25px rgba(0,230,255,0.3);
+  --shadow-card: 0 8px 32px rgba(0,0,0,0.5);
+}
