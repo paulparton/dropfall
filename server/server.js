@@ -4,6 +4,7 @@ import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSy
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
+import { GameRoom } from './game/GameRoom.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -71,39 +72,13 @@ class GameServer {
         };
     }
 
-    getGamePlayerInfo(game, playerId) {
-        if (!game) return null;
-        return game.players.find(p => p.id === playerId) || null;
-    }
-
-    clearReconnectTimer(game, slot) {
-        if (!game?.reconnectTimers) return;
-        const timeoutId = game.reconnectTimers.get(slot);
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-            game.reconnectTimers.delete(slot);
-        }
-    }
-
-    clearAllReconnectTimers(game) {
-        if (!game?.reconnectTimers) return;
-        for (const timeoutId of game.reconnectTimers.values()) {
-            clearTimeout(timeoutId);
-        }
-        game.reconnectTimers.clear();
-    }
-
-    broadcastReadyState(game, playerInfo) {
-        if (!game || !playerInfo) return;
-        this.broadcastToGame(game.id, {
+    broadcastReadyState(room, playerInfo) {
+        if (!room || !playerInfo) return;
+        this.broadcastToGame(room.id, {
             type: 'ready_state',
             slot: this.normalizeSlot(playerInfo.slot),
             ready: !!playerInfo.ready,
         });
-    }
-
-    areBothPlayersReady(game) {
-        return game.players.length === 2 && game.players.every(p => !!p.ready);
     }
 
     handleHttp(req, res) {
@@ -491,64 +466,41 @@ class GameServer {
         }
 
         const gameId = `game_${this.gameIdCounter++}`;
-        const game = {
-            id: gameId,
-            hostId: player.id,
-            hostName: player.name || 'Host',
-            settings: {
-                theme: 'default',
-                sphereSize: 2.0,
-                sphereWeight: 200,
-                sphereAccel: 2000,
-                collisionBounce: 0.9,
-                arenaSize: 4,
-                destructionRate: 3.0,
-                iceRate: 2.0,
-                bonusRate: 6.0,
-                bonusDuration: 4.0,
-                boostRegenSpeed: 1.5,
-                boostDrainRate: 20,
-                ...settings
-            },
-            players: [],
-            state: 'LOBBY',
-            stateUpdate: null,
-            reconnectTimers: new Map(),
+        const room = new GameRoom(gameId, player.id, player.name || 'Host', settings);
+        room.onBroadcast = (playerId, msg) => {
+            const p = this.players.get(playerId);
+            if (p) this.sendToPlayer(p, msg);
+        };
+        room.onGameEnded = (endedRoom) => {
+            this.games.delete(endedRoom.id);
+            this.broadcastStats();
         };
 
-        this.games.set(gameId, game);
+        this.games.set(gameId, room);
         this.stats.gamesCreated++;
 
         player.currentGame = gameId;
         player.playerSlot = 1;
         player.isHost = true;
-        game.players.push({
-            id: player.id,
-            name: player.name,
-            slot: 1,
-            ready: false,
-            rematchRequested: false,
-            disconnected: false,
-            customization: this.getDefaultCustomization(1, player.name),
-        });
+        room.addPlayer(player.id, player.name, player.ws);
 
-        this.sendToPlayer(player, { type: 'game_created', game: this.getPublicGame(game) });
+        this.sendToPlayer(player, { type: 'game_created', game: room.getPublicGame() });
         this.broadcastStats();
     }
 
     joinGame(player, gameId) {
-        const game = this.games.get(gameId);
-        if (!game) {
+        const room = this.games.get(gameId);
+        if (!room) {
             this.sendToPlayer(player, { type: 'error', message: 'Game not found' });
             return;
         }
 
-        if (game.state !== 'LOBBY') {
+        if (room.state !== 'LOBBY') {
             this.sendToPlayer(player, { type: 'error', message: 'Game already started' });
             return;
         }
 
-        if (game.players.length >= 2) {
+        if (room.isFull()) {
             this.sendToPlayer(player, { type: 'error', message: 'Game is full' });
             return;
         }
@@ -557,30 +509,25 @@ class GameServer {
             this.leaveGame(player);
         }
 
-        const slot = game.players.length === 0 ? 1 : 2;
-        player.currentGame = gameId;
-        player.playerSlot = slot;
-        player.isHost = false;
-        const playerInfo = {
-            id: player.id,
-            name: player.name,
-            slot,
-            ready: false,
-            rematchRequested: false,
-            disconnected: false,
-            customization: this.getDefaultCustomization(slot, player.name),
-        };
-        game.players.push(playerInfo);
+        const playerInfo = room.addPlayer(player.id, player.name, player.ws);
+        if (!playerInfo) {
+            this.sendToPlayer(player, { type: 'error', message: 'Failed to join game' });
+            return;
+        }
 
-        this.sendToPlayer(player, { type: 'game_joined', game: this.getPublicGame(game) });
+        player.currentGame = gameId;
+        player.playerSlot = playerInfo.slot;
+        player.isHost = false;
+
+        this.sendToPlayer(player, { type: 'game_joined', game: room.getPublicGame() });
 
         this.broadcastToGame(gameId, {
             type: 'player_joined',
             player: {
                 id: player.id,
                 name: player.name,
-                slot,
-                customization: { ...playerInfo.customization },
+                slot: playerInfo.slot,
+                customization: this.getDefaultCustomization(playerInfo.slot, player.name),
             },
         }, player.id);
 
@@ -590,38 +537,29 @@ class GameServer {
     leaveGame(player) {
         if (!player.currentGame) return;
 
-        const game = this.games.get(player.currentGame);
-        if (!game) {
+        const room = this.games.get(player.currentGame);
+        if (!room) {
             player.currentGame = null;
             return;
         }
 
-        const playerIndex = game.players.findIndex(p => p.id === player.id);
-        const departingPlayerInfo = playerIndex !== -1 ? game.players[playerIndex] : null;
-        if (departingPlayerInfo) {
-            this.clearReconnectTimer(game, departingPlayerInfo.slot);
-        }
-        if (playerIndex !== -1) {
-            game.players.splice(playerIndex, 1);
-        }
+        const result = room.removePlayer(player.id);
 
-        this.broadcastToGame(game.id, {
+        this.broadcastToGame(room.id, {
             type: 'player_left',
             playerId: player.id,
             playerSlot: player.playerSlot,
         });
 
-        if (game.players.length === 0 || game.hostId === player.id) {
-            if (game.players.length > 0) {
-                const newHost = game.players[0];
-                game.hostId = newHost.id;
-                newHost.isHost = true;
-                const hostPlayer = this.players.get(newHost.id);
+        if (!result || !result.disconnected) {
+            if (room.players.length === 0) {
+                room.destroy();
+                this.games.delete(room.id);
+            } else if (room.hostId === player.id) {
+                room.hostId = room.players[0].id;
+                const hostPlayer = this.players.get(room.players[0].id);
                 if (hostPlayer) hostPlayer.isHost = true;
-                this.broadcastToGame(game.id, { type: 'new_host', hostId: newHost.id });
-            } else {
-                this.clearAllReconnectTimers(game);
-                this.games.delete(game.id);
+                this.broadcastToGame(room.id, { type: 'new_host', hostId: room.hostId });
             }
         }
 
@@ -636,191 +574,107 @@ class GameServer {
     startGame(player) {
         if (!player.isHost) return;
 
-        const game = this.games.get(player.currentGame);
-        if (!game || game.state !== 'LOBBY') return;
+        const room = this.games.get(player.currentGame);
+        if (!room || room.state !== 'LOBBY') return;
 
-        if (game.players.length < 2) {
+        if (room.players.length < 2) {
             this.sendToPlayer(player, { type: 'error', message: 'Need 2 players to start' });
             return;
         }
 
-        if (!this.areBothPlayersReady(game)) {
+        if (!room.areBothReady()) {
             this.sendToPlayer(player, { type: 'error', message: 'Both players must be ready' });
             return;
         }
 
-        game.state = 'COUNTDOWN';
-        game.countdownStart = Date.now();
-
-        this.broadcastToGame(game.id, {
-            type: 'game_starting',
-            countdown: 3,
-            settings: game.settings,
-            players: game.players
-                .slice()
-                .sort((a, b) => a.slot - b.slot)
-                .map(playerInfo => this.buildPlayerCustomizationPayload(playerInfo)),
-        });
-
-        setTimeout(() => {
-            if (this.games.has(game.id)) {
-                game.state = 'PLAYING';
-                this.broadcastToGame(game.id, { type: 'game_started' });
-            }
-        }, 3000);
+        room.startCountdown();
     }
 
     requestSync(player) {
-        const game = this.games.get(player.currentGame);
-        if (!game) return;
+        const room = this.games.get(player.currentGame);
+        if (!room) return;
 
-        this.sendToPlayer(player, {
-            type: 'full_state',
-            state: game.stateUpdate || {},
-            settings: game.settings,
-            gameState: game.state,
-        });
+        room.requestFullState(player.id);
     }
 
     handleGameState(player, msg) {
-        const game = this.games.get(player.currentGame);
-        if (!game || game.hostId !== player.id) return;
-
-        game.stateUpdate = {
-            ...msg.state,
-            timestamp: Date.now(),
-        };
-
-        this.broadcastToGame(game.id, {
-            type: 'game_state_update',
-            state: game.stateUpdate,
-        }, player.id);
+        // Server is authoritative; game state is computed in GameRoom, not received from clients.
     }
 
     handlePlayerInput(player, msg) {
-        const game = this.games.get(player.currentGame);
-        if (!game || game.state !== 'PLAYING') return;
+        const room = this.games.get(player.currentGame);
+        if (!room) return;
 
-        game.stateUpdate = {
-            ...msg,
-            timestamp: Date.now(),
-        };
-
-        this.broadcastToGame(game.id, {
-            type: 'opponent_input',
-            playerSlot: player.playerSlot,
-            input: msg,
-        }, player.id);
+        room.setInput(player.id, msg);
     }
 
     handleRoundOver(player, msg) {
-        const game = this.games.get(player.currentGame);
-        if (!game) return;
-
-        this.broadcastToGame(game.id, {
-            type: 'round_over',
-            winner: msg.winner,
-            scores: msg.scores,
-        });
+        // Server is authoritative; round end is handled by GameRoom.
     }
 
     handleSyncState(player, msg) {
-        const game = this.games.get(player.currentGame);
-        if (!game) return;
+        const room = this.games.get(player.currentGame);
+        if (!room) return;
 
         if (msg.requestFullState) {
-            this.sendToPlayer(player, {
-                type: 'full_state',
-                state: game.stateUpdate,
-                settings: game.settings,
-                gameState: game.state,
-            });
+            room.requestFullState(player.id);
         }
     }
 
     setCustomization(player, msg) {
-        const game = this.games.get(player.currentGame);
-        if (!game || game.state !== 'LOBBY') return;
+        const room = this.games.get(player.currentGame);
+        if (!room || room.state !== 'LOBBY') return;
 
-        const playerInfo = this.getGamePlayerInfo(game, player.id);
+        const playerInfo = room.players.find(p => p.id === player.id);
         if (!playerInfo) return;
 
-        playerInfo.customization = {
-            color: msg.color,
-            hat: msg.hat,
-            name: msg.name,
-        };
+        room.setCustomization(player.id, msg);
 
-        if (typeof msg.name === 'string' && msg.name.trim().length > 0) {
-            const nextName = msg.name.trim().substring(0, 20);
-            playerInfo.name = nextName;
-            player.name = nextName;
-        }
-
-        this.broadcastToGame(game.id, {
+        this.broadcastToGame(room.id, {
             type: 'player_customization',
             slot: this.normalizeSlot(playerInfo.slot),
-            color: playerInfo.customization.color,
-            hat: playerInfo.customization.hat,
-            name: playerInfo.customization.name,
+            color: msg.color,
+            hat: msg.hat,
+            name: playerInfo.name,
         }, player.id);
 
         if (playerInfo.ready) {
             playerInfo.ready = false;
-            this.broadcastReadyState(game, playerInfo);
+            this.broadcastReadyState(room, playerInfo);
         }
     }
 
     setPlayerReady(player, msg) {
-        const game = this.games.get(player.currentGame);
-        if (!game || game.state !== 'LOBBY') return;
+        const room = this.games.get(player.currentGame);
+        if (!room || room.state !== 'LOBBY') return;
 
-        const playerInfo = this.getGamePlayerInfo(game, player.id);
-        if (!playerInfo) return;
+        room.setReady(player.id, msg.ready);
 
-        playerInfo.ready = !!msg.ready;
-        this.broadcastReadyState(game, playerInfo);
+        const playerInfo = room.players.find(p => p.id === player.id);
+        if (playerInfo) {
+            this.broadcastReadyState(room, playerInfo);
+        }
 
-        if (this.areBothPlayersReady(game)) {
-            this.broadcastToGame(game.id, { type: 'all_ready' });
+        if (room.areBothReady()) {
+            this.broadcastToGame(room.id, { type: 'all_ready' });
         }
     }
 
     requestRematch(player) {
-        const game = this.games.get(player.currentGame);
-        if (!game) return;
+        const room = this.games.get(player.currentGame);
+        if (!room) return;
 
-        const playerInfo = this.getGamePlayerInfo(game, player.id);
-        if (!playerInfo) return;
-
-        playerInfo.rematchRequested = true;
-        this.broadcastToGame(game.id, {
-            type: 'rematch_requested',
-            slot: this.normalizeSlot(playerInfo.slot),
-        });
-
-        if (game.players.length === 2 && game.players.every(p => p.rematchRequested)) {
-            game.state = 'LOBBY';
-            game.stateUpdate = null;
-            game.countdownStart = null;
-            game.players.forEach(p => {
-                p.ready = false;
-                p.rematchRequested = false;
-                p.disconnected = false;
-            });
-            this.clearAllReconnectTimers(game);
-            this.broadcastToGame(game.id, { type: 'rematch_start' });
-        }
+        room.requestRematch(player.id);
     }
 
     rejoinGame(player, gameId) {
-        const game = this.games.get(gameId);
-        if (!game) {
+        const room = this.games.get(gameId);
+        if (!room) {
             this.sendToPlayer(player, { type: 'error', message: 'Game not found' });
             return;
         }
 
-        const disconnectedPlayer = game.players.find(p => p.disconnected);
+        const disconnectedPlayer = room.players.find(p => p.disconnected);
         if (!disconnectedPlayer) {
             this.sendToPlayer(player, { type: 'error', message: 'No disconnected slot available' });
             return;
@@ -831,102 +685,52 @@ class GameServer {
         }
 
         const previousPlayerId = disconnectedPlayer.id;
-        disconnectedPlayer.id = player.id;
-        disconnectedPlayer.disconnected = false;
-        disconnectedPlayer.reconnectDeadline = null;
-
-        if (game.hostId === previousPlayerId) {
-            game.hostId = player.id;
+        const reconnected = room.reconnect(previousPlayerId, player.id, player.ws);
+        if (!reconnected) {
+            this.sendToPlayer(player, { type: 'error', message: 'Rejoin failed' });
+            return;
         }
 
         this.players.delete(previousPlayerId);
 
         player.currentGame = gameId;
-        player.playerSlot = disconnectedPlayer.slot;
-        player.isHost = game.hostId === player.id;
-        player.name = disconnectedPlayer.name;
-
-        this.clearReconnectTimer(game, disconnectedPlayer.slot);
+        player.playerSlot = reconnected.slot;
+        player.isHost = room.hostId === player.id;
+        player.name = reconnected.name;
 
         this.sendToPlayer(player, {
             type: 'rejoin_success',
-            game: this.getPublicGame(game),
-            slot: this.normalizeSlot(disconnectedPlayer.slot),
+            game: room.getPublicGame(),
+            slot: this.normalizeSlot(reconnected.slot),
         });
 
-        this.broadcastToGame(game.id, {
+        this.broadcastToGame(room.id, {
             type: 'player_reconnected',
-            slot: this.normalizeSlot(disconnectedPlayer.slot),
+            slot: this.normalizeSlot(reconnected.slot),
         }, player.id);
 
         this.broadcastStats();
     }
 
-    cleanupDisconnectedPlayer(gameId, slot, expectedPlayerId) {
-        const game = this.games.get(gameId);
-        if (!game) return;
-
-        const playerIndex = game.players.findIndex(p => p.slot === slot);
-        if (playerIndex === -1) return;
-
-        const playerInfo = game.players[playerIndex];
-        if (!playerInfo.disconnected || playerInfo.id !== expectedPlayerId) return;
-
-        this.clearReconnectTimer(game, slot);
-        game.players.splice(playerIndex, 1);
-
-        this.broadcastToGame(game.id, {
-            type: 'player_left',
-            playerId: playerInfo.id,
-            playerSlot: slot,
-        });
-
-        if (game.players.length === 0) {
-            this.clearAllReconnectTimers(game);
-            this.games.delete(game.id);
-            this.broadcastStats();
-            return;
-        }
-
-        if (game.hostId === playerInfo.id) {
-            const newHost = game.players[0];
-            game.hostId = newHost.id;
-            const hostPlayer = this.players.get(newHost.id);
-            if (hostPlayer) {
-                hostPlayer.isHost = true;
-            }
-            this.broadcastToGame(game.id, { type: 'new_host', hostId: newHost.id });
-        }
-
-        this.broadcastStats();
-    }
-
     handleDisconnect(player) {
-        const game = this.games.get(player.currentGame);
-        const playerInfo = this.getGamePlayerInfo(game, player.id);
+        const room = this.games.get(player.currentGame);
 
-        if (game && playerInfo && game.state === 'PLAYING') {
-            playerInfo.disconnected = true;
-            playerInfo.reconnectDeadline = Date.now() + 15000;
+        if (room) {
+            const result = room.removePlayer(player.id);
+            if (result && result.disconnected) {
+                this.broadcastToGame(room.id, {
+                    type: 'opponent_disconnected',
+                    slot: this.normalizeSlot(result.slot),
+                }, player.id);
 
-            this.broadcastToGame(game.id, {
-                type: 'opponent_disconnected',
-                slot: this.normalizeSlot(playerInfo.slot),
-            }, player.id);
-
-            this.clearReconnectTimer(game, playerInfo.slot);
-            const timeoutId = setTimeout(() => {
-                this.cleanupDisconnectedPlayer(game.id, playerInfo.slot, playerInfo.id);
-            }, 15000);
-            game.reconnectTimers.set(playerInfo.slot, timeoutId);
-
-            player.currentGame = null;
-            player.playerSlot = null;
-            player.isHost = false;
-            player.ws = null;
-            this.players.delete(player.id);
-            this.broadcastStats();
-            return;
+                player.currentGame = null;
+                player.playerSlot = null;
+                player.isHost = false;
+                player.ws = null;
+                this.players.delete(player.id);
+                this.broadcastStats();
+                return;
+            }
         }
 
         this.leaveGame(player);
@@ -941,31 +745,24 @@ class GameServer {
     }
 
     broadcastToGame(gameId, msg, excludePlayerId = null) {
-        const game = this.games.get(gameId);
-        if (!game) return;
+        const room = this.games.get(gameId);
+        if (!room) return;
 
-        for (const playerInfo of game.players) {
+        room.onBroadcast = room.onBroadcast || ((playerId, message) => {
+            const p = this.players.get(playerId);
+            if (p) this.sendToPlayer(p, message);
+        });
+
+        for (const playerInfo of room.players) {
             if (playerInfo.id === excludePlayerId) continue;
-            const player = this.players.get(playerInfo.id);
-            if (player) {
-                this.sendToPlayer(player, msg);
+            if (playerInfo.ws && playerInfo.ws.readyState === 1) {
+                room.onBroadcast(playerInfo.id, msg);
             }
         }
     }
 
-    getPublicGame(game) {
-        return {
-            id: game.id,
-            hostName: game.hostName,
-            playerCount: game.players.length,
-            maxPlayers: 2,
-            state: game.state,
-            settings: {
-                theme: game.settings.theme,
-                arenaSize: game.settings.arenaSize,
-                sphereSize: game.settings.sphereSize,
-            },
-        };
+    getPublicGame(room) {
+        return room.getPublicGame();
     }
 
     getPublicGameList() {

@@ -1635,32 +1635,17 @@ function setupOnlineHandlers() {
             useGameStore.getState().setOnlineOpponentInput(data.input);
         }
         if (data.type === 'game_state_update' && data.state && player1 && player2) {
-            const state = useGameStore.getState();
-            const isOnlineClient = state.gameMode === 'ONLINE' && !state.online.isHost;
-
-            if (!isOnlineClient) {
-                if (data.state.p1Pos) {
-                    player1.rigidBody.setTranslation(data.state.p1Pos, true);
-                    player1.rigidBody.setLinvel(data.state.p1Vel, true);
-                }
-                if (data.state.p2Pos) {
-                    player2.rigidBody.setTranslation(data.state.p2Pos, true);
-                    player2.rigidBody.setLinvel(data.state.p2Vel, true);
-                }
-            } else {
-                const mySlot = state.online?.playerSlot;
-                const remotePos = mySlot === 2 ? data.state.p1Pos : data.state.p2Pos;
-                const remotePlayer = getOnlineClientRemotePlayer(state);
-
-                if (remotePos) {
-                    if (!remotePlayerTargetPosition) {
-                        remotePlayer?.rigidBody?.setTranslation(remotePos, true);
-                    }
-                    remotePlayerTargetPosition = new THREE.Vector3(remotePos.x, remotePos.y, remotePos.z);
-                }
+            // Authoritative state: always apply server positions to both players.
+            if (data.state.p1Pos) {
+                player1.rigidBody.setTranslation(data.state.p1Pos, true);
+                player1.rigidBody.setLinvel(data.state.p1Vel, true);
             }
-            
-            // Sync tile states from host
+            if (data.state.p2Pos) {
+                player2.rigidBody.setTranslation(data.state.p2Pos, true);
+                player2.rigidBody.setLinvel(data.state.p2Vel, true);
+            }
+
+            // Sync tile states from authoritative server.
             if (data.state.tileStates && arena) {
                 data.state.tileStates.forEach(tileUpdate => {
                     const tile = arena.getTileAt(tileUpdate.q, tileUpdate.r);

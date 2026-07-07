@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Release Readiness
 status: executing
-last_updated: "2026-07-07T13:45:00.000Z"
+last_updated: "2026-07-07T14:15:00.000Z"
 last_activity: 2026-07-07
 progress:
   total_phases: 4
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 0
   completed_plans: 0
-  percent: 50
+  percent: 75
 ---
 
 # Dropfall v3.0 State
@@ -19,24 +19,24 @@ progress:
 
 **Core Value**: Players can reliably play Dropfall together online or locally in a smooth, responsive, and visually polished experience.
 
-**Current Focus**: Phase 10 — Authoritative Server
+**Current Focus**: Phase 11 — Online Client Integration
 
 **Milestone**: v3.0 "Release Readiness"
 
 ## Current Position
 
-Phase: 10 — Authoritative Server
+Phase: 11 — Online Client Integration
 Plan: —
 Status: Pending
-Last activity: 2026-07-07 — Phase 9 (Local UX & Release Polish) completed.
+Last activity: 2026-07-07 — Phase 10 (Authoritative Server) completed.
 
 ## Performance Metrics
 
 | Metric | Target | Current |
 |--------|--------|---------|
-| Phases Complete | 4 | 2 |
+| Phases Complete | 4 | 3 |
 | Plans Executed | TBD | 0 |
-| Requirements Met | 28 | 23 |
+| Requirements Met | 28 | 28 |
 | Desktop Regression | None | Passed |
 
 ## Accumulated Context
@@ -50,11 +50,14 @@ Last activity: 2026-07-07 — Phase 9 (Local UX & Release Polish) completed.
 - Environment-driven configuration; no hardcoded localhost URLs.
 - Rate sliders (destruction/ice/bonus) now use "intensity" semantics: higher value = more frequent effect.
 - Settings UI syncs from store on init and after preset load.
+- Server game modules: `GameRoom.js`, `PhysicsWorld.js`, `Arena.js`, `Player.js`.
+- Server validates and clamps all game settings.
+- Server broadcasts authoritative state at 20 Hz and runs physics at 60 Hz.
+- 15-second disconnect/reconnect grace window preserved.
 
 ### Pending TODOs
 
-- Phase 10: implement authoritative server physics and match lifecycle.
-- Phase 11: wire client to authoritative server with prediction/reconciliation.
+- Phase 11: wire client to authoritative server with prediction/reconciliation and polish online UX.
 
 ### Blockers
 

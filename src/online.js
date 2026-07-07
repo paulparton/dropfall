@@ -472,7 +472,15 @@ class OnlineManager {
     }
 
     sendInput(input) {
-        this.send({ type: 'player_input', ...input });
+        // Normalize boolean or numeric inputs into the server's expected format.
+        const forward = input.forward ? 1 : (input.backward ? -1 : 0);
+        const right = input.right ? 1 : (input.left ? -1 : 0);
+        this.send({
+            type: 'player_input',
+            forward,
+            right,
+            boost: !!input.boost,
+        });
     }
 
     sendGameState(state) {
