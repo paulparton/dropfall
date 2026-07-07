@@ -1181,13 +1181,31 @@ function setupButtonHandlers() {
                 const val = parseFloat(e.target.value);
                 valEl.textContent = val;
                 useGameStore.getState().updateSetting(key, val);
-                
+
                 // Update audio volume in real-time
                 if (key === 'musicVolume') setMusicVolume(val);
                 if (key === 'sfxVolume') setSfxVolume(val);
             });
         }
     }
+
+    // Sync UI controls to the current store settings (used on init and after preset load)
+    const syncSettingsUI = () => {
+        const settings = useGameStore.getState().settings;
+        for (const [id, key] of Object.entries(settingsMap)) {
+            const el = document.getElementById(id);
+            const valEl = document.getElementById(`${id}-val`);
+            if (el) {
+                const val = settings[key];
+                if (typeof val === 'number') {
+                    el.value = val;
+                    if (valEl) valEl.textContent = val;
+                }
+            }
+        }
+        if (typeof setMusicVolume === 'function') setMusicVolume(settings.musicVolume);
+        if (typeof setSfxVolume === 'function') setSfxVolume(settings.sfxVolume);
+    };
 
     // AR mode controls
     document.getElementById('ar-mode')?.addEventListener('change', (e) => {
@@ -1223,75 +1241,76 @@ function setupButtonHandlers() {
         const stored = localStorage.getItem('dropfall_presets');
         if (stored) return JSON.parse(stored);
         
-        // Initialize with default presets
+        // Initialize with default presets.
+        // Rate slider values are "intensity" (higher = more frequent effect).
         const defaults = {
             'Slow & Bouncy': {
                 sphereAccel: 800,
                 collisionBounce: 1.5,
                 sphereWeight: 50,
-                destructionRate: 6.0,
-                iceRate: 4.0,
-                bonusRate: 10.0
+                destructionRate: 4.5,
+                iceRate: 6.5,
+                bonusRate: 7.0
             },
             'Fast & Heavy': {
                 sphereAccel: 3000,
                 collisionBounce: 0.5,
                 sphereWeight: 400,
-                destructionRate: 1.5,
-                iceRate: 1.0,
-                bonusRate: 3.0
+                destructionRate: 9.0,
+                iceRate: 9.5,
+                bonusRate: 14.0
             },
             'Tiny Spheres': {
                 sphereSize: 0.8,
                 sphereAccel: 2500,
                 sphereWeight: 80,
-                destructionRate: 3.0,
-                iceRate: 2.0,
-                bonusRate: 5.0
+                destructionRate: 7.5,
+                iceRate: 8.5,
+                bonusRate: 12.0
             },
             'Massive Spheres': {
                 sphereSize: 4.5,
                 sphereWeight: 500,
                 sphereAccel: 1200,
                 collisionBounce: 0.3,
-                destructionRate: 4.0,
-                iceRate: 3.0,
-                bonusRate: 8.0
+                destructionRate: 6.5,
+                iceRate: 7.5,
+                bonusRate: 9.0
             },
             'Chaos Mode': {
                 sphereAccel: 2800,
                 collisionBounce: 1.3,
                 sphereWeight: 150,
-                destructionRate: 0.8,
-                iceRate: 0.8,
-                bonusRate: 2.0,
+                destructionRate: 9.7,
+                iceRate: 9.7,
+                bonusRate: 15.0,
                 bonusDuration: 2.0
             },
             'Zen Mode': {
                 sphereAccel: 1200,
                 collisionBounce: 0.8,
                 sphereWeight: 150,
-                destructionRate: 8.0,
-                iceRate: 6.0,
-                bonusRate: 12.0,
+                destructionRate: 2.5,
+                iceRate: 4.5,
+                bonusRate: 5.0,
                 bonusDuration: 6.0
             },
             'Big Arena': {
                 arenaSize: 8,
-                destructionRate: 4.0,
-                iceRate: 3.0,
-                bonusRate: 8.0
+                destructionRate: 6.5,
+                iceRate: 7.5,
+                bonusRate: 9.0
             },
             'Tiny Arena': {
                 arenaSize: 2,
-                destructionRate: 2.0,
-                iceRate: 1.5,
-                bonusRate: 4.0
+                destructionRate: 8.5,
+                iceRate: 9.0,
+                bonusRate: 13.0
             },
             'Party Mode': {
-                destructionRate: 1.0,
-                iceRate: 1.0,
-                bonusRate: 2.5,
+                destructionRate: 9.5,
+                iceRate: 9.5,
+                bonusRate: 14.5,
                 bonusDuration: 3.0,
                 sphereAccel: 2500,
                 collisionBounce: 1.2
@@ -1301,9 +1320,9 @@ function setupButtonHandlers() {
                 sphereWeight: 350,
                 sphereAccel: 2000,
                 collisionBounce: 1.4,
-                destructionRate: 2.5,
-                iceRate: 2.0,
-                bonusRate: 5.0
+                destructionRate: 8.0,
+                iceRate: 8.5,
+                bonusRate: 12.0
             }
         };
         
@@ -1320,6 +1339,7 @@ function setupButtonHandlers() {
             Object.entries(data).forEach(([key, val]) => {
                 useGameStore.getState().updateSetting(key, val);
             });
+            syncSettingsUI();
         };
 
         const renderPresets = () => {
@@ -1369,23 +1389,31 @@ function setupButtonHandlers() {
     // Autorestart checkboxes
     const autoRestartMenu = document.getElementById('autorestart-menu');
     const autoRestartGameover = document.getElementById('autorestart-gameover');
-    
+
+    // One-time migration from legacy standalone key to settings object
+    const legacyAutoRestart = localStorage.getItem('dropfall_autorestart');
+    if (legacyAutoRestart !== null) {
+        useGameStore.getState().updateSetting('autoRestart', legacyAutoRestart === 'true');
+        localStorage.removeItem('dropfall_autorestart');
+    }
+
+    const syncAutoRestartCheckboxes = (value) => {
+        if (autoRestartMenu) autoRestartMenu.checked = value;
+        if (autoRestartGameover) autoRestartGameover.checked = value;
+    };
+
     autoRestartMenu?.addEventListener('change', (e) => {
-        localStorage.setItem('dropfall_autorestart', e.target.checked);
         useGameStore.getState().updateSetting('autoRestart', e.target.checked);
-        if (autoRestartGameover) autoRestartGameover.checked = e.target.checked;
+        syncAutoRestartCheckboxes(e.target.checked);
     });
-    
+
     autoRestartGameover?.addEventListener('change', (e) => {
-        localStorage.setItem('dropfall_autorestart', e.target.checked);
         useGameStore.getState().updateSetting('autoRestart', e.target.checked);
-        if (autoRestartMenu) autoRestartMenu.checked = e.target.checked;
+        syncAutoRestartCheckboxes(e.target.checked);
     });
 
     // Sync checkboxes with store value on load
-    const autoRestartValue = useGameStore.getState().settings.autoRestart;
-    if (autoRestartMenu) autoRestartMenu.checked = autoRestartValue;
-    if (autoRestartGameover) autoRestartGameover.checked = autoRestartValue;
+    syncAutoRestartCheckboxes(useGameStore.getState().settings.autoRestart);
 
     // Settings navigation buttons (left sidebar)
     document.querySelectorAll('.settings-nav-btn').forEach(btn => {
@@ -1408,6 +1436,9 @@ function setupButtonHandlers() {
             }
         });
     });
+
+    // Sync all settings UI to stored values on init
+    syncSettingsUI();
 
     // Sync AR controls with stored values
     const syncARSettings = () => {

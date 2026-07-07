@@ -236,21 +236,27 @@ export class Arena {
         const iceRate = settings.iceRate || 2.0;
         const bonusRate = settings.bonusRate || 6.0;
 
+        // Slider values are "intensity" (higher = more frequent). Convert to
+        // actual intervals so the timers behave intuitively.
+        const destructionInterval = 10.5 - destructionRate;
+        const iceInterval = 10.5 - iceRate;
+        const bonusInterval = 17.0 - bonusRate;
+
         if (!isOnlineClient) {
             // 1. Handle The Drop
-            if (this.dropTimer >= destructionRate) {
+            if (this.dropTimer >= destructionInterval) {
                 this.dropTimer = 0;
                 this.triggerDrop();
             }
 
             // 2. Handle Ice Tiles
-            if (this.iceTimer >= iceRate) {
+            if (this.iceTimer >= iceInterval) {
                 this.iceTimer = 0;
                 this.triggerIce();
             }
 
             // 3. Handle Bonus Tiles
-            if (this.bonusTimer >= bonusRate) {
+            if (this.bonusTimer >= bonusInterval) {
                 this.bonusTimer = 0;
                 this.triggerBonus();
             }

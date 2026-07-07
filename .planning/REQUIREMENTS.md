@@ -9,11 +9,11 @@ created: 2026-07-07
 
 ### Deployment (DEP)
 
-- [ ] **DEP-01**: Static game client builds and deploys to railway.app (or associated static hosting).
-- [ ] **DEP-02**: WebSocket game server deploys to railway.app as a service.
-- [ ] **DEP-03**: railway.app config is stored in repo (railway.json or Dockerfile + environment variables).
-- [ ] **DEP-04**: Production build script runs cleanly (`npm ci && npm run build`).
-- [ ] **DEP-05**: Server exposes a health-check endpoint for railway probes.
+- [x] **DEP-01**: Static game client builds and deploys to railway.app (or associated static hosting).
+- [x] **DEP-02**: WebSocket game server deploys to railway.app as a service.
+- [x] **DEP-03**: railway.app config is stored in repo (railway.json or Dockerfile + environment variables).
+- [x] **DEP-04**: Production build script runs cleanly (`npm ci && npm run build`).
+- [x] **DEP-05**: Server exposes a health-check endpoint for railway probes.
 
 ### Online Multiplayer — Server (ONLINE-S)
 
@@ -33,23 +33,23 @@ created: 2026-07-07
 
 ### Configuration (CFG)
 
-- [ ] **CFG-01**: WebSocket server URL is environment-driven, not hardcoded.
-- [ ] **CFG-02**: Level editor API URL is environment-driven, not hardcoded to `localhost:3001`.
-- [ ] **CFG-03**: Client build injects environment variables correctly for dev/staging/prod.
-- [ ] **CFG-04**: Server port and CORS origins are configurable via environment variables.
+- [x] **CFG-01**: WebSocket server URL is environment-driven, not hardcoded.
+- [x] **CFG-02**: Level editor API URL is environment-driven, not hardcoded to `localhost:3001`.
+- [x] **CFG-03**: Client build injects environment variables correctly for dev/staging/prod.
+- [x] **CFG-04**: Server port and CORS origins are configurable via environment variables.
 
 ### Local Multiplayer UX (LOCAL)
 
-- [ ] **LOCAL-01**: Local 2-player split-screen/classic mode still works without regression.
-- [ ] **LOCAL-02**: Single-player race mode still works without regression.
-- [ ] **LOCAL-03**: Input bindings and menu navigation remain unchanged for desktop.
+- [x] **LOCAL-01**: Local 2-player split-screen/classic mode still works without regression.
+- [x] **LOCAL-02**: Single-player race mode still works without regression.
+- [x] **LOCAL-03**: Input bindings and menu navigation remain unchanged for desktop.
 
 ### Release Polish (POLISH)
 
-- [ ] **POLISH-01**: Power-up notifications no longer block player view.
-- [ ] **POLISH-02**: Arena size slider is capped at 16 and destruction-rate slider direction is fixed.
-- [ ] **POLISH-03**: Settings can be saved/loaded as presets.
-- [ ] **POLISH-04**: Auto-restart preference persists across matches (local storage).
+- [x] **POLISH-01**: Power-up notifications no longer block player view.
+- [x] **POLISH-02**: Arena size slider is capped at 16 and destruction-rate slider direction is fixed.
+- [x] **POLISH-03**: Settings can be saved/loaded as presets.
+- [x] **POLISH-04**: Auto-restart preference persists across matches (local storage).
 - [ ] **POLISH-05**: Game maintains target frame rates on desktop and mid-range mobile.
 
 ## Future Requirements (v3.1+)
@@ -80,22 +80,22 @@ created: 2026-07-07
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEP-01 | Phase 8 | In Progress |
-| DEP-02 | Phase 8 | In Progress |
-| DEP-03 | Phase 8 | In Progress |
-| DEP-04 | Phase 8 | In Progress |
-| DEP-05 | Phase 8 | In Progress |
-| CFG-01 | Phase 8 | In Progress |
-| CFG-02 | Phase 8 | In Progress |
-| CFG-03 | Phase 8 | In Progress |
-| CFG-04 | Phase 8 | In Progress |
-| LOCAL-01 | Phase 9 | Pending |
-| LOCAL-02 | Phase 9 | Pending |
-| LOCAL-03 | Phase 9 | Pending |
-| POLISH-01 | Phase 9 | Pending |
-| POLISH-02 | Phase 9 | Pending |
-| POLISH-03 | Phase 9 | Pending |
-| POLISH-04 | Phase 9 | Pending |
+| DEP-01 | Phase 8 | Complete |
+| DEP-02 | Phase 8 | Complete |
+| DEP-03 | Phase 8 | Complete |
+| DEP-04 | Phase 8 | Complete |
+| DEP-05 | Phase 8 | Complete |
+| CFG-01 | Phase 8 | Complete |
+| CFG-02 | Phase 8 | Complete |
+| CFG-03 | Phase 8 | Complete |
+| CFG-04 | Phase 8 | Complete |
+| LOCAL-01 | Phase 9 | Complete |
+| LOCAL-02 | Phase 9 | Complete |
+| LOCAL-03 | Phase 9 | Complete |
+| POLISH-01 | Phase 9 | Complete |
+| POLISH-02 | Phase 9 | Complete |
+| POLISH-03 | Phase 9 | Complete |
+| POLISH-04 | Phase 9 | Complete |
 | POLISH-05 | Phase 9 | Pending |
 | ONLINE-S-01 | Phase 10 | Pending |
 | ONLINE-S-02 | Phase 10 | Pending |
@@ -115,4 +115,4 @@ created: 2026-07-07
 
 ---
 *Requirements defined: 2026-07-07*
-*Last updated: 2026-07-07 after milestone v3.0 initialization*
+*Last updated: 2026-07-07 after Phase 9 completion*

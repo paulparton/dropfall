@@ -7,6 +7,9 @@
     <!-- Suggest portrait as primary orientation for mobile (hint, not enforced) -->
     <meta name="screen-orientation" content="portrait-primary" />
     <title>Dropfall</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       #menu, #game-over, #settings-panel { z-index: 50 !important; }
       .screen { z-index: 40 !important; }
@@ -23,10 +26,10 @@
         bottom: 80px !important;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-CpZkskZP.js"></script>
+    <script type="module" crossorigin src="/assets/index-5eTYPGTa.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/physics-yV62z-mf.js">
-    <link rel="modulepreload" crossorigin href="/assets/three-cs_MZA8J.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-DtOrmy6e.css">
+    <link rel="modulepreload" crossorigin href="/assets/three-DDTf6LWZ.js">
+    <link rel="stylesheet" crossorigin href="/assets/index--nLFXbpG.css">
   </head>
   <body>
     <!-- Game canvas container -->
@@ -240,7 +243,7 @@
             <div class="settings-grid" style="grid-template-columns: 1fr 1fr;">
               <div class="setting-item">
                 <label for="arena-size">Arena Size</label>
-                <input type="range" id="arena-size" min="2" max="32" step="1" value="4">
+                <input type="range" id="arena-size" min="2" max="16" step="1" value="4">
                 <span id="arena-size-val">4</span>
               </div>
               <div class="setting-item">
@@ -264,17 +267,17 @@
                 <span id="collision-bounce-val">0.9</span>
               </div>
               <div class="setting-item">
-                <label for="destruction-rate">Destruction Rate (s)</label>
+                <label for="destruction-rate">Destruction Rate</label>
                 <input type="range" id="destruction-rate" min="0.5" max="10.0" step="0.5" value="3.0">
                 <span id="destruction-rate-val">3.0</span>
               </div>
               <div class="setting-item">
-                <label for="ice-rate">Ice Rate (s)</label>
+                <label for="ice-rate">Ice Rate</label>
                 <input type="range" id="ice-rate" min="0.5" max="10.0" step="0.5" value="2.0">
                 <span id="ice-rate-val">2.0</span>
               </div>
               <div class="setting-item">
-                <label for="bonus-rate">Bonus Rate (s)</label>
+                <label for="bonus-rate">Bonus Rate</label>
                 <input type="range" id="bonus-rate" min="2.0" max="15.0" step="0.5" value="6.0">
                 <span id="bonus-rate-val">6.0</span>
               </div>
@@ -458,16 +461,19 @@
     </div>
 
     <div id="name-entry" class="screen hidden" style="padding: 1rem; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden;">
-      <h2 class="retro-subtitle" style="margin-bottom: 0.5rem; text-align: center;">GAME SETTINGS</h2>
-      <div id="name-entry-round-info" style="color: #ffff00; font-family: 'Courier New', monospace; font-size: 1rem; margin-bottom: 0.5rem; text-shadow: 0 0 8px #ffff00; letter-spacing: 1px; text-align: center;"></div>
-      
+      <div style="text-align: center; margin-bottom: 0.5rem;">
+        <h2 class="player-setup-title">PLAYER <span>SETUP</span></h2>
+        <p class="player-setup-subtitle">CONFIGURE YOUR BALL</p>
+      </div>
+      <div id="name-entry-round-info" style="color: rgba(255,255,255,0.5); font-family: 'Rajdhani', 'Trebuchet MS', system-ui, sans-serif; font-size: 0.9rem; margin-bottom: 0.5rem; letter-spacing: 1px; text-align: center;"></div>
+
       <!-- Main preview panel (will be filled by character-preview-panel component) -->
       <div id="character-preview-mount" style="flex: 1; width: 100%; display: flex; flex-direction: column; overflow: hidden; min-height: 0;"></div>
-      
+
       <!-- Action Buttons -->
-      <div style="display: flex; gap: 1rem; justify-content: center; padding-top: 1rem;">
-        <button id="name-entry-play-btn" class="retro-btn" style="padding: 0.8rem 2rem; font-size: 1.2rem;">🎮 LET'S PLAY!</button>
-        <button id="name-entry-menu-btn" class="retro-btn" style="padding: 0.8rem 1.5rem; font-size: 1rem; opacity: 0.7;">← BACK</button>
+      <div style="display: flex; gap: 1rem; justify-content: center; padding-top: 0.75rem;">
+        <button id="name-entry-play-btn" class="rl-ready-btn" style="padding: 0.9rem 3rem; font-size: 1.2rem;">READY UP</button>
+        <button id="name-entry-menu-btn" class="rl-back-btn" style="padding: 0.9rem 1.8rem; font-size: 1rem;">BACK</button>
       </div>
     </div>
 
