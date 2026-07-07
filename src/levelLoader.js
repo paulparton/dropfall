@@ -2,7 +2,17 @@
  * Level Loader - Fetches and manages custom levels from the editor server
  */
 
-const LEVEL_API_BASE = 'http://localhost:3001/api';
+function getLevelApiBase() {
+    if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_LEVEL_API_URL) {
+        return import.meta.env.VITE_LEVEL_API_URL.replace(/\/$/, '');
+    }
+    // Fallback for local development with the editor server
+    const host = window.location.hostname;
+    const isLocal = host === 'localhost' || host === '127.0.0.1';
+    return isLocal ? 'http://localhost:3001/api' : `${window.location.origin}/api`;
+}
+
+const LEVEL_API_BASE = getLevelApiBase();
 
 export async function loadLevels() {
     try {

@@ -27,6 +27,10 @@ class OnlineManager {
     }
 
     static getDefaultServerUrl() {
+        if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_WS_URL) {
+            return import.meta.env.VITE_WS_URL.replace(/\/$/, '');
+        }
+
         const isLocalHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         const baseUrl = isLocalHost ? 'ws://localhost:3000' : window.location.origin;
         return baseUrl

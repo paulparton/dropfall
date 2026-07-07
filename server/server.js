@@ -124,6 +124,17 @@ class GameServer {
         }
 
         // 2) API routes
+        if (req.method === 'GET' && normalizedPath === '/health') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                status: 'ok',
+                uptime: process.uptime(),
+                connections: this.players.size,
+                games: this.games.size,
+            }));
+            return;
+        }
+
         if (req.method === 'GET' && normalizedPath === '/api/stats') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(this.getStats()));
