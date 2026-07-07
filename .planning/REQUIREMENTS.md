@@ -1,105 +1,118 @@
 ---
-milestone: v2.3
-created: 2026-04-28
+milestone: v3.0
+created: 2026-07-07
 ---
 
-# Dropfall v2.3 Requirements: First-Class Mobile Support
+# Dropfall v3.0 Requirements: Release Readiness
 
-## Milestone v2.3 Requirements
+## Milestone v3.0 Requirements
 
-### Responsive Layout (RL)
-- [ ] **RL-01**: Desktop layout unchanged on screens ≥1024px (existing layout preserved)
-- [ ] **RL-02**: Mobile layout activates on screens <768px width
-- [ ] **RL-03**: Tablet layout (768px-1023px) uses scaled desktop layout or hybrid approach
-- [ ] **RL-04**: Viewport meta tag configured for mobile (initial-scale=1, width=device-width)
-- [ ] **RL-05**: Safe area insets handled (notch, home indicator on iOS)
-- [ ] **RL-06**: Orientation support — portrait primary for mobile, landscape supported
+### Deployment (DEP)
 
-### Touch Controls (TC)
-- [ ] **TC-01**: Virtual joystick for ball movement on touch screens
-- [ ] **TC-02**: Touch-drag alternative control scheme (drag finger to move ball)
-- [ ] **TC-03**: Touch latency <16ms (feels instant, native-like)
-- [ ] **TC-04**: Menu navigation fully usable via touch (tap, scroll)
-- [ ] **TC-05**: Touch controls hidden on desktop (mouse/keyboard unchanged)
-- [ ] **TC-06**: Visual feedback for touch interactions (pressed states, joystick movement)
+- [ ] **DEP-01**: Static game client builds and deploys to railway.app (or associated static hosting).
+- [ ] **DEP-02**: WebSocket game server deploys to railway.app as a service.
+- [ ] **DEP-03**: railway.app config is stored in repo (railway.json or Dockerfile + environment variables).
+- [ ] **DEP-04**: Production build script runs cleanly (`npm ci && npm run build`).
+- [ ] **DEP-05**: Server exposes a health-check endpoint for railway probes.
 
-### Mobile UI (MUI)
-- [ ] **MUI-01**: All interactive elements meet 44px minimum touch target size
-- [ ] **MUI-02**: HUD elements repositioned for mobile (thumb-friendly zones)
-- [ ] **MUI-03**: Font sizes readable on mobile (minimum 16px for body text)
-- [ ] **MUI-04**: Button spacing prevents accidental taps (minimum 8px gap)
-- [ ] **MUI-05**: Mobile-specific menu/overlay layouts (full-screen modals on mobile)
+### Online Multiplayer — Server (ONLINE-S)
 
-### Performance (PERF)
-- [ ] **PERF-01**: 30fps minimum maintained on mid-range mobile devices
-- [ ] **PERF-02**: Particle effects reduced/disabled on mobile GPUs
-- [ ] **PERF-03**: Battery-friendly rendering (limit unnecessary redraws)
-- [ ] **PERF-04**: Texture/asset optimization for mobile memory constraints
-- [ ] **PERF-05**: 60fps maintained on desktop (no regression)
+- [ ] **ONLINE-S-01**: Server runs an authoritative Rapier3D physics simulation for online matches.
+- [ ] **ONLINE-S-02**: Server accepts player inputs, advances simulation, and broadcasts authoritative game state.
+- [ ] **ONLINE-S-03**: Server supports lobby creation, joining, ready-up, countdown, and match lifecycle.
+- [ ] **ONLINE-S-04**: Server handles player disconnect/reconnect with a grace window.
+- [ ] **ONLINE-S-05**: Server validates game settings and enforces consistent match parameters.
 
-### Gestures (GEST)
-- [ ] **GEST-01**: Swipe gestures for menu navigation (optional enhancement)
-- [ ] **GEST-02**: Pinch-to-zoom disabled (game viewport should not zoom)
-- [ ] **GEST-03**: Double-tap prevention (accidental zoom disabled)
+### Online Multiplayer — Client (ONLINE-C)
 
-### Game Modes Mobile (GM)
-- [ ] **GM-01**: Classic mode fully playable on mobile with touch controls
-- [ ] **GM-02**: Race mode fully playable on mobile with touch controls
-- [ ] **GM-03**: Mode selection UI touch-optimized for mobile
-- [ ] **GM-04**: Game pause/resume works correctly on mobile (no focus loss issues)
+- [ ] **ONLINE-C-01**: Client sends local input to server every frame/tick.
+- [ ] **ONLINE-C-02**: Client receives authoritative state and updates remote + local entities smoothly.
+- [ ] **ONLINE-C-03**: Client implements prediction and reconciliation so local controls feel responsive.
+- [ ] **ONLINE-C-04**: Lobby UI allows entering server URL (or auto-detects same-origin), creating/joining games, and ready-up.
+- [ ] **ONLINE-C-05**: Connection status, opponent presence, and errors are clearly communicated in UI.
 
-## Future Requirements (v2.4+)
+### Configuration (CFG)
 
-### Advanced Mobile Features (deferred)
-- [ ] **ADV-01**: Haptic feedback (vibration on collisions, boost)
-- [ ] **ADV-02**: Mobile-specific achievements/goals
-- [ ] **ADV-03**: PWA support for "Add to Home Screen"
-- [ ] **ADV-04**: Native wrapper (Capacitor/Cordova) for app store distribution
+- [ ] **CFG-01**: WebSocket server URL is environment-driven, not hardcoded.
+- [ ] **CFG-02**: Level editor API URL is environment-driven, not hardcoded to `localhost:3001`.
+- [ ] **CFG-03**: Client build injects environment variables correctly for dev/staging/prod.
+- [ ] **CFG-04**: Server port and CORS origins are configurable via environment variables.
+
+### Local Multiplayer UX (LOCAL)
+
+- [ ] **LOCAL-01**: Local 2-player split-screen/classic mode still works without regression.
+- [ ] **LOCAL-02**: Single-player race mode still works without regression.
+- [ ] **LOCAL-03**: Input bindings and menu navigation remain unchanged for desktop.
+
+### Release Polish (POLISH)
+
+- [ ] **POLISH-01**: Power-up notifications no longer block player view.
+- [ ] **POLISH-02**: Arena size slider is capped at 16 and destruction-rate slider direction is fixed.
+- [ ] **POLISH-03**: Settings can be saved/loaded as presets.
+- [ ] **POLISH-04**: Auto-restart preference persists across matches (local storage).
+- [ ] **POLISH-05**: Game maintains target frame rates on desktop and mid-range mobile.
+
+## Future Requirements (v3.1+)
+
+### Advanced Online Features (deferred)
+
+- **ONLINE-F-01**: Spectator mode.
+- **ONLINE-F-02**: Ranked matchmaking.
+- **ONLINE-F-03**: Replay recording.
+- **ONLINE-F-04**: Region selection / multiple server regions.
+
+### Mobile & PWA (deferred)
+
+- **MOBILE-F-01**: PWA support (Add to Home Screen).
+- **MOBILE-F-02**: Advanced haptic feedback.
+- **MOBILE-F-03**: Native wrapper (Capacitor/Cordova).
 
 ## Out of Scope
 
-- **App store packaging** — PWA or native wrapper is future scope
-- **Mobile-specific game modes** — Classic and Race modes only
-- **Mobile multiplayer** — Uses existing desktop online multiplayer
-- **Advanced haptics** — Basic vibration only in v2.3
-- **Mobile analytics** — Not tracking mobile-specific metrics in v2.3
-- **Push notifications** — Not needed for this game type
+| Feature | Reason |
+|---------|--------|
+| Native mobile app packaging | PWA/native wrapper is future scope |
+| Ranked matchmaking | Out of scope for initial release |
+| Console ports | Web-first release |
+| Mobile-specific game modes | Classic/Race modes only for v3.0 |
 
 ## Traceability
 
-| REQ-ID | Phase | Status |
-|--------|-------|--------|
-| RL-01 | Phase 1 | Pending |
-| RL-02 | Phase 1 | Pending |
-| RL-03 | Phase 1 | Pending |
-| RL-04 | Phase 1 | Pending |
-| RL-05 | Phase 1 | Pending |
-| RL-06 | Phase 1 | Pending |
-| TC-01 | Phase 2 | Pending |
-| TC-02 | Phase 2 | Pending |
-| TC-03 | Phase 2 | Pending |
-| TC-04 | Phase 2 | Pending |
-| TC-05 | Phase 2 | Pending |
-| TC-06 | Phase 2 | Pending |
-| MUI-01 | Phase 3 | Pending |
-| MUI-02 | Phase 3 | Pending |
-| MUI-03 | Phase 3 | Pending |
-| MUI-04 | Phase 3 | Pending |
-| MUI-05 | Phase 3 | Pending |
-| PERF-01 | Phase 4 | Pending |
-| PERF-02 | Phase 4 | Pending |
-| PERF-03 | Phase 4 | Pending |
-| PERF-04 | Phase 4 | Pending |
-| PERF-05 | Phase 4 | Pending |
-| GEST-01 | Phase 5 | Pending |
-| GEST-02 | Phase 5 | Pending |
-| GEST-03 | Phase 5 | Pending |
-| GM-01 | Phase 5 | Pending |
-| GM-02 | Phase 5 | Pending |
-| GM-03 | Phase 5 | Pending |
-| GM-04 | Phase 5 | Pending |
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DEP-01 | Phase 8 | Pending |
+| DEP-02 | Phase 8 | Pending |
+| DEP-03 | Phase 8 | Pending |
+| DEP-04 | Phase 8 | Pending |
+| DEP-05 | Phase 8 | Pending |
+| CFG-01 | Phase 8 | Pending |
+| CFG-02 | Phase 8 | Pending |
+| CFG-03 | Phase 8 | Pending |
+| CFG-04 | Phase 8 | Pending |
+| LOCAL-01 | Phase 9 | Pending |
+| LOCAL-02 | Phase 9 | Pending |
+| LOCAL-03 | Phase 9 | Pending |
+| POLISH-01 | Phase 9 | Pending |
+| POLISH-02 | Phase 9 | Pending |
+| POLISH-03 | Phase 9 | Pending |
+| POLISH-04 | Phase 9 | Pending |
+| POLISH-05 | Phase 9 | Pending |
+| ONLINE-S-01 | Phase 10 | Pending |
+| ONLINE-S-02 | Phase 10 | Pending |
+| ONLINE-S-03 | Phase 10 | Pending |
+| ONLINE-S-04 | Phase 10 | Pending |
+| ONLINE-S-05 | Phase 10 | Pending |
+| ONLINE-C-01 | Phase 11 | Pending |
+| ONLINE-C-02 | Phase 11 | Pending |
+| ONLINE-C-03 | Phase 11 | Pending |
+| ONLINE-C-04 | Phase 11 | Pending |
+| ONLINE-C-05 | Phase 11 | Pending |
 
-*Phase mapping completed by roadmapper for v2.3 milestone.*
+**Coverage:**
+- v3.0 requirements: 28 total
+- Mapped to phases: 28
+- Unmapped: 0 ✓
 
 ---
-*Created: 2026-04-28 for v2.3 Mobile Support milestone*
+*Requirements defined: 2026-07-07*
+*Last updated: 2026-07-07 after milestone v3.0 initialization*

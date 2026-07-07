@@ -1,49 +1,60 @@
 ---
-milestone: v2.3
-created: 2026-04-28
+gsd_state_version: 1.0
+milestone: v3.0
+milestone_name: Release Readiness
+status: planning
+last_updated: "2026-07-07T03:03:30.730Z"
+last_activity: 2026-07-07
+progress:
+  total_phases: 4
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
-# Dropfall v2.3 State
+# Dropfall v3.0 State
 
 ## Project Reference
 
-**Core Value**: Make Dropfall accessible to mobile players with a premium touch-first experience while preserving the existing desktop experience unchanged.
+**Core Value**: Players can reliably play Dropfall together online or locally in a smooth, responsive, and visually polished experience.
 
-**Current Focus**: Phase 1 - Responsive Layout Foundation
+**Current Focus**: Phase 8 - Deployment Foundation
 
-**Milestone**: v2.3 "First-Class Mobile Support"
+**Milestone**: v3.0 "Release Readiness"
 
 ## Current Position
 
-**Phase**: Not started (defining roadmap)
-**Plan**: —
-**Status**: Milestone reset — creating roadmap
-**Progress**: ░░░░░░░░░░ 0%
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-07-07 — Milestone v3.0 started
 
 ## Performance Metrics
 
 | Metric | Target | Current |
 |--------|--------|---------|
-| Phases Complete | TBD | 0 |
+| Phases Complete | 4 | 0 |
 | Plans Executed | TBD | 0 |
-| Requirements Met | TBD | 0 |
+| Requirements Met | 28 | 0 |
 | Desktop Regression | None | N/A |
 
 ## Accumulated Context
 
 ### Key Decisions
-- Desktop layout unchanged on screens ≥1024px (media queries only affect mobile)
-- Touch controls: virtual joystick + touch-drag alternative (research best methods)
-- Performance target: 30fps minimum on mid-range mobile
-- Touch latency target: <16ms (native-like feel)
-- Remove boost button from UI
-- Start with player options screen layout fix
-- AR mode added via three.js ARButton (`immersive-ar` session), roomscale (floor) and tabletop (configurable height) modes
+
+- Authoritative server physics replaces host-client relay model.
+- Deploy client + server on railway.app from connected GitHub repo.
+- Replace rather than patch existing online multiplayer code.
+- Keep local multiplayer and single-player modes unchanged.
+- Environment-driven configuration; no hardcoded localhost URLs.
 
 ### Pending TODOs
+
 - None
 
 ### Blockers
+
 - None
 
 ### Quick Tasks Completed
@@ -55,13 +66,13 @@ created: 2026-04-28
 
 ## Session Continuity
 
-**Last Session**: 2026-05-26 - Completed quick task 260526-tmm: Add AR mode to Dropfall VR/headset rooms (roomscale + tabletop)
-**Next Action**: Test AR mode on Meta Quest 2 headset (roomscale and tabletop)
+**Last Session**: 2026-07-07 — Initialized milestone v3.0 Release Readiness.
+**Next Action**: Plan and execute Phase 8 — Deployment Foundation.
 **Context for Next Session**:
-- AR mode: roomscale (arena on floor) and tabletop (arena at configurable height, default 0.75m)
-- AR settings in Gameplay pane: AR Mode toggle, AR Mode Type dropdown, Table Height slider
-- ARButton toggles with VRButton based on arMode setting
-- Scene background goes transparent in AR (passthrough visible), restores on exit
+
+- New milestone goals: authoritative online multiplayer, railway deployment, release polish.
+- Planning docs updated: PROJECT.md, REQUIREMENTS.md, ROADMAP.md.
+- Ready to begin `/gsd-plan-phase 8` or inline execution.
 
 ---
-*State initialized: 2026-04-28 for v2.3 Mobile Support milestone*
+*State initialized: 2026-07-07 for v3.0 Release Readiness milestone*
