@@ -80,15 +80,15 @@ created: 2026-07-07
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEP-01 | Phase 8 | Pending |
-| DEP-02 | Phase 8 | Pending |
-| DEP-03 | Phase 8 | Pending |
-| DEP-04 | Phase 8 | Pending |
-| DEP-05 | Phase 8 | Pending |
-| CFG-01 | Phase 8 | Pending |
-| CFG-02 | Phase 8 | Pending |
-| CFG-03 | Phase 8 | Pending |
-| CFG-04 | Phase 8 | Pending |
+| DEP-01 | Phase 8 | In Progress |
+| DEP-02 | Phase 8 | In Progress |
+| DEP-03 | Phase 8 | In Progress |
+| DEP-04 | Phase 8 | In Progress |
+| DEP-05 | Phase 8 | In Progress |
+| CFG-01 | Phase 8 | In Progress |
+| CFG-02 | Phase 8 | In Progress |
+| CFG-03 | Phase 8 | In Progress |
+| CFG-04 | Phase 8 | In Progress |
 | LOCAL-01 | Phase 9 | Pending |
 | LOCAL-02 | Phase 9 | Pending |
 | LOCAL-03 | Phase 9 | Pending |
