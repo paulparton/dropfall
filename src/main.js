@@ -35,7 +35,7 @@ import { Arena } from './entities/Arena.js';
 import { ParticleSystem } from './entities/ParticleSystem.js';
 import { LightningSystem } from './entities/LightningSystem.js';
 import { ShockwaveSystem } from './entities/ShockwaveSystem.js';
-import { initAudio, playMusic, playCollisionSound, setMusicSpeed, updateRollingSound } from './audio.js';
+import { initAudio, playMusic, playCollisionSound, setMusicSpeed, setMusicVolume, setSfxVolume, updateRollingSound } from './audio.js';
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
 import { online } from './online.js';
@@ -1203,8 +1203,8 @@ function setupButtonHandlers() {
                 }
             }
         }
-        if (typeof setMusicVolume === 'function') setMusicVolume(settings.musicVolume);
-        if (typeof setSfxVolume === 'function') setSfxVolume(settings.sfxVolume);
+        setMusicVolume(settings.musicVolume);
+        setSfxVolume(settings.sfxVolume);
     };
 
     // AR mode controls
