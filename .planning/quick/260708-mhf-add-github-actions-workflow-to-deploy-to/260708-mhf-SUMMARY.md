@@ -17,7 +17,7 @@ Workflow steps:
 3. Install dependencies with `npm ci`.
 4. Run tests with `npm run test`.
 5. Install Railway CLI (`npm install -g @railway/cli`).
-6. Deploy to Railway using `railway up --detach`.
+6. Deploy to Railway using `railway up --service dropfall --detach`.
 
 ## Required repository secret
 

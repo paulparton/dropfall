@@ -29,5 +29,4 @@ jobs:
       - name: Deploy to Railway
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_SERVICE: dropfall
-        run: railway up --detach
+        run: railway up --service dropfall --detach
