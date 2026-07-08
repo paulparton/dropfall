@@ -75,7 +75,7 @@ Last activity: 2026-07-07 — Phase 11 (Online Client Integration) completed.
 | 260526-tmm | Add AR mode to Dropfall VR/headset rooms (roomscale + tabletop) | 2026-05-26 | dbe6b94, ed9029b | [260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms](./quick/260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms/) |
 | 260708-h59 | Hide manual server URL UI for production Railway deploy | 2026-07-08 | — | [260708-h59-hide-manual-server-url-ui-for-production](./quick/260708-h59-hide-manual-server-url-ui-for-production/) |
 | 260708-m3g | Fix Railway build: EBUSY node_modules cache and Node 18 version mismatch | 2026-07-08 | — | [260708-m3g-fix-railway-build-ebusy-node-modules-cac](./quick/260708-m3g-fix-railway-build-ebusy-node-modules-cac/) |
-| 260708-mhf | Add GitHub Actions workflow to deploy to Railway | 2026-07-08 | — | [260708-mhf-add-github-actions-workflow-to-deploy-to](./quick/260708-mhf-add-github-actions-workflow-to-deploy-to/) |
+| 260708-mhf | Add GitHub Actions workflow to deploy to Railway | 2026-07-08 | d2ba94b | [260708-mhf-add-github-actions-workflow-to-deploy-to](./quick/260708-mhf-add-github-actions-workflow-to-deploy-to/) |
 
 ## Session Continuity
 
