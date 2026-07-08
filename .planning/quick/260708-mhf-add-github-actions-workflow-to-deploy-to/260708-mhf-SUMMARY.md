@@ -16,7 +16,8 @@ Workflow steps:
 2. Setup Node.js 20 (`actions/setup-node@v4`).
 3. Install dependencies with `npm ci`.
 4. Run tests with `npm run test`.
-5. Deploy to Railway using `railwayapp/deploy-action@v1`.
+5. Install Railway CLI (`npm install -g @railway/cli`).
+6. Deploy to Railway using `railway up --detach`.
 
 ## Required repository secret
 
