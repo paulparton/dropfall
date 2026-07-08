@@ -492,6 +492,34 @@ function getDefaultOnlineServerUrl() {
         .replace(/^http:\/\//i, 'ws://');
 }
 
+function isAutoServerUrlConfigured() {
+    // If a server URL is baked in at build time, or the page is served from a
+    // non-localhost origin, we can connect automatically without showing the
+    // manual server address UI.
+    const hasBuildTimeUrl = typeof import.meta !== 'undefined' &&
+        import.meta.env &&
+        import.meta.env.VITE_WS_URL;
+    const isLocalhost = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1';
+    return hasBuildTimeUrl || !isLocalhost;
+}
+
+function configureOnlineConnectUI() {
+    const serverGroup = document.getElementById('online-server-input')?.closest('.online-input-group');
+    const serverHelp = document.querySelector('.online-help');
+    const serverAddressDisplay = document.querySelector('.online-server-address');
+
+    if (isAutoServerUrlConfigured()) {
+        serverGroup?.classList.add('hidden');
+        serverHelp?.classList.add('hidden');
+        serverAddressDisplay?.classList.add('hidden');
+    } else {
+        serverGroup?.classList.remove('hidden');
+        serverHelp?.classList.remove('hidden');
+        serverAddressDisplay?.classList.remove('hidden');
+    }
+}
+
 function getOnlineClientRemotePlayer(state) {
     if (state.gameMode !== 'ONLINE' || state.online.isHost) return null;
     const mySlot = state.online?.playerSlot;
@@ -1158,14 +1186,17 @@ function setupButtonHandlers() {
         showScreen('menu');
     });
     document.getElementById('online-connect-btn')?.addEventListener('click', () => {
-        const serverUrl = document.getElementById('online-server-input')?.value.trim() || getDefaultOnlineServerUrl();
+        const serverInput = document.getElementById('online-server-input');
+        const serverUrl = (!serverInput || serverInput.closest('.online-input-group')?.classList.contains('hidden'))
+            ? getDefaultOnlineServerUrl()
+            : serverInput.value.trim() || getDefaultOnlineServerUrl();
         const playerName = document.getElementById('online-name-input')?.value.trim();
-        
+
         if (!playerName) {
             document.getElementById('online-connect-error').textContent = 'Please enter your name';
             return;
         }
-        
+
         document.getElementById('online-connect-error').textContent = '';
         document.getElementById('online-connect-status').textContent = 'Connecting...';
         online.connect(serverUrl);
@@ -2498,6 +2529,7 @@ async function init() {
         if (serverInput && !serverInput.value.trim()) {
             serverInput.value = getDefaultOnlineServerUrl();
         }
+        configureOnlineConnectUI();
 
         const onlineNameInput = document.getElementById('online-name-input');
         if (onlineNameInput && !onlineNameInput.value.trim()) {

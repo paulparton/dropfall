@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v3.0
 milestone_name: Release Readiness
 status: executing
-last_updated: "2026-07-07T14:15:00.000Z"
-last_activity: 2026-07-07
+last_updated: "2026-07-08T02:20:00.000Z"
+last_activity: 2026-07-08
 progress:
   total_phases: 4
   completed_phases: 4
@@ -73,11 +73,12 @@ Last activity: 2026-07-07 — Phase 11 (Online Client Integration) completed.
 |---|-------------|------|--------|-----------|
 | 260428-qwy | Remove portals from game - comment out code for potential future use | 2026-04-28 | e173311 | [260428-qwy-remove-portals-from-game-comment-out-cod](./quick/260428-qwy-remove-portals-from-game-comment-out-cod/) |
 | 260526-tmm | Add AR mode to Dropfall VR/headset rooms (roomscale + tabletop) | 2026-05-26 | dbe6b94, ed9029b | [260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms](./quick/260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms/) |
+| 260708-h59 | Hide manual server URL UI for production Railway deploy | 2026-07-08 | — | [260708-h59-hide-manual-server-url-ui-for-production](./quick/260708-h59-hide-manual-server-url-ui-for-production/) |
 
 ## Session Continuity
 
-**Last Session**: 2026-07-07 — Completed Phase 11 (Online Client Integration).
-**Next Action**: Decide on POLISH-05 (performance verification), commit changes, and deploy/release.
+**Last Session**: 2026-07-08 — Quick task: hide manual server URL UI for production Railway deploy.
+**Next Action**: Commit changes and verify deployed Railway build hides the server URL.
 **Context for Next Session**:
 
 - Phase 8 deployment foundation is in place: railway.json, env-driven URLs, health endpoint, working build.
