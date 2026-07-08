@@ -24,6 +24,14 @@ class OnlineManager {
         this.lastServerUrl = '';
         this.lastStateSentAt = 0;
         this.connectResolver = null;
+
+        // Prediction / reconciliation state
+        this.localTick = 0;
+        this.serverTick = 0;
+        this.inputHistory = [];
+        this.stateBuffer = [];
+        this.maxInputHistory = 120;
+        this.maxStateBuffer = 30;
     }
 
     static getDefaultServerUrl() {
@@ -177,6 +185,7 @@ class OnlineManager {
 
     async attemptReconnection(gameId) {
         this.isReconnecting = true;
+        this.emit('reconnecting');
         const rejoinGameId = gameId || sessionStorage.getItem('dropfall_rejoin_game_id');
 
         for (let attempt = 1; attempt <= this.maxReconnectAttempts; attempt += 1) {
@@ -345,6 +354,20 @@ class OnlineManager {
                 break;
 
             case 'game_state_update':
+                if (typeof msg.tick === 'number') {
+                    this.serverTick = msg.tick;
+                    this.stateBuffer.push({
+                        tick: msg.tick,
+                        receivedAt: performance.now(),
+                        state: msg.state,
+                    });
+                    if (this.stateBuffer.length > this.maxStateBuffer) {
+                        this.stateBuffer.shift();
+                    }
+                }
+                this.emit('gameUpdate', msg);
+                break;
+
             case 'opponent_input':
                 this.emit('gameUpdate', msg);
                 break;
@@ -475,12 +498,19 @@ class OnlineManager {
         // Normalize boolean or numeric inputs into the server's expected format.
         const forward = input.forward ? 1 : (input.backward ? -1 : 0);
         const right = input.right ? 1 : (input.left ? -1 : 0);
-        this.send({
+        const tick = this.localTick;
+        const normalizedInput = {
             type: 'player_input',
             forward,
             right,
             boost: !!input.boost,
-        });
+            tick,
+        };
+        this.inputHistory.push({ tick, forward, right, boost: !!input.boost });
+        if (this.inputHistory.length > this.maxInputHistory) {
+            this.inputHistory.shift();
+        }
+        this.send(normalizedInput);
     }
 
     sendGameState(state) {

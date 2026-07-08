@@ -430,6 +430,57 @@ function setOpponentDisconnectOverlayVisible(visible) {
     overlay.classList.toggle('hidden', !visible);
 }
 
+function updateLobbyConnectionStatus(status) {
+    const statusEl = document.getElementById('online-connected-status');
+    if (!statusEl) return;
+
+    if (status === 'connected') {
+        statusEl.textContent = '● CONNECTED';
+        statusEl.className = 'online-status-connected';
+    } else if (status === 'reconnecting') {
+        statusEl.textContent = '● RECONNECTING...';
+        statusEl.className = 'online-status-disconnected';
+    } else if (status === 'disconnected') {
+        statusEl.textContent = '● DISCONNECTED';
+        statusEl.className = 'online-status-disconnected';
+    }
+}
+
+function showOnlineToast(message) {
+    let toast = document.getElementById('online-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'online-toast';
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 300;
+            background: rgba(0, 0, 0, 0.85);
+            color: #0ff;
+            border: 1px solid #0ff;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        `;
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.style.opacity = '1';
+    clearTimeout(toast._hideTimeout);
+    toast._hideTimeout = setTimeout(() => {
+        toast.style.opacity = '0';
+    }, 3000);
+}
+
 function getDefaultOnlineServerUrl() {
     const onlineCtor = online?.constructor;
     if (onlineCtor && typeof onlineCtor.getDefaultServerUrl === 'function') {
@@ -447,8 +498,59 @@ function getOnlineClientRemotePlayer(state) {
     return mySlot === 2 ? player1 : player2;
 }
 
+function getLocalPlayer(state) {
+    if (state.gameMode !== 'ONLINE') return null;
+    const mySlot = state.online?.playerSlot;
+    if (mySlot === 1) return player1;
+    if (mySlot === 2) return player2;
+    return null;
+}
+
+function getRemotePlayer(state) {
+    if (state.gameMode !== 'ONLINE') return null;
+    const mySlot = state.online?.playerSlot;
+    if (mySlot === 1) return player2;
+    if (mySlot === 2) return player1;
+    return null;
+}
+
+function reconcileLocalPlayer(player, serverPos, serverVel, delta) {
+    if (!player?.rigidBody) return;
+    const current = player.rigidBody.translation();
+    const currentVel = player.rigidBody.linvel();
+
+    const errorX = serverPos.x - current.x;
+    const errorY = serverPos.y - current.y;
+    const errorZ = serverPos.z - current.z;
+    const errorDist = Math.sqrt(errorX * errorX + errorY * errorY + errorZ * errorZ);
+
+    // Large error: snap to server position (e.g., after respawn or reconnect).
+    if (errorDist > 8.0) {
+        player.rigidBody.setTranslation(serverPos, true);
+        player.rigidBody.setLinvel(serverVel, true);
+        return;
+    }
+
+    // Smooth correction: blend current velocity toward server velocity + position error correction.
+    const correctionSpeed = 4.0;
+    const targetVel = {
+        x: serverVel.x + errorX * correctionSpeed,
+        y: serverVel.y + errorY * correctionSpeed,
+        z: serverVel.z + errorZ * correctionSpeed,
+    };
+
+    const blend = Math.min(delta * 8.0, 1.0);
+    const nextVel = {
+        x: currentVel.x + (targetVel.x - currentVel.x) * blend,
+        y: currentVel.y + (targetVel.y - currentVel.y) * blend,
+        z: currentVel.z + (targetVel.z - currentVel.z) * blend,
+    };
+
+    player.rigidBody.setLinvel(nextVel, true);
+}
+
 function applyOnlineClientRemoteInterpolation(state) {
-    const remotePlayer = getOnlineClientRemotePlayer(state);
+    const remotePlayer = getRemotePlayer(state);
     if (!remotePlayer?.rigidBody || !remotePlayerTargetPosition) return;
 
     const current = remotePlayer.rigidBody.translation();
@@ -835,6 +937,13 @@ function startOnlineGame() {
     useGameStore.getState().resetScores();
     resetOnlineEntities();
     updateHUDNames();
+
+    // Reset prediction state for a fresh online match.
+    online.localTick = 0;
+    online.serverTick = 0;
+    online.inputHistory = [];
+    online.stateBuffer = [];
+    remotePlayerTargetPosition = null;
 }
 
 function startReplayCountdown() {
@@ -1462,9 +1571,22 @@ function setupButtonHandlers() {
 function setupOnlineHandlers() {
     online.on('connected', () => {
         online.setName(document.getElementById('online-name-input')?.value.trim() || 'Player');
+        document.getElementById('online-connect-status').textContent = 'Connected';
+        document.getElementById('online-connect-error').textContent = '';
         showScreen('onlineLobby');
         document.getElementById('online-server-url').textContent = online.ws?.url || '';
+        updateLobbyConnectionStatus('connected');
         online.listGames();
+    });
+
+    online.on('reconnecting', () => {
+        updateLobbyConnectionStatus('reconnecting');
+        showOnlineToast('Connection lost. Reconnecting...');
+    });
+
+    online.on('reconnected', () => {
+        updateLobbyConnectionStatus('connected');
+        showOnlineToast('Reconnected to server');
     });
 
     online.on('gamesUpdated', (games) => {
@@ -1635,14 +1757,25 @@ function setupOnlineHandlers() {
             useGameStore.getState().setOnlineOpponentInput(data.input);
         }
         if (data.type === 'game_state_update' && data.state && player1 && player2) {
-            // Authoritative state: always apply server positions to both players.
-            if (data.state.p1Pos) {
-                player1.rigidBody.setTranslation(data.state.p1Pos, true);
-                player1.rigidBody.setLinvel(data.state.p1Vel, true);
+            const state = useGameStore.getState();
+            const mySlot = state.online?.playerSlot;
+
+            // Determine local and remote server positions.
+            const localServerPos = mySlot === 1 ? data.state.p1Pos : data.state.p2Pos;
+            const localServerVel = mySlot === 1 ? data.state.p1Vel : data.state.p2Vel;
+            const remoteServerPos = mySlot === 1 ? data.state.p2Pos : data.state.p1Pos;
+
+            const localPlayer = getLocalPlayer(state);
+            const remotePlayer = getRemotePlayer(state);
+
+            // Reconcile local predicted player against authoritative state.
+            if (localPlayer?.rigidBody && localServerPos) {
+                reconcileLocalPlayer(localPlayer, localServerPos, localServerVel || { x: 0, y: 0, z: 0 }, 0.016);
             }
-            if (data.state.p2Pos) {
-                player2.rigidBody.setTranslation(data.state.p2Pos, true);
-                player2.rigidBody.setLinvel(data.state.p2Vel, true);
+
+            // Update remote player interpolation target.
+            if (remotePlayer?.rigidBody && remoteServerPos) {
+                remotePlayerTargetPosition = new THREE.Vector3(remoteServerPos.x, remoteServerPos.y, remoteServerPos.z);
             }
 
             // Sync tile states from authoritative server.
@@ -1663,7 +1796,14 @@ function setupOnlineHandlers() {
     });
 
     online.on('error', (msg) => {
-        document.getElementById('online-connect-error').textContent = msg;
+        const connectScreen = document.getElementById('online-connect');
+        const isConnectVisible = connectScreen && !connectScreen.classList.contains('hidden');
+        if (isConnectVisible) {
+            document.getElementById('online-connect-error').textContent = msg;
+        } else {
+            showOnlineToast(msg);
+        }
+        updateLobbyConnectionStatus('disconnected');
     });
 }
 
@@ -1673,6 +1813,10 @@ function setupOnlineHandlers() {
 function animate(_timestamp, _frame) {
     const delta = Math.min(clock.getDelta(), 0.1);
     const state = useGameStore.getState();
+
+    if (state.gameMode === 'ONLINE' && (state.gameState === 'PLAYING' || state.gameState === 'COUNTDOWN')) {
+        online.localTick += 1;
+    }
 
     // Menu background animation
     if (state.gameState === 'MENU') {
@@ -1691,16 +1835,17 @@ function animate(_timestamp, _frame) {
 
     // Game states
     if (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING') {
-        const isOnlineClient = state.gameMode === 'ONLINE' && !state.online.isHost;
+        const isOnlineMatch = state.gameMode === 'ONLINE';
+        const isOnlineClient = isOnlineMatch && !state.online.isHost;
 
-        if (isOnlineClient) {
+        if (isOnlineMatch) {
             applyOnlineClientRemoteInterpolation(state);
         }
 
         // Always update player visuals (mesh sync, tile interactions, power-ups)
         player1?.update(delta, arena, particles);
         player2?.update(delta, arena, particles);
-        
+
         if (aiController && player1 && player2) {
             const arenaRadius = (state.settings.arenaSize + 1) * 8.0;
             const activeTiles = arena?.getActiveTileSet() ?? null;
@@ -1712,8 +1857,8 @@ function animate(_timestamp, _frame) {
                 activeTiles, warnedTiles
             );
         }
-        
-        if (isOnlineClient) {
+
+        if (isOnlineMatch) {
             arena?.update(delta, { isOnlineClient: true });
         } else {
             arena?.update(delta);

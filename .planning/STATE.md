@@ -7,10 +7,10 @@ last_updated: "2026-07-07T14:15:00.000Z"
 last_activity: 2026-07-07
 progress:
   total_phases: 4
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 0
   completed_plans: 0
-  percent: 75
+  percent: 96
 ---
 
 # Dropfall v3.0 State
@@ -19,7 +19,7 @@ progress:
 
 **Core Value**: Players can reliably play Dropfall together online or locally in a smooth, responsive, and visually polished experience.
 
-**Current Focus**: Phase 11 — Online Client Integration
+**Current Focus**: Phase 11 — Online Client Integration (complete); pending POLISH-05 performance verification.
 
 **Milestone**: v3.0 "Release Readiness"
 
@@ -27,16 +27,16 @@ progress:
 
 Phase: 11 — Online Client Integration
 Plan: —
-Status: Pending
-Last activity: 2026-07-07 — Phase 10 (Authoritative Server) completed.
+Status: Complete
+Last activity: 2026-07-07 — Phase 11 (Online Client Integration) completed.
 
 ## Performance Metrics
 
 | Metric | Target | Current |
 |--------|--------|---------|
-| Phases Complete | 4 | 3 |
+| Phases Complete | 4 | 4 |
 | Plans Executed | TBD | 0 |
-| Requirements Met | 28 | 28 |
+| Requirements Met | 28 | 27 |
 | Desktop Regression | None | Passed |
 
 ## Accumulated Context
@@ -54,10 +54,14 @@ Last activity: 2026-07-07 — Phase 10 (Authoritative Server) completed.
 - Server validates and clamps all game settings.
 - Server broadcasts authoritative state at 20 Hz and runs physics at 60 Hz.
 - 15-second disconnect/reconnect grace window preserved.
+- Client sends normalized input every local tick (`forward`, `right`, `boost`, `tick`).
+- Client predicts local player movement and reconciles against server state with velocity-based smoothing.
+- Remote players are interpolated from an authoritative state buffer.
+- Connection status toasts replaced alerts for lobby/disconnect/reconnect events.
 
 ### Pending TODOs
 
-- Phase 11: wire client to authoritative server with prediction/reconciliation and polish online UX.
+- POLISH-05: verify/maintain target frame rates on desktop and mid-range mobile.
 
 ### Blockers
 
@@ -72,13 +76,14 @@ Last activity: 2026-07-07 — Phase 10 (Authoritative Server) completed.
 
 ## Session Continuity
 
-**Last Session**: 2026-07-07 — Completed Phase 9 (Local UX & Release Polish).
-**Next Action**: Plan and execute Phase 10 — Authoritative Server.
+**Last Session**: 2026-07-07 — Completed Phase 11 (Online Client Integration).
+**Next Action**: Decide on POLISH-05 (performance verification), commit changes, and deploy/release.
 **Context for Next Session**:
 
 - Phase 8 deployment foundation is in place: railway.json, env-driven URLs, health endpoint, working build.
 - Phase 9 polish is complete: arena size capped, rate sliders inverted, notifications repositioned, presets/auto-restart fixed.
-- Ready to begin `/gsd-plan-phase 10` or inline execution.
+- Phase 10 authoritative server is in place and tested: GameRoom, PhysicsWorld, Arena, Player modules.
+- Phase 11 client integration is in place: prediction/reconciliation, remote interpolation, lobby UI, connection toasts.
 
 ---
 *State initialized: 2026-07-07 for v3.0 Release Readiness milestone*

@@ -25,11 +25,11 @@ created: 2026-07-07
 
 ### Online Multiplayer — Client (ONLINE-C)
 
-- [ ] **ONLINE-C-01**: Client sends local input to server every frame/tick.
-- [ ] **ONLINE-C-02**: Client receives authoritative state and updates remote + local entities smoothly.
-- [ ] **ONLINE-C-03**: Client implements prediction and reconciliation so local controls feel responsive.
-- [ ] **ONLINE-C-04**: Lobby UI allows entering server URL (or auto-detects same-origin), creating/joining games, and ready-up.
-- [ ] **ONLINE-C-05**: Connection status, opponent presence, and errors are clearly communicated in UI.
+- [x] **ONLINE-C-01**: Client sends local input to server every frame/tick.
+- [x] **ONLINE-C-02**: Client receives authoritative state and updates remote + local entities smoothly.
+- [x] **ONLINE-C-03**: Client implements prediction and reconciliation so local controls feel responsive.
+- [x] **ONLINE-C-04**: Lobby UI allows entering server URL (or auto-detects same-origin), creating/joining games, and ready-up.
+- [x] **ONLINE-C-05**: Connection status, opponent presence, and errors are clearly communicated in UI.
 
 ### Configuration (CFG)
 
@@ -102,17 +102,19 @@ created: 2026-07-07
 | ONLINE-S-03 | Phase 10 | Complete |
 | ONLINE-S-04 | Phase 10 | Complete |
 | ONLINE-S-05 | Phase 10 | Complete |
-| ONLINE-C-01 | Phase 11 | Pending |
-| ONLINE-C-02 | Phase 11 | Pending |
-| ONLINE-C-03 | Phase 11 | Pending |
-| ONLINE-C-04 | Phase 11 | Pending |
-| ONLINE-C-05 | Phase 11 | Pending |
+| ONLINE-C-01 | Phase 11 | Complete |
+| ONLINE-C-02 | Phase 11 | Complete |
+| ONLINE-C-03 | Phase 11 | Complete |
+| ONLINE-C-04 | Phase 11 | Complete |
+| ONLINE-C-05 | Phase 11 | Complete |
 
 **Coverage:**
 - v3.0 requirements: 28 total
 - Mapped to phases: 28
+- Complete: 27
+- Pending: 1 (POLISH-05)
 - Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-07-07*
-*Last updated: 2026-07-07 after Phase 10 completion*
+*Last updated: 2026-07-07 after Phase 11 completion*
