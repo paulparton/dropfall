@@ -74,11 +74,12 @@ Last activity: 2026-07-07 — Phase 11 (Online Client Integration) completed.
 | 260428-qwy | Remove portals from game - comment out code for potential future use | 2026-04-28 | e173311 | [260428-qwy-remove-portals-from-game-comment-out-cod](./quick/260428-qwy-remove-portals-from-game-comment-out-cod/) |
 | 260526-tmm | Add AR mode to Dropfall VR/headset rooms (roomscale + tabletop) | 2026-05-26 | dbe6b94, ed9029b | [260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms](./quick/260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms/) |
 | 260708-h59 | Hide manual server URL UI for production Railway deploy | 2026-07-08 | — | [260708-h59-hide-manual-server-url-ui-for-production](./quick/260708-h59-hide-manual-server-url-ui-for-production/) |
+| 260708-m3g | Fix Railway build: EBUSY node_modules cache and Node 18 version mismatch | 2026-07-08 | — | [260708-m3g-fix-railway-build-ebusy-node-modules-cac](./quick/260708-m3g-fix-railway-build-ebusy-node-modules-cac/) |
 
 ## Session Continuity
 
-**Last Session**: 2026-07-08 — Quick task: hide manual server URL UI for production Railway deploy.
-**Next Action**: Commit changes and verify deployed Railway build hides the server URL.
+**Last Session**: 2026-07-08 — Quick tasks: hide manual server URL UI + fix Railway build (EBUSY cache + Node 18 mismatch).
+**Next Action**: Commit all changes and retry Railway deployment.
 **Context for Next Session**:
 
 - Phase 8 deployment foundation is in place: railway.json, env-driven URLs, health endpoint, working build.
