@@ -17,6 +17,7 @@
     "editor:dev": "node --watch server/editor-3d-server.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "vitest run tests/e2e/game.e2e.js",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.js"
   },
@@ -30,6 +31,7 @@
     "@vitest/coverage-v8": "^4.1.2",
     "eslint": "^8.57.0",
     "jsdom": "^29.0.1",
+    "puppeteer": "^23.0.0",
     "terser": "^5.48.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.4.0",

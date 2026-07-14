@@ -430,6 +430,62 @@ function setOpponentDisconnectOverlayVisible(visible) {
     overlay.classList.toggle('hidden', !visible);
 }
 
+let onlineLoadingOverlayEl = null;
+
+function ensureOnlineLoadingOverlay() {
+    if (onlineLoadingOverlayEl) return onlineLoadingOverlayEl;
+    const overlay = document.createElement('div');
+    overlay.id = 'online-loading-overlay';
+    overlay.className = 'hidden';
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 400;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.9);
+        color: #0ff;
+        font-family: 'Courier New', monospace;
+        gap: 1.2rem;
+        pointer-events: none;
+    `;
+    const title = document.createElement('div');
+    title.textContent = 'LOADING ARENA';
+    title.style.cssText = 'font-size: clamp(1.5rem, 4vw, 3rem); letter-spacing: 4px; text-shadow: 0 0 20px rgba(0,255,255,0.8);';
+    const spinner = document.createElement('div');
+    spinner.style.cssText = `
+        width: 48px; height: 48px;
+        border: 4px solid rgba(0,255,255,0.2);
+        border-top-color: #0ff;
+        border-radius: 50%;
+        animation: dropfall-spin 0.8s linear infinite;
+    `;
+    overlay.append(title, spinner);
+
+    const style = document.createElement('style');
+    style.textContent = '@keyframes dropfall-spin { to { transform: rotate(360deg); } }';
+    document.head.appendChild(style);
+
+    document.body.appendChild(overlay);
+    onlineLoadingOverlayEl = overlay;
+    return overlay;
+}
+
+function showOnlineLoadingOverlay() {
+    const overlay = ensureOnlineLoadingOverlay();
+    overlay.classList.remove('hidden');
+    overlay.style.display = 'flex';
+}
+
+function hideOnlineLoadingOverlay() {
+    const overlay = ensureOnlineLoadingOverlay();
+    overlay.classList.add('hidden');
+    overlay.style.display = 'none';
+}
+
 function updateLobbyConnectionStatus(status) {
     const statusEl = document.getElementById('online-connected-status');
     if (!statusEl) return;
@@ -957,21 +1013,24 @@ function returnToMenu() {
     }
 }
 
-function startOnlineGame() {
-    console.log('[startOnlineGame] Starting online game');
+function startOnlineGame(matchStart = true) {
+    console.log('[startOnlineGame] Starting online game, matchStart:', matchStart);
     initAudio();
     playMusic();
     setMusicSpeed(0.6);
-    useGameStore.getState().resetScores();
+    if (matchStart) {
+        useGameStore.getState().resetScores();
+    }
     resetOnlineEntities();
     updateHUDNames();
 
-    // Reset prediction state for a fresh online match.
-    online.localTick = 0;
-    online.serverTick = 0;
-    online.inputHistory = [];
-    online.stateBuffer = [];
-    remotePlayerTargetPosition = null;
+    if (matchStart) {
+        online.localTick = 0;
+        online.serverTick = 0;
+        online.inputHistory = [];
+        online.stateBuffer = [];
+        remotePlayerTargetPosition = null;
+    }
 }
 
 function startReplayCountdown() {
@@ -1701,8 +1760,12 @@ function setupOnlineHandlers() {
     });
 
     online.on('gameStarting', (data) => {
-        console.log('[gameStarting] Received game_starting event, countdown:', data.countdown);
+        console.log('[gameStarting] Received game_starting event, countdown:', data.countdown, 'matchStart:', data.matchStart);
         console.log('[gameStarting] isHost:', useGameStore.getState().online.isHost, 'playerSlot:', useGameStore.getState().online.playerSlot);
+
+        const matchStart = data.matchStart !== false;
+
+        showOnlineLoadingOverlay();
 
         if (Array.isArray(data.players) && data.players.length > 0) {
             const hasZeroBasedSlots = data.players.some((player) => player?.slot === 0);
@@ -1742,13 +1805,36 @@ function setupOnlineHandlers() {
             useGameStore.getState().updateSetting(key, val);
         });
 
-        startOnlineGame();
-        hideAllScreens();
-        screens.hud.classList.remove('hidden');
-        screens.countdown.classList.remove('hidden');
-        screens.countdown.textContent = String(data.countdown);
+        startOnlineGame(matchStart);
         countdownTimer = data.countdown;
-        useGameStore.getState().startGame();
+
+        const revealGame = () => {
+            hideAllScreens();
+            screens.hud.classList.remove('hidden');
+            screens.countdown.classList.remove('hidden');
+            screens.countdown.textContent = String(data.countdown);
+            hideOnlineLoadingOverlay();
+
+            if (!useGameStore.getState().online.isHost) {
+                setTimeout(() => online.requestSync(), 100);
+            }
+        };
+
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                revealGame();
+            });
+        });
+
+        if (matchStart) {
+            useGameStore.getState().startGame();
+        } else {
+            useGameStore.setState({
+                gameState: 'COUNTDOWN',
+                winner: null,
+                activeTileEffects: [],
+            });
+        }
     });
 
     online.on('gameStarted', () => {
@@ -1762,7 +1848,6 @@ function setupOnlineHandlers() {
 
     online.on('rematchStart', () => {
         useGameStore.getState().resetOnlineSetupState?.();
-        enterOnlineSetupState({ resetSetup: false });
     });
 
     online.on('fullState', (data) => {
@@ -1780,7 +1865,41 @@ function setupOnlineHandlers() {
     });
 
     online.on('roundOver', (data) => {
-        useGameStore.getState().endRound(data.winner);
+        const st = useGameStore.getState();
+        let newP1Score = st.p1Score;
+        let newP2Score = st.p2Score;
+        if (data.winner === 'Player 1') newP1Score++;
+        if (data.winner === 'Player 2') newP2Score++;
+        if (data.scores) {
+            newP1Score = data.scores.p1 ?? newP1Score;
+            newP2Score = data.scores.p2 ?? newP2Score;
+        }
+
+        if (data.matchOver) {
+            useGameStore.setState({
+                gameState: 'GAME_OVER',
+                winner: data.winner,
+                p1Score: newP1Score,
+                p2Score: newP2Score,
+            });
+        } else {
+            useGameStore.setState({
+                gameState: 'ROUND_OVER',
+                winner: data.winner,
+                p1Score: newP1Score,
+                p2Score: newP2Score,
+                activeTileEffects: [],
+            });
+        }
+    });
+
+    online.on('matchOver', (data) => {
+        useGameStore.setState({
+            gameState: 'GAME_OVER',
+            winner: data.winner,
+            p1Score: data.scores?.p1 ?? useGameStore.getState().p1Score,
+            p2Score: data.scores?.p2 ?? useGameStore.getState().p2Score,
+        });
     });
 
     online.on('gameUpdate', (data) => {
@@ -1844,6 +1963,22 @@ function setupOnlineHandlers() {
 function animate(_timestamp, _frame) {
     const delta = Math.min(clock.getDelta(), 0.1);
     const state = useGameStore.getState();
+
+    // Dev-only snapshot for e2e/interaction tests. Pruned from production builds by Vite.
+    if (import.meta.env && import.meta.env.DEV) {
+        window.__DROPFALL_DEBUG__ = {
+            gameState: state.gameState,
+            gameMode: state.gameMode,
+            players: [
+                player1
+                    ? { id: 'p1', x: player1.mesh.position.x, y: player1.mesh.position.y, z: player1.mesh.position.z, dead: !!player1.isDead }
+                    : null,
+                player2
+                    ? { id: 'p2', x: player2.mesh.position.x, y: player2.mesh.position.y, z: player2.mesh.position.z, dead: !!player2.isDead }
+                    : null,
+            ],
+        };
+    }
 
     if (state.gameMode === 'ONLINE' && (state.gameState === 'PLAYING' || state.gameState === 'COUNTDOWN')) {
         online.localTick += 1;
