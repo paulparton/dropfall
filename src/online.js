@@ -284,8 +284,39 @@ class OnlineManager {
             case 'game_joined':
                 state.setOnlineCurrentGame(msg.game);
                 state.setOnlineHost(false);
-                state.setOnlinePlayerSlot(2);
+                const joinedGame = msg.game || {};
+                const joinedSlot = joinedGame.players && joinedGame.players.length > 0
+                    ? (joinedGame.players[joinedGame.players.length - 1]?.slot || 2)
+                    : 2;
+                state.setOnlinePlayerSlot(joinedSlot);
                 state.enterOnlineLobby();
+
+                if (Array.isArray(joinedGame.players)) {
+                    const myPlayerId = state.online.playerId;
+                    const existingPlayers = joinedGame.players.filter(p => p.id !== myPlayerId);
+                    for (const ep of existingPlayers) {
+                        state.setOnlineOpponentConnected(true);
+                        state.setOnlineOpponentName(ep.name || 'Player');
+                        state.setOnlineOpponentCustomization?.(
+                            ep.color ?? null,
+                            ep.hat ?? null,
+                            ep.name ?? null,
+                        );
+
+                        if (ep.slot === 1 || ep.slot === 2) {
+                            const p1Color = ep.slot === 1 ? ep.color : state.p1Color;
+                            const p2Color = ep.slot === 2 ? ep.color : state.p2Color;
+                            const p1Hat = ep.slot === 1 ? ep.hat : state.p1Hat;
+                            const p2Hat = ep.slot === 2 ? ep.hat : state.p2Hat;
+                            const p1Name = ep.slot === 1 ? ep.name : state.p1Name;
+                            const p2Name = ep.slot === 2 ? ep.name : state.p2Name;
+                            state.setPlayerColors?.(p1Color, p2Color);
+                            state.setPlayerHats?.(p1Hat, p2Hat);
+                            state.setPlayerNames?.(p1Name, p2Name);
+                        }
+                    }
+                }
+
                 this.emit('gameJoined', msg.game);
                 break;
 
@@ -300,6 +331,31 @@ class OnlineManager {
                 state.setOnlineOpponentConnected(true);
                 const opponentName = msg.player.name || 'Player';
                 state.setOnlineOpponentName(opponentName);
+
+                const joinedPlayerSlot = msg.player.slot;
+                const cust = msg.player.customization || {};
+                const opponentColor = cust.color ?? null;
+                const opponentHat = cust.hat ?? null;
+                const opponentCustName = cust.name ?? opponentName;
+
+                state.setOnlineOpponentCustomization?.(opponentColor, opponentHat, opponentCustName);
+
+                if (joinedPlayerSlot === 1 || joinedPlayerSlot === 2) {
+                    const mySlot = state.online?.playerSlot;
+                    const isOpponent = mySlot != null && joinedPlayerSlot !== mySlot;
+                    if (isOpponent) {
+                        const p1Color = joinedPlayerSlot === 1 ? opponentColor : state.p1Color;
+                        const p2Color = joinedPlayerSlot === 2 ? opponentColor : state.p2Color;
+                        const p1Hat = joinedPlayerSlot === 1 ? opponentHat : state.p1Hat;
+                        const p2Hat = joinedPlayerSlot === 2 ? opponentHat : state.p2Hat;
+                        const p1Name = joinedPlayerSlot === 1 ? opponentCustName : state.p1Name;
+                        const p2Name = joinedPlayerSlot === 2 ? opponentCustName : state.p2Name;
+                        state.setPlayerColors?.(p1Color, p2Color);
+                        state.setPlayerHats?.(p1Hat, p2Hat);
+                        state.setPlayerNames?.(p1Name, p2Name);
+                    }
+                }
+
                 this.emit('playerJoined', msg.player);
                 break;
 
@@ -346,7 +402,12 @@ class OnlineManager {
                     );
                 }
 
-                this.emit('gameStarting', { countdown: msg.countdown, settings: msg.settings, players: msg.players || [] });
+                this.emit('gameStarting', {
+                    countdown: msg.countdown,
+                    matchStart: msg.matchStart !== false,
+                    settings: msg.settings,
+                    players: msg.players || [],
+                });
                 break;
 
             case 'game_started':
@@ -372,9 +433,33 @@ class OnlineManager {
                 this.emit('gameUpdate', msg);
                 break;
 
-            case 'round_over':
-                this.emit('roundOver', { winner: msg.winner, scores: msg.scores });
+            case 'round_over': {
+                const winnerSlot = msg.winner;
+                let winnerName = 'Draw';
+                if (winnerSlot === 1) winnerName = 'Player 1';
+                else if (winnerSlot === 2) winnerName = 'Player 2';
+                this.emit('roundOver', {
+                    winner: winnerName,
+                    winnerSlot,
+                    scores: msg.scores,
+                    matchOver: Boolean(msg.matchOver),
+                    matchWinner: msg.matchWinner ?? null,
+                });
                 break;
+            }
+
+            case 'match_over': {
+                const matchWinnerSlot = msg.winner;
+                let matchWinnerName = 'Draw';
+                if (matchWinnerSlot === 1) matchWinnerName = 'Player 1';
+                else if (matchWinnerSlot === 2) matchWinnerName = 'Player 2';
+                this.emit('matchOver', {
+                    winner: matchWinnerName,
+                    winnerSlot: matchWinnerSlot,
+                    scores: msg.scores,
+                });
+                break;
+            }
 
             case 'full_state':
                 this.emit('fullState', msg);
@@ -476,6 +561,45 @@ class OnlineManager {
 
     listGames() {
         this.send({ type: 'list_games' });
+    }
+
+    static async fetchNetworkInfo(serverUrl = OnlineManager.getDefaultServerUrl()) {
+        try {
+            const httpUrl = serverUrl
+                .replace(/^wss:\/\//i, 'https://')
+                .replace(/^ws:\/\//i, 'http://')
+                .replace(/\/$/, '');
+            const res = await fetch(`${httpUrl}/api/network-info`);
+            if (!res.ok) return null;
+            return await res.json();
+        } catch {
+            return null;
+        }
+    }
+
+    static isPrivateIp(hostname) {
+        if (!hostname) return false;
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') return true;
+        const parts = hostname.split('.');
+        if (parts.length !== 4) return false;
+        const [a, b] = parts.map(Number);
+        if (Number.isNaN(a) || Number.isNaN(b)) return false;
+        if (a === 10) return true;
+        if (a === 172 && b >= 16 && b <= 31) return true;
+        if (a === 192 && b === 168) return true;
+        return false;
+    }
+
+    static detectNetworkMode(serverUrl = '') {
+        if (!serverUrl) return 'unknown';
+        try {
+            const url = new URL(serverUrl);
+            const hostname = url.hostname;
+            if (OnlineManager.isPrivateIp(hostname)) return 'lan';
+            return 'internet';
+        } catch {
+            return 'unknown';
+        }
     }
 
     createGame(settings = {}) {
@@ -583,3 +707,5 @@ class OnlineManager {
 }
 
 export const online = new OnlineManager();
+
+export { OnlineManager };

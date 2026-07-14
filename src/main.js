@@ -38,7 +38,7 @@ import { ShockwaveSystem } from './entities/ShockwaveSystem.js';
 import { initAudio, playMusic, playCollisionSound, setMusicSpeed, setMusicVolume, setSfxVolume, updateRollingSound } from './audio.js';
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
-import { online } from './online.js';
+import { online, OnlineManager } from './online.js';
 import { initVR, isInVR, onVRSessionStart, onVRSessionEnd, initAR, isInAR, getXRSessionMode } from './vr/VRSession.js';
 import { initControllers, updateControllers } from './vr/VRControllers.js';
 import { applyVRScale, createVRCameraRig, getVRContainer, reparentToScene, reparentToVRContainer, updateVRCameraRig } from './vr/VRCamera.js';
@@ -688,6 +688,69 @@ function maybeAutoConnectOnline() {
     online.connect(defaultServerUrl);
 }
 
+async function setupLanDetection() {
+    const lanSuggestion = document.getElementById('online-lan-suggestion');
+    const lanInfo = document.getElementById('online-lan-info');
+    const networkModeEl = document.getElementById('online-network-mode');
+    const serverInput = document.getElementById('online-server-input');
+    if (!lanSuggestion || !lanInfo || !serverInput) return;
+
+    const updateNetworkBadge = (url) => {
+        if (!networkModeEl) return;
+        const mode = OnlineManager.detectNetworkMode(url);
+        if (mode === 'lan') {
+            networkModeEl.textContent = '● LAN MODE';
+            networkModeEl.style.color = '#00ff88';
+        } else if (mode === 'internet') {
+            networkModeEl.textContent = '● INTERNET MODE';
+            networkModeEl.style.color = '#9deaff';
+        } else {
+            networkModeEl.textContent = '';
+        }
+    };
+
+    const currentUrl = serverInput.value.trim() || OnlineManager.getDefaultServerUrl();
+    updateNetworkBadge(currentUrl);
+
+    serverInput.addEventListener('input', () => {
+        updateNetworkBadge(serverInput.value.trim());
+    });
+
+    const info = await OnlineManager.fetchNetworkInfo(currentUrl);
+    if (!info || !Array.isArray(info.lanAddresses) || info.lanAddresses.length === 0) {
+        lanSuggestion.style.display = 'none';
+        return;
+    }
+
+    const currentHostname = (() => {
+        try { return new URL(OnlineManager.normalizeServerUrl(currentUrl)).hostname; } catch { return ''; }
+    })();
+
+    const isAlreadyLan = OnlineManager.isPrivateIp(currentHostname);
+    if (isAlreadyLan) {
+        lanSuggestion.style.display = 'none';
+        return;
+    }
+
+    const suggested = info.lanAddresses[0];
+    const wsUrl = `ws://${suggested.address}:${info.port}`;
+    lanInfo.innerHTML = `
+        <p style="margin: 0.3rem 0;">A server is running on your local network:</p>
+        <p style="margin: 0.3rem 0;"><code style="color: #00ff88; font-size: 1rem;">${suggested.address}:${info.port}</code></p>
+        <button id="online-lan-connect-btn" class="retro-btn" style="margin-top: 0.5rem; padding: 0.4rem 1rem; font-size: 0.9rem;">CONNECT VIA LAN</button>
+    `;
+    lanSuggestion.style.display = 'block';
+
+    const lanBtn = document.getElementById('online-lan-connect-btn');
+    if (lanBtn) {
+        lanBtn.addEventListener('click', () => {
+            serverInput.value = wsUrl;
+            updateNetworkBadge(wsUrl);
+            document.getElementById('online-connect-btn')?.click();
+        });
+    }
+}
+
 // ============================================
 // CHARACTER PREVIEW STATE
 // ============================================
@@ -1119,6 +1182,7 @@ function setupButtonHandlers() {
         console.log('[Button] Online clicked!');
         useGameStore.getState().setGameMode('ONLINE');
         showScreen('onlineConnect');
+        setupLanDetection();
         maybeAutoConnectOnline();
     });
 
@@ -1151,6 +1215,7 @@ function setupButtonHandlers() {
         console.log('[Click] ONLINE clicked');
         useGameStore.getState().setGameMode('ONLINE');
         showScreen('onlineConnect');
+        setupLanDetection();
         maybeAutoConnectOnline();
         console.log('[Click] Screen shown, new state:', useGameStore.getState());
     });

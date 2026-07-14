@@ -6,6 +6,8 @@ const TICK_RATE = 60;
 const BROADCAST_RATE = 20;
 const RECONNECT_GRACE_MS = 15000;
 const ROUND_OVER_DELAY_MS = 2000;
+const COUNTDOWN_MS = 3000;
+const WINS_TO_WIN_MATCH = 3;
 
 const DEFAULT_SETTINGS = {
     theme: 'tron',
@@ -23,16 +25,18 @@ const DEFAULT_SETTINGS = {
 };
 
 export class GameRoom {
-    constructor(id, hostId, hostName, settings = {}) {
+    constructor(id, hostId, hostName, settings = {}, options = {}) {
         this.id = id;
         this.hostId = hostId;
         this.hostName = hostName || 'Host';
         this.settings = this._validateSettings({ ...DEFAULT_SETTINGS, ...settings });
+        this.isServerLobby = !!(options && options.isServerLobby);
 
-        this.players = []; // { id, name, slot, ready, rematchRequested, disconnected, reconnectDeadline, ws, player }
+        this.players = []; // { id, name, slot, ready, rematchRequested, disconnected, reconnectDeadline, ws, player, color, hat }
         this.state = 'LOBBY';
         this.tick = 0;
         this.scores = { p1: 0, p2: 0 };
+        this.matchWinner = null;
         this.roundWinner = null;
         this.roundOverAt = null;
 
@@ -87,6 +91,8 @@ export class GameRoom {
             reconnectDeadline: null,
             ws,
             player: null,
+            color: slot - 1,
+            hat: 'none',
         };
 
         this.players.push(playerInfo);
@@ -150,8 +156,15 @@ export class GameRoom {
         });
 
         if (this.players.length === 0) {
-            this.destroy();
-            if (this.onGameEnded) this.onGameEnded(this);
+            if (this.isServerLobby) {
+                this.state = 'LOBBY';
+                this.scores = { p1: 0, p2: 0 };
+                this.matchWinner = null;
+                this._stopLoops();
+            } else {
+                this.destroy();
+                if (this.onGameEnded) this.onGameEnded(this);
+            }
         } else if (this.hostId === playerInfo.id) {
             this.hostId = this.players[0].id;
             this._broadcast({ type: 'new_host', hostId: this.hostId });
@@ -189,6 +202,15 @@ export class GameRoom {
         playerInfo.ready = !!ready;
     }
 
+    async maybeAutoStart() {
+        if (!this.isServerLobby) return false;
+        if (this.state !== 'LOBBY') return false;
+        if (this.players.length < 2) return false;
+        if (!this.areBothReady()) return false;
+        await this.startCountdown();
+        return true;
+    }
+
     setInput(id, input) {
         const playerInfo = this.players.find(p => p.id === id);
         if (!playerInfo || !playerInfo.player || playerInfo.disconnected) return;
@@ -207,6 +229,7 @@ export class GameRoom {
         this._broadcast({
             type: 'game_starting',
             countdown: 3,
+            matchStart: true,
             settings: this.settings,
             players: this.players.map(p => ({
                 slot: p.slot - 1,
@@ -216,7 +239,7 @@ export class GameRoom {
             })),
         });
 
-        setTimeout(() => this._startPlaying(), 3000);
+        setTimeout(() => this._startPlaying(), COUNTDOWN_MS);
     }
 
     _startPlaying() {
@@ -306,23 +329,76 @@ export class GameRoom {
             else this.scores.p2 += 1;
         }
 
+        const matchOver = this.scores.p1 >= WINS_TO_WIN_MATCH || this.scores.p2 >= WINS_TO_WIN_MATCH;
+        if (matchOver && !this.matchWinner) {
+            this.matchWinner = this.scores.p1 >= WINS_TO_WIN_MATCH ? 1 : 2;
+        }
+
         this._broadcast({
             type: 'round_over',
             winner: this.roundWinner,
             scores: this.scores,
+            matchOver,
+            matchWinner: matchOver ? this.matchWinner : null,
         });
 
         this._stopLoops();
 
         setTimeout(() => {
-            this._returnToLobby();
+            if (matchOver) {
+                this._endMatch();
+            } else {
+                this._startNextRound();
+            }
         }, ROUND_OVER_DELAY_MS);
+    }
+
+    _startNextRound() {
+        if (this.state !== 'ROUND_OVER') return;
+        if (this.players.length < 2) return;
+
+        this._resetRound();
+
+        this.state = 'COUNTDOWN';
+        this._broadcast({
+            type: 'game_starting',
+            countdown: 3,
+            matchStart: false,
+            settings: this.settings,
+            players: this.players.map(p => ({
+                slot: p.slot - 1,
+                name: p.name,
+                color: p.color,
+                hat: p.hat,
+            })),
+        });
+
+        setTimeout(() => this._startPlaying(), COUNTDOWN_MS);
+    }
+
+    _endMatch() {
+        this.state = 'LOBBY';
+        this.roundWinner = null;
+        this.roundOverAt = null;
+
+        for (const playerInfo of this.players) {
+            playerInfo.ready = false;
+            playerInfo.rematchRequested = false;
+        }
+
+        this._broadcast({
+            type: 'match_over',
+            winner: this.matchWinner,
+            scores: this.scores,
+        });
     }
 
     _returnToLobby() {
         this.state = 'LOBBY';
         this.roundWinner = null;
         this.roundOverAt = null;
+        this.matchWinner = null;
+        this.scores = { p1: 0, p2: 0 };
 
         for (const playerInfo of this.players) {
             playerInfo.ready = false;
@@ -400,7 +476,14 @@ export class GameRoom {
         });
 
         if (this.players.length === 2 && this.players.every(p => p.rematchRequested)) {
-            this._returnToLobby();
+            this.scores = { p1: 0, p2: 0 };
+            this.matchWinner = null;
+
+            for (const p of this.players) {
+                p.ready = true;
+            }
+
+            this.startCountdown();
         }
     }
 
@@ -422,6 +505,19 @@ export class GameRoom {
         }
     }
 
+    getPlayers() {
+        return this.players
+            .filter(p => !p.disconnected)
+            .map(p => ({
+                id: p.id,
+                name: p.name,
+                slot: p.slot,
+                ready: p.ready,
+                color: p.color,
+                hat: p.hat,
+            }));
+    }
+
     getPublicGame() {
         return {
             id: this.id,
@@ -429,11 +525,13 @@ export class GameRoom {
             playerCount: this.players.filter(p => !p.disconnected).length,
             maxPlayers: 2,
             state: this.state,
+            isServerLobby: this.isServerLobby,
             settings: {
                 theme: this.settings.theme,
                 arenaSize: this.settings.arenaSize,
                 sphereSize: this.settings.sphereSize,
             },
+            players: this.getPlayers(),
         };
     }
 

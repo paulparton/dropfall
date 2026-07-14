@@ -4,6 +4,7 @@ import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSy
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
+import { networkInterfaces } from 'os';
 import { GameRoom } from './game/GameRoom.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -48,6 +49,31 @@ class GameServer {
         this.wss.on('connection', (ws) => this.handleConnection(ws));
 
         this.broadcastInterval = setInterval(() => this.broadcastStats(), 1000);
+
+        this.createServerLobby();
+    }
+
+    createServerLobby() {
+        const gameId = 'server-lobby';
+        const existing = this.games.get(gameId);
+        if (existing) return existing;
+
+        const room = new GameRoom(gameId, 'server', 'Dropfall Public', {}, { isServerLobby: true });
+        room.onBroadcast = (playerId, msg) => {
+            const p = this.players.get(playerId);
+            if (p) this.sendToPlayer(p, msg);
+        };
+        room.onGameEnded = (endedRoom) => {
+            if (!endedRoom.isServerLobby) {
+                this.games.delete(endedRoom.id);
+            }
+            this.broadcastStats();
+        };
+
+        this.games.set(gameId, room);
+        this.stats.gamesCreated++;
+        this.broadcastStats();
+        return room;
     }
 
     normalizeSlot(slot) {
@@ -119,6 +145,19 @@ class GameServer {
         if (req.method === 'GET' && normalizedPath === '/api/games') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(this.getPublicGameList()));
+            return;
+        }
+
+        if (req.method === 'GET' && normalizedPath === '/api/network-info') {
+            res.writeHead(200, {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'no-store',
+            });
+            res.end(JSON.stringify({
+                lanAddresses: this.getLanAddresses(),
+                port: PORT,
+            }));
             return;
         }
 
@@ -521,6 +560,23 @@ class GameServer {
 
         this.sendToPlayer(player, { type: 'game_joined', game: room.getPublicGame() });
 
+        for (const existing of room.players) {
+            if (existing.id === player.id) continue;
+            this.sendToPlayer(player, {
+                type: 'player_joined',
+                player: {
+                    id: existing.id,
+                    name: existing.name,
+                    slot: existing.slot,
+                    customization: {
+                        color: existing.color ?? this.normalizeSlot(existing.slot),
+                        hat: existing.hat ?? 'none',
+                        name: existing.name,
+                    },
+                },
+            });
+        }
+
         this.broadcastToGame(gameId, {
             type: 'player_joined',
             player: {
@@ -572,10 +628,23 @@ class GameServer {
     }
 
     startGame(player) {
-        if (!player.isHost) return;
-
         const room = this.games.get(player.currentGame);
         if (!room || room.state !== 'LOBBY') return;
+
+        if (room.isServerLobby) {
+            if (room.players.length < 2) {
+                this.sendToPlayer(player, { type: 'error', message: 'Need 2 players to start' });
+                return;
+            }
+            if (!room.areBothReady()) {
+                this.sendToPlayer(player, { type: 'error', message: 'Both players must be ready' });
+                return;
+            }
+            room.startCountdown();
+            return;
+        }
+
+        if (!player.isHost) return;
 
         if (room.players.length < 2) {
             this.sendToPlayer(player, { type: 'error', message: 'Need 2 players to start' });
@@ -657,6 +726,9 @@ class GameServer {
 
         if (room.areBothReady()) {
             this.broadcastToGame(room.id, { type: 'all_ready' });
+            if (room.isServerLobby) {
+                room.maybeAutoStart();
+            }
         }
     }
 
@@ -802,8 +874,27 @@ class GameServer {
         });
     }
 
+    getLanAddresses() {
+        try {
+            const interfaces = networkInterfaces();
+            const addresses = [];
+            for (const [name, nets] of Object.entries(interfaces)) {
+                if (!nets) continue;
+                for (const net of nets) {
+                    if (net.family === 'IPv4' && !net.internal) {
+                        addresses.push({ interface: name, address: net.address });
+                    }
+                }
+            }
+            return addresses;
+        } catch {
+            return [];
+        }
+    }
+
     start(port = PORT) {
         this.server.listen(port, () => {
+            const lanAddrs = this.getLanAddresses();
             console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                     DROPFALL GAME SERVER                       ║
@@ -816,6 +907,10 @@ class GameServer {
 ║  Supported Games: Dropfall                                     ║
 ╚═══════════════════════════════════════════════════════════════╝
             `);
+            if (lanAddrs.length > 0) {
+                console.log('  LAN addresses:');
+                lanAddrs.forEach(a => console.log(`    ${a.interface}: ${a.address}:${port}`));
+            }
         });
     }
 }
