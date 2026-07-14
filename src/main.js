@@ -4,8 +4,8 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { useGameStore } from './store.js';
 import { initPhysics, world as physicsWorld } from './physics.js';
 import { getPhysicsSystem } from './systems/PhysicsSystem.js';
-import { initRenderer, updateRenderer, camera, scene, renderer, ambientLight, directionalLight } from './renderer.js';
-import { initInput, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
+import { initRenderer, updateRenderer, getPerformanceMetrics, camera, scene, renderer, ambientLight, directionalLight } from './renderer.js';
+import { initInput, resetInputState, getPlayer1Input, getPlayer2Input, getConnectedGamepads, getGamepadState } from './input.js';
 import { createInputHandler } from './handlers/InputHandler.js';
 import { replayRecorder, resetReplayRecorder } from './systems/ReplayRecorder.js';
 import { createReplayModal } from './components/ReplayModal.js';
@@ -151,6 +151,26 @@ function hideAllScreens() {
     Object.values(screens).forEach(s => s?.classList.add('hidden'));
 }
 
+function setGamePaused(paused, { focusResume = true } = {}) {
+    const state = useGameStore.getState();
+    const canPause = state.gameMode !== 'ONLINE' && (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING');
+    const nextPaused = Boolean(paused && canPause);
+    const pauseMenu = document.getElementById('pause-menu');
+
+    isGamePaused = nextPaused;
+    pauseMenu?.classList.toggle('hidden', !nextPaused);
+    document.body.classList.toggle('game-paused', nextPaused);
+    resetInputState();
+
+    if (nextPaused && focusResume) {
+        requestAnimationFrame(() => document.getElementById('pause-resume-btn')?.focus());
+    }
+}
+
+function toggleGamePause() {
+    setGamePaused(!isGamePaused);
+}
+
 // ============================================
 // POWER-UPS GUIDE
 // ============================================
@@ -223,6 +243,7 @@ let onlineSetupPanelTeardown = null;
 let opponentDisconnectOverlayEl = null;
 let remotePlayerTargetPosition = null;
 let lastSentTileStates = new Map();
+let isGamePaused = false;
 
 const REMOTE_PLAYER_LERP_FACTOR = 0.25;
 
@@ -806,6 +827,7 @@ window.POWER_UP_EFFECTS = POWER_UP_EFFECTS;
 // ============================================
 
 function startGame(skipNameEntry = false) {
+    setGamePaused(false, { focusResume: false });
     console.log('[Game] startGame called, initializing audio...');
     initAudio();
     console.log('[Game] initAudio returned, playing music...');
@@ -1046,6 +1068,7 @@ function resetOnlineEntities() {
 }
 
 function returnToMenu() {
+    setGamePaused(false, { focusResume: false });
     clearReplayCountdown();
     const replayModal = document.getElementById('replay-modal');
     if (replayModal) replayModal.remove();
@@ -1194,32 +1217,6 @@ function setupButtonHandlers() {
         showScreen('menu');
     });
 
-    // Game Mode Selection
-    const singleBtn = document.getElementById('mode-single-btn');
-    const localBtn = document.getElementById('mode-local-btn');
-    const onlineBtn = document.getElementById('mode-online-btn');
-    
-    console.log('[Setup] Mode buttons found:', { singleBtn: !!singleBtn, localBtn: !!localBtn, onlineBtn: !!onlineBtn });
-    
-    singleBtn?.addEventListener('click', () => {
-        console.log('[Click] SINGLE PLAYER clicked');
-        useGameStore.getState().setGameMode('1P');
-        console.log('[Click] Store updated, new state:', useGameStore.getState());
-    });
-    localBtn?.addEventListener('click', () => {
-        console.log('[Click] LOCAL clicked');
-        useGameStore.getState().setGameMode('2P');
-        console.log('[Click] Store updated, new state:', useGameStore.getState());
-    });
-    onlineBtn?.addEventListener('click', () => {
-        console.log('[Click] ONLINE clicked');
-        useGameStore.getState().setGameMode('ONLINE');
-        showScreen('onlineConnect');
-        setupLanDetection();
-        maybeAutoConnectOnline();
-        console.log('[Click] Screen shown, new state:', useGameStore.getState());
-    });
-
     // Difficulty Selection
     ['easy', 'normal', 'hard'].forEach(diff => {
         const btn = document.getElementById(`difficulty-${diff}-btn`);
@@ -1245,10 +1242,34 @@ function setupButtonHandlers() {
     });
     // HUD
     document.getElementById('hud-restart-btn')?.addEventListener('click', () => {
+        setGamePaused(false, { focusResume: false });
         useGameStore.getState().resetScores();
-        startGame();
+        startGame(true);
     });
     document.getElementById('hud-menu-btn')?.addEventListener('click', returnToMenu);
+    document.getElementById('hud-pause-btn')?.addEventListener('click', toggleGamePause);
+    document.getElementById('pause-resume-btn')?.addEventListener('click', () => setGamePaused(false, { focusResume: false }));
+    document.getElementById('pause-restart-btn')?.addEventListener('click', () => {
+        setGamePaused(false, { focusResume: false });
+        useGameStore.getState().resetScores();
+        startGame(true);
+    });
+    document.getElementById('pause-menu-btn')?.addEventListener('click', returnToMenu);
+
+    document.addEventListener('keydown', (event) => {
+        if (event.repeat || (event.code !== 'Escape' && event.code !== 'KeyP')) return;
+        const state = useGameStore.getState();
+        if (state.gameMode === 'ONLINE' || (state.gameState !== 'COUNTDOWN' && state.gameState !== 'PLAYING')) return;
+        event.preventDefault();
+        toggleGamePause();
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        const state = useGameStore.getState();
+        if (document.hidden && state.gameMode !== 'ONLINE' && (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING')) {
+            setGamePaused(true, { focusResume: false });
+        }
+    });
 
     // Game Over
     document.getElementById('restart-btn')?.addEventListener('click', () => {
@@ -2034,6 +2055,8 @@ function animate(_timestamp, _frame) {
         window.__DROPFALL_DEBUG__ = {
             gameState: state.gameState,
             gameMode: state.gameMode,
+            isPaused: isGamePaused,
+            performance: getPerformanceMetrics(),
             players: [
                 player1
                     ? { id: 'p1', x: player1.mesh.position.x, y: player1.mesh.position.y, z: player1.mesh.position.z, dead: !!player1.isDead }
@@ -2043,6 +2066,11 @@ function animate(_timestamp, _frame) {
                     : null,
             ],
         };
+    }
+
+    if (isGamePaused) {
+        updateRenderer();
+        return;
     }
 
     if (state.gameMode === 'ONLINE' && (state.gameState === 'PLAYING' || state.gameState === 'COUNTDOWN')) {
@@ -2410,6 +2438,8 @@ function startNextRound() {
 // ============================================
 function setupStoreSubscription() {
     useGameStore.subscribe((state, prevState) => {
+        document.body.dataset.gameState = state.gameState;
+
         if (state.settings?.vrScale !== prevState.settings?.vrScale) {
             applyVRScale();
         }
@@ -2428,6 +2458,9 @@ function setupStoreSubscription() {
         // Screen transitions
         if (state.gameState !== prevState.gameState) {
             console.log('[Store Sub] gameState changed:', prevState.gameState, '->', state.gameState);
+            if (state.gameState !== 'COUNTDOWN' && state.gameState !== 'PLAYING') {
+                setGamePaused(false, { focusResume: false });
+            }
             if (state.gameState !== 'ROUND_OVER') {
                 roundOverTimeoutSet = false;
             }
@@ -2580,6 +2613,12 @@ function setupStoreSubscription() {
         // Update HUD
         document.getElementById('p1-score').textContent = state.p1Score;
         document.getElementById('p2-score').textContent = state.p2Score;
+        const gameOverScore = document.getElementById('game-over-score');
+        if (gameOverScore) {
+            const separator = document.createElement('span');
+            separator.textContent = ':';
+            gameOverScore.replaceChildren(String(state.p1Score), separator, String(state.p2Score));
+        }
         const p1Record = document.getElementById('p1-record');
         const p2Record = document.getElementById('p2-record');
         if (p1Record) p1Record.textContent = `W: ${state.p1SessionWins}  L: ${state.p2SessionWins}`;
@@ -2616,13 +2655,24 @@ async function init() {
         const arButton = initAR(renderer);
         arButton.id = 'ARButton';
         document.body.appendChild(arButton);
+        const supportsXRMode = async (mode) => {
+            try {
+                return Boolean(await navigator.xr?.isSessionSupported?.(mode));
+            } catch {
+                return false;
+            }
+        };
+        const [vrSupported, arSupported] = await Promise.all([
+            supportsXRMode('immersive-vr'),
+            supportsXRMode('immersive-ar'),
+        ]);
 
         // Show/hide XR buttons based on store setting
         const updateXRButtons = () => {
             const settings = useGameStore.getState().settings;
             const showAR = settings.arMode === true;
-            vrButton.style.display = showAR ? 'none' : '';
-            arButton.style.display = showAR ? '' : 'none';
+            vrButton.style.display = !showAR && vrSupported ? '' : 'none';
+            arButton.style.display = showAR && arSupported ? '' : 'none';
         };
         updateXRButtons();
 
@@ -2736,7 +2786,8 @@ async function init() {
             onlineNameInput.value = (localStorage.getItem('dropfall_p1name') || 'Player').slice(0, 20);
         }
         ensureOpponentDisconnectOverlay();
-        
+        document.body.dataset.gameState = useGameStore.getState().gameState;
+
         showScreen('menu');
         renderer.setAnimationLoop(animate);
     } catch (error) {

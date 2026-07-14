@@ -1,5 +1,30 @@
 import { createStore } from 'zustand/vanilla';
 
+function readStorage(key) {
+    try {
+        return globalThis.localStorage?.getItem(key) ?? null;
+    } catch {
+        return null;
+    }
+}
+
+function writeStorage(key, value) {
+    try {
+        globalThis.localStorage?.setItem(key, value);
+    } catch {
+        // Storage can be unavailable in private browsing, tests, or locked-down embeds.
+    }
+}
+
+function readJsonStorage(key, fallback) {
+    try {
+        const value = readStorage(key);
+        return value ? JSON.parse(value) : fallback;
+    } catch {
+        return fallback;
+    }
+}
+
 const defaultSettings = {
     theme: 'tron',
     sphereSize: 2.0,
@@ -43,7 +68,7 @@ const defaultSettings = {
     }
 };
 
-const savedSettings = JSON.parse(localStorage.getItem('dropfall_settings')) || {};
+const savedSettings = readJsonStorage('dropfall_settings', {});
 
 // Backward compatibility: map old theme names
 if (savedSettings.theme === 'default') savedSettings.theme = 'tron';
@@ -100,8 +125,8 @@ const createDefaultRaceModeState = () => ({
 export const useGameStore = createStore((set, get) => ({
     // State
     gameState: 'MENU', // 'MENU', 'GAME_MODE_SELECT', 'DIFFICULTY_SELECT', 'NAME_ENTRY', 'COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER', 'ONLINE', 'ONLINE_SETUP'
-    gameMode: localStorage.getItem('dropfall_gamemode') || '2P', // '1P', '2P', or 'ONLINE'
-    difficulty: localStorage.getItem('dropfall_difficulty') || 'normal', // 'easy', 'normal', 'hard'
+    gameMode: readStorage('dropfall_gamemode') || '2P', // '1P', '2P', or 'ONLINE'
+    difficulty: readStorage('dropfall_difficulty') || 'normal', // 'easy', 'normal', 'hard'
     winner: null,
     p1Score: 0,
     p2Score: 0,
@@ -110,12 +135,12 @@ export const useGameStore = createStore((set, get) => ({
     player1Boost: 0,
     player2Boost: 0,
     activeTileEffects: [],
-    p1Name: localStorage.getItem('dropfall_p1name') || 'Player 1',
-    p2Name: localStorage.getItem('dropfall_p2name') || 'Player 2',
-    p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
-    p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
-    p1Color: parseInt(localStorage.getItem('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
-    p2Color: parseInt(localStorage.getItem('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
+    p1Name: readStorage('dropfall_p1name') || 'Player 1',
+    p2Name: readStorage('dropfall_p2name') || 'Player 2',
+    p1Hat: readStorage('dropfall_p1hat') || 'none',
+    p2Hat: readStorage('dropfall_p2hat') || 'none',
+    p1Color: parseInt(readStorage('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
+    p2Color: parseInt(readStorage('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
     selectedLevelId: null,
     selectedLevelData: null,
     race: null,
@@ -147,30 +172,30 @@ export const useGameStore = createStore((set, get) => ({
     // Actions
     updateSetting: (key, value) => set((state) => {
         const newSettings = { ...state.settings, [key]: value };
-        localStorage.setItem('dropfall_settings', JSON.stringify(newSettings));
+        writeStorage('dropfall_settings', JSON.stringify(newSettings));
         return { settings: newSettings };
     }),
 
     resetSettings: () => set(() => {
-        localStorage.setItem('dropfall_settings', JSON.stringify(defaultSettings));
+        writeStorage('dropfall_settings', JSON.stringify(defaultSettings));
         return { settings: defaultSettings };
     }),
 
     setPlayerNames: (p1Name, p2Name) => set(() => {
-        localStorage.setItem('dropfall_p1name', p1Name);
-        localStorage.setItem('dropfall_p2name', p2Name);
+        writeStorage('dropfall_p1name', p1Name);
+        writeStorage('dropfall_p2name', p2Name);
         return { p1Name, p2Name };
     }),
 
     setPlayerHats: (p1Hat, p2Hat) => set(() => {
-        localStorage.setItem('dropfall_p1hat', p1Hat);
-        localStorage.setItem('dropfall_p2hat', p2Hat);
+        writeStorage('dropfall_p1hat', p1Hat);
+        writeStorage('dropfall_p2hat', p2Hat);
         return { p1Hat, p2Hat };
     }),
 
     setPlayerColors: (p1Color, p2Color) => set(() => {
-        localStorage.setItem('dropfall_p1color', p1Color.toString(16));
-        localStorage.setItem('dropfall_p2color', p2Color.toString(16));
+        writeStorage('dropfall_p1color', p1Color.toString(16));
+        writeStorage('dropfall_p2color', p2Color.toString(16));
         return { p1Color, p2Color };
     }),
 
@@ -180,7 +205,7 @@ export const useGameStore = createStore((set, get) => ({
     })),
 
     setGameMode: (mode) => set((state) => {
-        localStorage.setItem('dropfall_gamemode', mode);
+        writeStorage('dropfall_gamemode', mode);
         // All modes go directly to NAME_ENTRY (game settings)
         // For 1P, difficulty selection appears within game settings
         const nextState = 'NAME_ENTRY';
@@ -195,7 +220,7 @@ export const useGameStore = createStore((set, get) => ({
     }),
 
     setDifficulty: (diff) => set(() => {
-        localStorage.setItem('dropfall_difficulty', diff);
+        writeStorage('dropfall_difficulty', diff);
         return { difficulty: diff, gameState: 'NAME_ENTRY' };
     }),
 

@@ -7,6 +7,20 @@ import { isInVR } from './vr/VRSession.js';
 
 export let scene, camera, renderer, composer, ambientLight, directionalLight;
 
+let isMobileRuntime = false;
+let basePixelRatio = 1;
+let currentPixelRatio = 1;
+let performanceWindowStartedAt = 0;
+let performanceFrameCount = 0;
+let lowFpsWindows = 0;
+let highFpsWindows = 0;
+const performanceMetrics = {
+    fps: 60,
+    frameTimeMs: 16.7,
+    pixelRatio: 1,
+    quality: 'high',
+};
+
 function isMobileDevice() {
     const userAgent = navigator.userAgent.toLowerCase();
     return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/.test(userAgent) 
@@ -21,6 +35,7 @@ export function initRenderer() {
     if (renderer) return; // Prevent multiple initializations
 
     const isMobile = isMobileDevice();
+    isMobileRuntime = isMobile;
     
     // 1. Scene
     scene = new THREE.Scene();
@@ -34,12 +49,13 @@ export function initRenderer() {
     // 3. Renderer
     renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: isMobile ? "low-power" : "high-performance", alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(isMobile ? 1.0 : Math.min(window.devicePixelRatio, 2));
+    basePixelRatio = isMobile ? 1.0 : Math.min(window.devicePixelRatio || 1, 2);
+    currentPixelRatio = basePixelRatio;
+    renderer.setPixelRatio(currentPixelRatio);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     // PERFORMANCE: 1024 is sufficient for this game, 2048 is overkill
     const shadowResolution = isMobile ? new THREE.Vector2(512, 512) : new THREE.Vector2(1024, 1024);
-    renderer.shadowMap.resolution = shadowResolution;
     renderer.shadowMap.resolution = shadowResolution;
     renderer.toneMapping = THREE.ReinhardToneMapping;
     
@@ -72,6 +88,7 @@ export function initRenderer() {
     const outputPass = new OutputPass();
 
     composer = new EffectComposer(renderer);
+    composer.setPixelRatio(currentPixelRatio);
     composer.addPass(renderScene);
     
     // PERFORMANCE: Only add bloom on desktop
@@ -103,15 +120,74 @@ export function initRenderer() {
 
     // Handle Resize
     window.addEventListener('resize', onWindowResize);
+    performanceWindowStartedAt = performance.now();
 }
 
 function onWindowResize() {
     if (camera && renderer && composer) {
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
+        basePixelRatio = isMobileRuntime ? 1.0 : Math.min(window.devicePixelRatio || 1, 2);
+        currentPixelRatio = Math.min(currentPixelRatio, basePixelRatio);
+        renderer.setPixelRatio(currentPixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        composer.setPixelRatio(currentPixelRatio);
         composer.setSize(window.innerWidth, window.innerHeight);
+    }
+}
+
+function applyPixelRatio(nextRatio) {
+    if (!renderer || !composer) return;
+    const clampedRatio = Math.max(0.75, Math.min(basePixelRatio, nextRatio));
+    if (Math.abs(clampedRatio - currentPixelRatio) < 0.04) return;
+
+    currentPixelRatio = clampedRatio;
+    renderer.setPixelRatio(currentPixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    composer.setPixelRatio(currentPixelRatio);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    performanceMetrics.pixelRatio = Number(currentPixelRatio.toFixed(2));
+    performanceMetrics.quality = currentPixelRatio >= basePixelRatio - 0.05
+        ? 'high'
+        : currentPixelRatio >= Math.max(1, basePixelRatio * 0.7)
+            ? 'balanced'
+            : 'performance';
+}
+
+function samplePerformance() {
+    const now = performance.now();
+    performanceFrameCount += 1;
+    const elapsed = now - performanceWindowStartedAt;
+    if (elapsed < 2000) return;
+
+    const fps = (performanceFrameCount * 1000) / elapsed;
+    performanceMetrics.fps = Number(fps.toFixed(1));
+    performanceMetrics.frameTimeMs = Number((1000 / Math.max(fps, 1)).toFixed(1));
+    performanceMetrics.pixelRatio = Number(currentPixelRatio.toFixed(2));
+    performanceFrameCount = 0;
+    performanceWindowStartedAt = now;
+
+    // Mobile starts at a conservative 1x buffer. Desktop can trade a small
+    // amount of internal resolution for stable frame pacing under load.
+    if (isMobileRuntime || document.hidden) return;
+
+    if (fps < 50) {
+        lowFpsWindows += 1;
+        highFpsWindows = 0;
+        if (lowFpsWindows >= 2) {
+            applyPixelRatio(currentPixelRatio - 0.15);
+            lowFpsWindows = 0;
+        }
+    } else if (fps > 58) {
+        highFpsWindows += 1;
+        lowFpsWindows = 0;
+        if (highFpsWindows >= 3 && currentPixelRatio < basePixelRatio) {
+            applyPixelRatio(currentPixelRatio + 0.1);
+            highFpsWindows = 0;
+        }
+    } else {
+        lowFpsWindows = 0;
+        highFpsWindows = 0;
     }
 }
 
@@ -123,6 +199,11 @@ export function updateRenderer() {
     } else if (renderer && scene && camera) {
         renderer.render(scene, camera);
     }
+    samplePerformance();
+}
+
+export function getPerformanceMetrics() {
+    return { ...performanceMetrics };
 }
 
 export function setBloomLevel(level) {

@@ -5,6 +5,18 @@ import { getVRInput } from './vr/VRControllers.js';
 
 export const keys = {};
 
+export function resetInputState() {
+    Object.keys(keys).forEach((code) => {
+        keys[code] = false;
+    });
+    gamepadState.forEach((_, index) => {
+        gamepadState[index] = { up: false, down: false, left: false, right: false, boost: false };
+    });
+    touchState.forEach((_, index) => {
+        touchState[index] = { up: false, down: false, left: false, right: false, boost: false };
+    });
+}
+
 // Robust gamepad state
 const gamepadState = [
     { up: false, down: false, left: false, right: false, boost: false },
@@ -24,10 +36,25 @@ export function initInput() {
     initialized = true;
 
     window.addEventListener('keydown', (e) => {
+        const state = useGameStore.getState();
+        const target = e.target;
+        const isEditable = target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement || target?.isContentEditable;
+        const gameplayKeys = new Set([
+            'KeyW', 'KeyA', 'KeyS', 'KeyD',
+            'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight',
+            'ShiftLeft', 'ShiftRight', 'Space'
+        ]);
+        if (!isEditable && (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING') && gameplayKeys.has(e.code)) {
+            e.preventDefault();
+        }
         keys[e.code] = true;
     });
     window.addEventListener('keyup', (e) => {
         keys[e.code] = false;
+    });
+    window.addEventListener('blur', resetInputState);
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) resetInputState();
     });
 
     // Mobile touch controls
@@ -171,6 +198,7 @@ function initTouchControls() {
         touchState[0] = { up: false, down: false, left: false, right: false, boost: false };
         touchState[1] = { up: false, down: false, left: false, right: false, boost: false };
     }, { passive: true });
+    document.addEventListener('touchcancel', resetInputState, { passive: true });
     
     function updateTouchInput(touch) {
         const x = touch.clientX;
@@ -186,8 +214,8 @@ function initTouchControls() {
         // Left side controls left/right, top/bottom controls forward/backward
         touchState[0].left = normX < (0.5 - THRESHOLD);
         touchState[0].right = normX > (0.5 + THRESHOLD);
-        touchState[0].forward = normY < (0.5 - THRESHOLD);
-        touchState[0].backward = normY > (0.5 + THRESHOLD);
+        touchState[0].up = normY < (0.5 - THRESHOLD);
+        touchState[0].down = normY > (0.5 + THRESHOLD);
     }
     
     // Boost button - create it dynamically
