@@ -195,19 +195,31 @@ export class Player {
         // Initialize theme-aware power-up colors
         this.themeAwarePowerUpColors = getThemeAwarePowerUpColors(theme);
 
+        // Read the full store state up front so the material-selection block and
+        // the later hat/nameLabel logic can share a single getState() call.
+        const storeState = useGameStore.getState();
+
         // 1. Three.js Mesh
         const geometry = new THREE.SphereGeometry(this.sphereSize, 16, 16); // PERFORMANCE: Reduced from 32, 32
         const { sphereMaterialParams } = getThemeMaterials(theme);
         const isPattern = isPatternId(this.color);
         const playerDisplayColor = typeof this.color === 'number' ? this.color : getDisplayColor(this.color);
-        
+
         this.iceColor = theme === 'beach' ? 0x0000ff : 0x00ffff;
 
-        if (isPattern && theme === 'default') {
+        // Stage-skin flag: read the per-player persisted toggle by this.id
+        // (mirrors the storeState.p1Hat pattern). Default to ON when the field
+        // is absent — defensive for older persisted state or test stubs.
+        const useStageSkin = (this.id === 'player1' ? storeState.p1UseStageSkin : storeState.p2UseStageSkin) ?? true;
+        // Patterns are themselves a skin, so the stage skin never overrides
+        // them; the default theme never carries a stage skin.
+        const applyThemeSkin = useStageSkin && theme !== 'default' && !isPattern;
+
+        if (isPattern || !applyThemeSkin) {
             const material = createBallMaterial(this.color, this.sphereSize);
             this.mesh = new THREE.Mesh(geometry, material);
             this.baseMaterial = material;
-            this.baseMaterialColor = getDisplayColor(this.color);
+            this.baseMaterialColor = isPattern ? getDisplayColor(this.color) : this.color;
         } else {
             this.baseMaterialColor = theme === 'default' ? this.color : (sphereMaterialParams.color || 0xffffff);
             const material = new THREE.MeshStandardMaterial({
@@ -259,7 +271,6 @@ export class Player {
         this.collider = collider;
 
         // 5. Floating name label (hidden during rounds if player has a hat)
-        const storeState = useGameStore.getState();
         this.playerName = id === 'player1' ? (storeState.p1Name || 'Player 1') : (storeState.p2Name || 'Player 2');
         const hatType = id === 'player1' ? (storeState.p1Hat || 'none') : (storeState.p2Hat || 'none');
         this.hatType = hatType;

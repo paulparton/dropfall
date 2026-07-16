@@ -141,6 +141,8 @@ export const useGameStore = createStore((set, get) => ({
     p2Hat: readStorage('dropfall_p2hat') || 'none',
     p1Color: parseInt(readStorage('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
     p2Color: parseInt(readStorage('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
+    p1UseStageSkin: readStorage('dropfall_p1stagekin') === null ? true : readStorage('dropfall_p1stagekin') === 'true',
+    p2UseStageSkin: readStorage('dropfall_p2stagekin') === null ? true : readStorage('dropfall_p2stagekin') === 'true',
     selectedLevelId: null,
     selectedLevelData: null,
     race: null,
@@ -197,6 +199,12 @@ export const useGameStore = createStore((set, get) => ({
         writeStorage('dropfall_p1color', p1Color.toString(16));
         writeStorage('dropfall_p2color', p2Color.toString(16));
         return { p1Color, p2Color };
+    }),
+
+    setPlayerStageSkins: (p1UseStageSkin, p2UseStageSkin) => set(() => {
+        writeStorage('dropfall_p1stagekin', String(p1UseStageSkin));
+        writeStorage('dropfall_p2stagekin', String(p2UseStageSkin));
+        return { p1UseStageSkin, p2UseStageSkin };
     }),
 
     setSelectedLevel: (id, data) => set(() => ({
@@ -568,6 +576,19 @@ export const useGameStore = createStore((set, get) => ({
 
     setOnlineName: (name) => set((state) => ({
         online: { ...state.online, myName: name }
+    })),
+
+    clearOnlineRoom: () => set((state) => ({
+        online: {
+            ...state.online,
+            currentGame: null,
+            isHost: false,
+            playerSlot: null,
+            opponentConnected: false,
+            opponentInput: null,
+            opponentName: null,
+            ...defaultOnlineSetupState,
+        }
     })),
 
     resetOnlineState: () => set((state) => ({
