@@ -17,6 +17,7 @@ export interface PreviewPlayerState {
   color: number | string;
   hat: string;
   difficulty?: string;
+  useStageSkin?: boolean;
 }
 
 interface PreviewInstance {
@@ -978,6 +979,59 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   });
 
   customSection.appendChild(hatRow);
+
+  // --- STAGE SKIN TOGGLE ---
+  // Per-player "Use Stage Skin" switch (default ON). When OFF the themed
+  // stage ball look is skipped in favour of the player's own skin (see
+  // src/entities/Player.js material block). Reuses the global .switch-control
+  // CSS class from src/style.css; per-card accent colour overrides the
+  // hard-coded cyan so the ON state matches each player's accent.
+  const initialStageSkin = player.useStageSkin
+    ?? (useGameStore.getState() as any)[isP1 ? 'p1UseStageSkin' : 'p2UseStageSkin']
+    ?? true;
+
+  customSection.appendChild(makeSectionLabel('STAGE SKIN'));
+
+  const stageSkinLabel = document.createElement('label');
+  stageSkinLabel.className = 'switch-control';
+  stageSkinLabel.style.color = isP1 ? '#cfe9f0' : '#f3d8c7';
+
+  const stageSkinLabelText = document.createElement('span');
+  stageSkinLabelText.textContent = 'Use Stage Skin';
+  stageSkinLabelText.style.cssText = 'pointer-events: none;';
+
+  const stageSkinInput = document.createElement('input');
+  stageSkinInput.type = 'checkbox';
+  stageSkinInput.checked = initialStageSkin;
+
+  const stageSkinTrack = document.createElement('span');
+  stageSkinTrack.className = 'switch-control__track';
+  stageSkinTrack.style.background = initialStageSkin
+    ? `rgba(${accentRgb},0.32)`
+    : 'rgba(1,7,14,0.65)';
+  stageSkinTrack.style.borderColor = initialStageSkin
+    ? accentCss
+    : `rgba(${accentRgb},0.28)`;
+
+  stageSkinLabel.appendChild(stageSkinInput);
+  stageSkinLabel.appendChild(stageSkinTrack);
+  stageSkinLabel.appendChild(stageSkinLabelText);
+  customSection.appendChild(stageSkinLabel);
+
+  stageSkinInput.onchange = () => {
+    const next = stageSkinInput.checked;
+    stageSkinTrack.style.background = next ? `rgba(${accentRgb},0.32)` : 'rgba(1,7,14,0.65)';
+    stageSkinTrack.style.borderColor = next ? accentCss : `rgba(${accentRgb},0.28)`;
+    const store = useGameStore.getState() as any;
+    if (player.playerId === 'player1') {
+      store.setPlayerStageSkins(next, store.p2UseStageSkin);
+    } else {
+      store.setPlayerStageSkins(store.p1UseStageSkin, next);
+    }
+    player.useStageSkin = next;
+    onPlayerStateChange?.(player.playerId, { useStageSkin: next });
+  };
+
   card.appendChild(customSection);
 
   return card;
