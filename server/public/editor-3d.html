@@ -155,6 +155,81 @@
             color: #0a0e27;
         }
 
+        .level-item-header,
+        .level-item-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .level-item-meta {
+            margin-top: 4px;
+            color: #00aa00;
+            font-size: 9px;
+        }
+
+        .level-item.selected .level-item-meta { color: #154015; }
+
+        .level-status-badge {
+            flex: 0 0 auto;
+            padding: 2px 5px;
+            border: 1px solid currentColor;
+            border-radius: 999px;
+            font-size: 8px;
+            letter-spacing: .08em;
+        }
+
+        .level-status-badge.active { color: #72ffad; }
+        .level-status-badge.draft { color: #809080; }
+        .level-item.selected .level-status-badge { color: #0a0e27; }
+
+        .publish-setting {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            align-items: center;
+            gap: 8px 10px;
+            margin: 10px 0 8px;
+            padding: 10px;
+            color: #a6ffba;
+            background: #0a1a0a;
+            border: 1px solid #00aa00;
+            cursor: pointer;
+        }
+
+        .publish-setting input {
+            width: 18px;
+            height: 18px;
+            margin: 0;
+            accent-color: #00ff65;
+        }
+
+        .publish-setting strong {
+            display: block;
+            font-size: 11px;
+            letter-spacing: .05em;
+        }
+
+        .publish-setting small {
+            grid-column: 2;
+            color: #569566;
+            font-size: 9px;
+            line-height: 1.35;
+        }
+
+        .level-launch-status {
+            min-height: 32px;
+            padding: 7px 8px;
+            color: #719079;
+            background: rgba(0, 0, 0, .2);
+            border-left: 2px solid #405040;
+            font-size: 9px;
+            line-height: 1.4;
+        }
+
+        .level-launch-status.active { color: #88ffb3; border-left-color: #00ff65; }
+        .level-launch-status.warning { color: #ffd777; border-left-color: #ffaa00; }
+
         .help {
             font-size: 9px;
             color: #006600;
@@ -309,6 +384,13 @@
                     <option selected>normal</option>
                     <option>hard</option>
                 </select>
+
+                <label class="publish-setting" for="levelActive">
+                    <input id="levelActive" type="checkbox">
+                    <strong>ACTIVE IN GAME</strong>
+                    <small>Show this arena in the game’s level picker. Draft levels remain editor-only.</small>
+                </label>
+                <div id="levelLaunchStatus" class="level-launch-status">Draft · hidden from the game</div>
 
                 <button onclick="editor.newLevel()">✨ NEW LEVEL</button>
                 <button onclick="editor.clearTiles()">🗑️ CLEAR ALL</button>
@@ -538,6 +620,7 @@
                 this.tileType = 'NORMAL';
                 this.tiles = [];
                 this.currentLevel = null;
+                this.levelSummaries = [];
                 this.hexSize = 8;
                 this.tileRadius = 7;
                 this.tileHeight = 4;
@@ -575,6 +658,9 @@
 
                 this.initThreeJS();
                 this.bindSettingInputs();
+                document.getElementById('levelActive').addEventListener('change', (event) => {
+                    this.updateLaunchStatus(event.target.checked);
+                });
                 this.resetSettingsToDefaults();
                 this.loadLevels();
                 this.animate();
@@ -835,6 +921,8 @@
                 document.getElementById('levelName').value = 'My Arena';
                 document.getElementById('levelDesc').value = '';
                 document.getElementById('levelDiff').value = 'normal';
+                document.getElementById('levelActive').checked = false;
+                this.updateLaunchStatus(false);
                 this.resetSettingsToDefaults();
                 this.redrawTiles();
                 this.updateStatus('New level created', 'success');
@@ -851,12 +939,14 @@
                 const name = document.getElementById('levelName').value || 'Untitled';
                 const desc = document.getElementById('levelDesc').value;
                 const diff = document.getElementById('levelDiff').value;
+                const active = document.getElementById('levelActive').checked;
                 const settings = this.getSettingsFromUI();
 
                 const level = {
                     name,
                     description: desc,
                     difficulty: diff,
+                    active,
                     ...settings,
                     tiles: this.tiles.map(t => ({
                         coord: { q: t.q, r: t.r },
@@ -877,9 +967,12 @@
                     });
 
                     const result = await res.json();
+                    if (!res.ok) throw new Error(result.error || 'Save failed');
                     this.currentLevel = result.id;
-                    this.updateStatus(`Saved: ${name}`, 'success');
-                    this.loadLevels();
+                    this.updateLaunchStatus(result.active, result.launchReady, result.validationIssues);
+                    const qualifier = active && result.launchReady === false ? ' · active with warnings' : active ? ' · active in game' : ' · draft';
+                    this.updateStatus(`Saved: ${name}${qualifier}`, result.launchReady === false && active ? 'info' : 'success');
+                    await this.loadLevels();
                 } catch (err) {
                     this.updateStatus(`Error: ${err.message}`, 'error');
                 }
@@ -889,6 +982,8 @@
                 try {
                     const res = await fetch(`${API_BASE}/levels`);
                     const levels = await res.json();
+                    if (!res.ok) throw new Error(levels.error || 'Failed to load levels');
+                    this.levelSummaries = levels;
                     const list = document.getElementById('levelsList');
                     list.innerHTML = '';
 
@@ -896,7 +991,22 @@
                         const div = document.createElement('div');
                         div.className = 'level-item';
                         if (this.currentLevel === level.id) div.classList.add('selected');
-                        div.innerHTML = `<strong>${level.name}</strong><br>${level.tileCount} tiles`;
+                        const header = document.createElement('div');
+                        header.className = 'level-item-header';
+                        const name = document.createElement('strong');
+                        name.textContent = level.name || 'Untitled';
+                        const badge = document.createElement('span');
+                        badge.className = `level-status-badge ${level.active ? 'active' : 'draft'}`;
+                        badge.textContent = level.active ? 'ACTIVE' : 'DRAFT';
+                        header.append(name, badge);
+                        const meta = document.createElement('div');
+                        meta.className = 'level-item-meta';
+                        const tileCount = document.createElement('span');
+                        tileCount.textContent = `${level.tileCount} tiles`;
+                        const readiness = document.createElement('span');
+                        readiness.textContent = level.launchReady ? 'PLAY CHECK ✓' : 'CHECK WARNINGS';
+                        meta.append(tileCount, readiness);
+                        div.append(header, meta);
                         div.onclick = () => this.loadLevel(level.id);
                         list.appendChild(div);
                     });
@@ -909,6 +1019,7 @@
                 try {
                     const res = await fetch(`${API_BASE}/levels/${id}`);
                     const level = await res.json();
+                    if (!res.ok) throw new Error(level.error || 'Failed to load level');
                     
                     this.currentLevel = id;
                     this.tiles = level.tiles.map(t => ({
@@ -920,6 +1031,10 @@
                     document.getElementById('levelName').value = level.name;
                     document.getElementById('levelDesc').value = level.description;
                     document.getElementById('levelDiff').value = level.difficulty;
+                    const active = typeof level.active === 'boolean' ? level.active : level.isPublic === true;
+                    document.getElementById('levelActive').checked = active;
+                    const summary = this.levelSummaries.find(item => item.id === id);
+                    this.updateLaunchStatus(active, summary?.launchReady, summary?.validationIssues);
                     this.applySettingsToUI(level);
 
                     this.redrawTiles();
@@ -940,6 +1055,7 @@
                     name: document.getElementById('levelName').value,
                     description: document.getElementById('levelDesc').value,
                     difficulty: document.getElementById('levelDiff').value,
+                    active: document.getElementById('levelActive').checked,
                     ...this.getSettingsFromUI(),
                     tiles: this.tiles.map(t => ({
                         coord: { q: t.q, r: t.r },
@@ -1014,6 +1130,7 @@
                     name: level.name || 'Imported Level',
                     description: level.description || '',
                     difficulty: level.difficulty || 'normal',
+                    active: typeof level.active === 'boolean' ? level.active : level.isPublic === true,
                     settings: {
                         ...this.defaultLevelSettings,
                         ...importedSettings
@@ -1050,6 +1167,8 @@
                     document.getElementById('levelName').value = imported.name;
                     document.getElementById('levelDesc').value = imported.description;
                     document.getElementById('levelDiff').value = imported.difficulty;
+                    document.getElementById('levelActive').checked = imported.active;
+                    this.updateLaunchStatus(imported.active);
                     this.applySettingsToUI(imported.settings);
 
                     this.redrawTiles();
@@ -1067,6 +1186,24 @@
                 const color = type === 'error' ? 'color: #ff0000' : type === 'success' ? 'color: #00ff00' : 'color: #00aa00';
                 status.innerHTML = `[${now}] <span style="${color}">${msg}</span><br>` + 
                     status.innerHTML.split('<br>').slice(0, 4).join('<br>');
+            }
+
+            updateLaunchStatus(active, launchReady, issues = []) {
+                const el = document.getElementById('levelLaunchStatus');
+                if (!el) return;
+                el.className = 'level-launch-status';
+                if (!active) {
+                    el.textContent = 'Draft · hidden from the game';
+                    return;
+                }
+                if (launchReady === false) {
+                    el.classList.add('warning');
+                    const firstIssue = Array.isArray(issues) && issues.length > 0 ? ` · ${issues[0]}` : '';
+                    el.textContent = `Active · selectable with playability warnings${firstIssue}`;
+                    return;
+                }
+                el.classList.add('active');
+                el.textContent = launchReady === true ? 'Active · available in the game picker' : 'Active · save to refresh playability checks';
             }
 
             onWindowResize() {

@@ -10,7 +10,7 @@ import { createArcticSkyMaterial } from './arctic-sky.js';
 import { createInfernoSkyMaterial } from './inferno-sky.js';
 
 export const SHADER_THEMES = {
-    tron: 'TRON (Cyber)',
+    tron: 'Star Circuit',
     beach: 'Beach',
     temple: 'Temple (Aztec)',
     arctic: 'Arctic',

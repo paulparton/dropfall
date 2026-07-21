@@ -13,6 +13,13 @@ import { createCharacterPreviewPanel, destroyPreviewPanel, getSelectedPreviewLev
 import { createOnlineSetupPanel } from './components/OnlineSetupPanel';
 import { getLevelById } from './levels/levelProvider.js';
 import { hexToPixel } from './utils/math.js';
+import { getHatDefinition, HAT_VALUES } from './utils/hatCatalog.js';
+import {
+    MATCH_PRESETS,
+    MATCH_SETTING_FIELDS,
+    MATCH_THEMES,
+    formatMatchSettingValue,
+} from '../shared/matchSettings.js';
 
 // Wrapper functions that use InputHandler when available, fallback to legacy input
 function getPlayer1InputUnified() {
@@ -35,6 +42,7 @@ import { Arena } from './entities/Arena.js';
 import { ParticleSystem } from './entities/ParticleSystem.js';
 import { LightningSystem } from './entities/LightningSystem.js';
 import { ShockwaveSystem } from './entities/ShockwaveSystem.js';
+import { GameFeelSystem } from './systems/GameFeelSystem.js';
 import { initAudio, playMusic, playCollisionSound, setMusicSpeed, setMusicVolume, setSfxVolume, updateRollingSound } from './audio.js';
 import { POWER_UP_EFFECTS } from './entities/Player.js';
 import { AIController } from './ai/AIController.js';
@@ -63,11 +71,9 @@ function generateRandomBallWithHat() {
     ];
     
     // Available hats
-    const hats = ['none', 'santa', 'cowboy', 'afro', 'crown', 'dunce'];
-    
     // Pick random color and hat
     const randomColor = ballColors[Math.floor(Math.random() * ballColors.length)];
-    const randomHat = hats[Math.floor(Math.random() * hats.length)];
+    const randomHat = HAT_VALUES[Math.floor(Math.random() * HAT_VALUES.length)];
     
     return { color: randomColor, hat: randomHat };
 }
@@ -104,20 +110,11 @@ function createBallWithHatCanvas(color, hat) {
     ctx.fill();
     
     // Draw hat icons above the ball
-    const hatEmojis = {
-        'none': '',
-        'santa': '🎅',
-        'cowboy': '🤠',
-        'afro': '🟤',
-        'crown': '👑',
-        'dunce': '📐'
-    };
-    
     if (hat !== 'none') {
         ctx.font = 'bold 40px Arial';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
-        ctx.fillText(hatEmojis[hat], ballX, ballY - ballRadius - 5);
+        ctx.fillText(getHatDefinition(hat)?.icon || '🎩', ballX, ballY - ballRadius - 5);
     }
     
     return canvas.toDataURL();
@@ -226,6 +223,7 @@ let preOverrideSettings = null;
 const clock = new THREE.Clock();
 let collisionCooldown = 0;
 let sceneFlashLight;
+const gameFeel = new GameFeelSystem();
 let winTimer = 0;
 let pendingWinner = null;
 let countdownTimer = 3.0;
@@ -317,20 +315,55 @@ function restorePreOverrideSettings() {
 
 function getSpawnableTiles(currentArena) {
     if (!currentArena?.tiles?.length) return [];
-    return currentArena.tiles.filter(tile => tile && tile.mesh && tile.state !== 'FALLING');
+    return currentArena.tiles.filter(tile => tile && tile.mesh && tile.state !== 'FALLING' && tile.state !== 'WARNING');
 }
 
-function pickUniqueSpawnTiles(currentArena, count = 2) {
-    const spawnableTiles = getSpawnableTiles(currentArena);
-    if (spawnableTiles.length === 0) return [];
+function getHexDistanceBetweenTiles(a, b) {
+    const aS = -a.q - a.r;
+    const bS = -b.q - b.r;
+    return Math.max(Math.abs(a.q - b.q), Math.abs(a.r - b.r), Math.abs(aS - bS));
+}
 
-    const shuffled = [...spawnableTiles];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+function pickSafeSpawnTiles(currentArena, preferSideSplit = true) {
+    const spawnableTiles = getSpawnableTiles(currentArena);
+    if (spawnableTiles.length < 2) return [];
+
+    const tileMap = new Map(spawnableTiles.map(tile => [`${tile.q},${tile.r}`, tile]));
+    const directions = [[1, 0], [1, -1], [0, -1], [-1, 0], [-1, 1], [0, 1]];
+    const neighborCounts = new Map();
+    for (const tile of spawnableTiles) {
+        neighborCounts.set(tile, directions.filter(([dq, dr]) => tileMap.get(`${tile.q + dq},${tile.r + dr}`)?.state === 'NORMAL').length);
+    }
+    const wellSupportedCandidates = spawnableTiles.filter(tile => tile.state === 'NORMAL' && neighborCounts.get(tile) >= 4);
+    const stableCandidates = spawnableTiles.filter(tile => {
+        if (tile.state !== 'NORMAL') return false;
+        return neighborCounts.get(tile) >= 2;
+    });
+    const candidates = wellSupportedCandidates.length >= 2
+        ? wellSupportedCandidates
+        : stableCandidates.length >= 2 ? stableCandidates : spawnableTiles;
+    let bestPair = null;
+    let bestScore = Number.NEGATIVE_INFINITY;
+
+    for (let i = 0; i < candidates.length; i++) {
+        for (let j = i + 1; j < candidates.length; j++) {
+            const first = candidates[i];
+            const second = candidates[j];
+            const distance = getHexDistanceBetweenTiles(first, second);
+            const firstX = getTileWorldX(first);
+            const secondX = getTileWorldX(second);
+            const sideSplitBonus = preferSideSplit && firstX * secondX < 0 ? 100 : 0;
+            const supportBonus = (neighborCounts.get(first) + neighborCounts.get(second)) * 5;
+            const edgePenalty = (first.distanceToCenter + second.distanceToCenter) * 2;
+            const score = distance * 20 + supportBonus + sideSplitBonus - edgePenalty;
+            if (score > bestScore) {
+                bestScore = score;
+                bestPair = [first, second];
+            }
+        }
     }
 
-    return shuffled.slice(0, Math.min(count, shuffled.length));
+    return bestPair || [];
 }
 
 function spawnPositionFromTile(tile, sphereRadius) {
@@ -344,58 +377,19 @@ function getTileWorldX(tile) {
 }
 
 function getPlayerSpawnPositions(currentArena, sphereRadius, options = {}) {
-    const { preferSideSplit = false } = options;
+    const { preferSideSplit = true } = options;
     const fallbackSpawns = [
         { x: -15, y: 4, z: 0 },
         { x: 15, y: 4, z: 0 }
     ];
 
-    if (preferSideSplit) {
-        const spawnableTiles = getSpawnableTiles(currentArena);
-        if (spawnableTiles.length < 2) {
-            console.warn('[Spawn] Not enough valid tiles for side-split spawns, using fallback spawns.');
-            return fallbackSpawns;
-        }
-
-        const tilesWithX = spawnableTiles.map(tile => ({ tile, x: getTileWorldX(tile) }));
-        const leftTiles = tilesWithX.filter(entry => entry.x < 0);
-        const rightTiles = tilesWithX.filter(entry => entry.x > 0);
-
-        let selectedTiles = null;
-        if (leftTiles.length > 0 && rightTiles.length > 0) {
-            const leftTile = leftTiles[Math.floor(Math.random() * leftTiles.length)].tile;
-            const rightTile = rightTiles[Math.floor(Math.random() * rightTiles.length)].tile;
-            selectedTiles = [leftTile, rightTile];
-        } else {
-            const sortedTiles = [...tilesWithX].sort((a, b) => a.x - b.x);
-            const leftMost = sortedTiles[0];
-            const rightMost = sortedTiles[sortedTiles.length - 1];
-
-            if (leftMost.x >= rightMost.x) {
-                console.warn('[Spawn] Could not find ordered side-split tiles, using fallback spawns.');
-                return fallbackSpawns;
-            }
-
-            selectedTiles = [leftMost.tile, rightMost.tile];
-        }
-
-        const p1Spawn = spawnPositionFromTile(selectedTiles[0], sphereRadius);
-        const p2Spawn = spawnPositionFromTile(selectedTiles[1], sphereRadius);
-        if (p1Spawn.x >= p2Spawn.x) {
-            console.warn('[Spawn] Side-split tile ordering failed, using fallback spawns.');
-            return fallbackSpawns;
-        }
-
-        return [p1Spawn, p2Spawn];
-    }
-
-    const tiles = pickUniqueSpawnTiles(currentArena, 2);
+    const tiles = pickSafeSpawnTiles(currentArena, preferSideSplit);
     if (tiles.length < 2) {
-        console.warn('[Spawn] Not enough valid tiles for unique spawn positions, using fallback spawns.');
+        console.warn('[Spawn] No safe separated spawn pair, using fallback spawns.');
         return fallbackSpawns;
     }
-
-    return tiles.map(tile => spawnPositionFromTile(tile, sphereRadius));
+    const orderedTiles = [...tiles].sort((a, b) => getTileWorldX(a) - getTileWorldX(b));
+    return orderedTiles.map(tile => spawnPositionFromTile(tile, sphereRadius));
 }
 
 function cleanupOnlineSetupPanel() {
@@ -961,9 +955,7 @@ function resetEntities() {
     shockwaves = new ShockwaveSystem();
 
     const sphereRadius = state.settings?.sphereSize ?? 2;
-    const [p1Spawn, p2Spawn] = getPlayerSpawnPositions(arena, sphereRadius, {
-        preferSideSplit: state.gameMode === '2P'
-    });
+    const [p1Spawn, p2Spawn] = getPlayerSpawnPositions(arena, sphereRadius, { preferSideSplit: true });
 
     // Players - use unified input handler and store colors
     player1 = new Player('player1', effectiveP1Color || 0xff4444, p1Spawn, getPlayer1InputUnified);
@@ -992,6 +984,10 @@ function resetOnlineEntities() {
     shockwaves?.cleanup();
 
     const state = useGameStore.getState();
+    // Online customization previews communicate exact player identity colors.
+    // Stage-specific sphere skins are an offline opt-in and must not replace
+    // those colors after the match starts.
+    useGameStore.setState({ p1UseStageSkin: false, p2UseStageSkin: false });
     remotePlayerTargetPosition = null;
     lastSentTileStates = new Map();
     const mySlot = state.online?.playerSlot;
@@ -1280,7 +1276,8 @@ function setupButtonHandlers() {
                 online.sendRematchRequest();
                 const restartBtn = document.getElementById('restart-btn');
                 if (restartBtn) {
-                    restartBtn.textContent = 'Rematch Requested';
+                    const isNextSettingsPicker = currentState.online?.currentGame?.settingsPickerId === currentState.online?.playerId;
+                    restartBtn.textContent = isNextSettingsPicker ? 'Waiting for Opponent' : 'Waiting for Settings Picker';
                     restartBtn.disabled = true;
                     restartBtn.style.opacity = '0.6';
                 }
@@ -1445,18 +1442,37 @@ function setupButtonHandlers() {
     });
 
     // Settings sliders
+    const matchSettingsMap = Object.fromEntries(MATCH_SETTING_FIELDS.map(field => [field.id, field.key]));
     const settingsMap = {
-        'sphere-size': 'sphereSize', 'sphere-weight': 'sphereWeight', 'sphere-accel': 'sphereAccel',
-        'collision-bounce': 'collisionBounce', 'arena-size': 'arenaSize', 'destruction-rate': 'destructionRate',
-        'ice-rate': 'iceRate',
-        'bonus-rate': 'bonusRate', 'bonus-duration': 'bonusDuration', 'music-volume': 'musicVolume',
+        ...matchSettingsMap,
+        'music-volume': 'musicVolume',
         'sfx-volume': 'sfxVolume', 'particle-amount': 'particleAmount', 'bloom-level': 'bloomLevel',
-        'boost-regen-speed': 'boostRegenSpeed', 'boost-drain-rate': 'boostDrainRate',
         'player-aura-size': 'playerAuraSize', 'player-aura-opacity': 'playerAuraOpacity',
         'player-glow-intensity': 'playerGlowIntensity', 'player-glow-range': 'playerGlowRange',
         'vr-scale': 'vrScale',
         'ar-height': 'arHeight'
     };
+
+    // The global settings panel and online room both render from the same schema.
+    for (const field of MATCH_SETTING_FIELDS) {
+        const input = document.getElementById(field.id);
+        const label = document.querySelector(`label[for="${field.id}"]`);
+        if (input) {
+            input.min = String(field.min);
+            input.max = String(field.max);
+            input.step = String(field.step);
+        }
+        if (label) label.textContent = field.label;
+    }
+    const themeSelect = document.getElementById('theme-select');
+    if (themeSelect) {
+        themeSelect.replaceChildren(...MATCH_THEMES.map(theme => {
+            const option = document.createElement('option');
+            option.value = theme.value;
+            option.textContent = theme.label;
+            return option;
+        }));
+    }
 
     for (const [id, key] of Object.entries(settingsMap)) {
         const el = document.getElementById(id);
@@ -1464,7 +1480,8 @@ function setupButtonHandlers() {
         if (el && valEl) {
             el.addEventListener('input', (e) => {
                 const val = parseFloat(e.target.value);
-                valEl.textContent = val;
+                const field = MATCH_SETTING_FIELDS.find(item => item.id === id);
+                valEl.textContent = field ? formatMatchSettingValue(field, val) : val;
                 useGameStore.getState().updateSetting(key, val);
 
                 // Update audio volume in real-time
@@ -1484,7 +1501,10 @@ function setupButtonHandlers() {
                 const val = settings[key];
                 if (typeof val === 'number') {
                     el.value = val;
-                    if (valEl) valEl.textContent = val;
+                    if (valEl) {
+                        const field = MATCH_SETTING_FIELDS.find(item => item.id === id);
+                        valEl.textContent = field ? formatMatchSettingValue(field, val) : val;
+                    }
                 }
             }
         }
@@ -1526,90 +1546,7 @@ function setupButtonHandlers() {
         const stored = localStorage.getItem('dropfall_presets');
         if (stored) return JSON.parse(stored);
         
-        // Initialize with default presets.
-        // Rate slider values are "intensity" (higher = more frequent effect).
-        const defaults = {
-            'Slow & Bouncy': {
-                sphereAccel: 800,
-                collisionBounce: 1.5,
-                sphereWeight: 50,
-                destructionRate: 4.5,
-                iceRate: 6.5,
-                bonusRate: 7.0
-            },
-            'Fast & Heavy': {
-                sphereAccel: 3000,
-                collisionBounce: 0.5,
-                sphereWeight: 400,
-                destructionRate: 9.0,
-                iceRate: 9.5,
-                bonusRate: 14.0
-            },
-            'Tiny Spheres': {
-                sphereSize: 0.8,
-                sphereAccel: 2500,
-                sphereWeight: 80,
-                destructionRate: 7.5,
-                iceRate: 8.5,
-                bonusRate: 12.0
-            },
-            'Massive Spheres': {
-                sphereSize: 4.5,
-                sphereWeight: 500,
-                sphereAccel: 1200,
-                collisionBounce: 0.3,
-                destructionRate: 6.5,
-                iceRate: 7.5,
-                bonusRate: 9.0
-            },
-            'Chaos Mode': {
-                sphereAccel: 2800,
-                collisionBounce: 1.3,
-                sphereWeight: 150,
-                destructionRate: 9.7,
-                iceRate: 9.7,
-                bonusRate: 15.0,
-                bonusDuration: 2.0
-            },
-            'Zen Mode': {
-                sphereAccel: 1200,
-                collisionBounce: 0.8,
-                sphereWeight: 150,
-                destructionRate: 2.5,
-                iceRate: 4.5,
-                bonusRate: 5.0,
-                bonusDuration: 6.0
-            },
-            'Big Arena': {
-                arenaSize: 8,
-                destructionRate: 6.5,
-                iceRate: 7.5,
-                bonusRate: 9.0
-            },
-            'Tiny Arena': {
-                arenaSize: 2,
-                destructionRate: 8.5,
-                iceRate: 9.0,
-                bonusRate: 13.0
-            },
-            'Party Mode': {
-                destructionRate: 9.5,
-                iceRate: 9.5,
-                bonusRate: 14.5,
-                bonusDuration: 3.0,
-                sphereAccel: 2500,
-                collisionBounce: 1.2
-            },
-            'Gladiator': {
-                sphereSize: 3.5,
-                sphereWeight: 350,
-                sphereAccel: 2000,
-                collisionBounce: 1.4,
-                destructionRate: 8.0,
-                iceRate: 8.5,
-                bonusRate: 12.0
-            }
-        };
+        const defaults = Object.fromEntries(MATCH_PRESETS.map(preset => [preset.label, { ...preset.settings }]));
         
         savePresets(defaults);
         return defaults;
@@ -1634,12 +1571,19 @@ function setupButtonHandlers() {
                 presetList.innerHTML = '<div style="color: #666; font-size: 0.85rem; padding: 0.5rem;">No presets saved yet</div>';
                 return;
             }
-            presetList.innerHTML = names.map(name => `
-                <div class="preset-item">
-                    <button class="preset-load-btn">${name}</button>
-                    <button class="preset-delete-btn" data-name="${name}">×</button>
-                </div>
-            `).join('');
+            presetList.replaceChildren(...names.map(name => {
+                const item = document.createElement('div');
+                item.className = 'preset-item';
+                const load = document.createElement('button');
+                load.className = 'preset-load-btn';
+                load.textContent = name;
+                const remove = document.createElement('button');
+                remove.className = 'preset-delete-btn';
+                remove.dataset.name = name;
+                remove.textContent = '×';
+                item.append(load, remove);
+                return item;
+            }));
             
             presetList.querySelectorAll('.preset-load-btn').forEach((btn, i) => {
                 const name = names[i];
@@ -1745,6 +1689,8 @@ function setupButtonHandlers() {
 // ONLINE EVENT HANDLERS
 // ============================================
 function setupOnlineHandlers() {
+    let lastLobbyGamesSignature = null;
+
     online.on('connected', () => {
         online.setName(document.getElementById('online-name-input')?.value.trim() || 'Player');
         document.getElementById('online-connect-status').textContent = 'Connected';
@@ -1767,28 +1713,78 @@ function setupOnlineHandlers() {
 
     online.on('gamesUpdated', (games) => {
         const list = document.getElementById('online-games-list');
+        const roomCount = document.getElementById('online-room-count');
         if (!list) return;
-        
-        if (games.length === 0) {
-            list.innerHTML = '<div class="online-empty">No games available. Create one!</div>';
-        } else {
-            list.innerHTML = games.map(g => `
-                <div class="online-game-item" data-game-id="${g.id}">
-                    <div class="online-game-info">
-                        <h4>${g.hostName}'s Game</h4>
-                        <p>${g.playerCount}/${g.maxPlayers} players | ${g.settings.theme}</p>
-                    </div>
-                    <span class="online-join-btn">JOIN</span>
-                </div>
-            `).join('');
-            
-            list.querySelectorAll('.online-game-item').forEach(item => {
-                item.addEventListener('click', () => {
-                    online.joinGame(item.dataset.gameId);
-                    document.getElementById('online-joining')?.classList.remove('hidden');
-                });
-            });
+
+        const visibleGames = Array.isArray(games) ? games : [];
+        if (roomCount) {
+            const openCount = visibleGames.filter((game) => game.playerCount < game.maxPlayers).length;
+            roomCount.textContent = `${openCount} open · ${visibleGames.length} total`;
         }
+
+        // The server publishes room availability periodically. Keep the existing
+        // controls mounted when nothing changed so pointer and focus interactions
+        // are not interrupted by a background refresh.
+        const lobbyGamesSignature = JSON.stringify(visibleGames);
+        if (lobbyGamesSignature === lastLobbyGamesSignature) return;
+        lastLobbyGamesSignature = lobbyGamesSignature;
+
+        list.replaceChildren();
+        if (visibleGames.length === 0) {
+            const empty = document.createElement('div');
+            empty.className = 'online-no-games';
+            const icon = document.createElement('span');
+            icon.textContent = '⌁';
+            const heading = document.createElement('strong');
+            heading.textContent = 'No open rooms';
+            const copy = document.createElement('p');
+            copy.textContent = 'Create a room to become the host.';
+            empty.append(icon, heading, copy);
+            list.append(empty);
+            return;
+        }
+
+        visibleGames.forEach((game) => {
+            const item = document.createElement('article');
+            item.className = 'online-room-list-item';
+            if (game.isServerLobby) item.classList.add('online-room-list-item--quick');
+
+            const marker = document.createElement('div');
+            marker.className = 'online-room-list-item__marker';
+            marker.textContent = game.isServerLobby ? 'Q' : String(game.hostName || 'H').charAt(0).toUpperCase();
+
+            const info = document.createElement('div');
+            info.className = 'online-room-list-item__info';
+            const title = document.createElement('h3');
+            title.textContent = game.isServerLobby ? 'Quick Match' : `${game.hostName || 'Host'}'s Room`;
+            const description = document.createElement('p');
+            description.textContent = game.isServerLobby ? 'Server-managed rules · starts when both players are ready' : 'Private room · host-controlled rules';
+            const tags = document.createElement('div');
+            tags.className = 'online-room-list-item__tags';
+            const themeTag = document.createElement('span');
+            themeTag.textContent = MATCH_THEMES.find((theme) => theme.value === String(game.settings?.theme || 'tron'))?.label.toUpperCase() || 'STAR CIRCUIT';
+            const sizeTag = document.createElement('span');
+            sizeTag.textContent = `${game.settings?.arenaSize || 4} RINGS`;
+            const playerTag = document.createElement('span');
+            playerTag.textContent = `${game.playerCount}/${game.maxPlayers} PLAYERS`;
+            tags.append(themeTag, sizeTag, playerTag);
+            info.append(title, description, tags);
+
+            const joinButton = document.createElement('button');
+            joinButton.type = 'button';
+            joinButton.className = 'online-room-list-item__join';
+            const isFull = game.playerCount >= game.maxPlayers;
+            joinButton.disabled = isFull;
+            joinButton.textContent = isFull ? 'Full' : 'Join Room';
+            joinButton.addEventListener('click', () => {
+                joinButton.disabled = true;
+                joinButton.textContent = 'Joining…';
+                online.joinGame(game.id);
+            });
+
+            item.append(marker, info, joinButton);
+            list.append(item);
+        });
     });
 
     online.on('gameCreated', (game) => {
@@ -1826,7 +1822,8 @@ function setupOnlineHandlers() {
             state.setPlayerNames(opponentName, myName);
         }
         
-        document.getElementById('online-game-info').innerHTML = `<p>Player joined: ${opponentName}</p>`;
+        const gameInfo = document.getElementById('online-game-info');
+        if (gameInfo) gameInfo.textContent = `Player joined: ${opponentName}`;
         if (isHost) {
             console.log('[playerJoined] Host detected, showing start button');
             document.getElementById('online-start-btn')?.classList.remove('hidden');
@@ -1834,14 +1831,15 @@ function setupOnlineHandlers() {
             document.getElementById('online-joining')?.classList.add('hidden');
             document.getElementById('online-my-game')?.classList.remove('hidden');
             document.getElementById('online-my-game').style.borderColor = '#ffff00';
-            document.getElementById('online-game-info').innerHTML = '<p>Waiting for host to start...</p>';
+            if (gameInfo) gameInfo.textContent = 'Waiting for host to start...';
             document.getElementById('online-start-btn')?.classList.add('hidden');
         }
     });
 
     online.on('playerLeft', () => {
         const isHost = useGameStore.getState().online.isHost;
-        document.getElementById('online-game-info').innerHTML = '<p>Player left</p>';
+        const gameInfo = document.getElementById('online-game-info');
+        if (gameInfo) gameInfo.textContent = 'Player left';
         if (isHost) document.getElementById('online-start-btn')?.classList.add('hidden');
     });
 
@@ -2022,6 +2020,7 @@ function setupOnlineHandlers() {
                         const wasFalling = tile.state === 'FALLING';
                         tile.state = tileUpdate.state;
                         tile.timer = tileUpdate.timer;
+                        tile.powerUpType = tileUpdate.powerUpType || null;
                         if (tileUpdate.state === 'FALLING' && !wasFalling) {
                             arena.hideTile(tileUpdate.q, tileUpdate.r);
                         }
@@ -2049,6 +2048,7 @@ function setupOnlineHandlers() {
 function animate(_timestamp, _frame) {
     const delta = Math.min(clock.getDelta(), 0.1);
     const state = useGameStore.getState();
+    gameFeel.beginFrame(camera);
 
     // Dev-only snapshot for e2e/interaction tests. Pruned from production builds by Vite.
     if (import.meta.env && import.meta.env.DEV) {
@@ -2094,6 +2094,7 @@ function animate(_timestamp, _frame) {
 
     // Game states
     if (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING') {
+        collisionCooldown = Math.max(0, collisionCooldown - delta);
         const isOnlineMatch = state.gameMode === 'ONLINE';
         const isOnlineClient = isOnlineMatch && !state.online.isHost;
 
@@ -2154,17 +2155,27 @@ function animate(_timestamp, _frame) {
 
                 const dir1 = new THREE.Vector3().subVectors(p1Pos, p2Pos).normalize();
                 const bounce = (1500 + relVel * 10) * (player1.isBoosting || player2.isBoosting ? 1.5 : 1.0);
-                player1.rigidBody.applyImpulse({ x: dir1.x * bounce, y: 0, z: dir1.z * bounce }, true);
-                player2.rigidBody.applyImpulse({ x: -dir1.x * bounce, y: 0, z: -dir1.z * bounce }, true);
+                if (!player1.isInvulnerable) player1.rigidBody.applyImpulse({ x: dir1.x * bounce, y: 0, z: dir1.z * bounce }, true);
+                if (!player2.isInvulnerable) player2.rigidBody.applyImpulse({ x: -dir1.x * bounce, y: 0, z: -dir1.z * bounce }, true);
 
-                particles?.emit(new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5), { x: 0, y: 10, z: 0 }, 0xff4400, Math.floor(15 * intensity));
+                const impactPosition = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
+                const boostedImpact = player1.isBoosting || player2.isBoosting;
+                particles?.emit(impactPosition, { x: 0, y: 10, z: 0 }, boostedImpact ? 0xffd63d : 0xff6b76, Math.floor(18 * intensity));
+                shockwaves?.emit(impactPosition, boostedImpact ? 0xffd63d : 0x72e4d2, Math.min(intensity, 3));
                 player1.glow.intensity = 10 * intensity;
                 player2.glow.intensity = 10 * intensity;
-                
-                if (player1.isBoosting || player2.isBoosting) {
-                    lightning?.emit(new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5), intensity);
+                if (sceneFlashLight) {
+                    sceneFlashLight.position.copy(impactPosition).add(new THREE.Vector3(0, 5, 0));
+                    sceneFlashLight.color.setHex(boostedImpact ? 0xffd63d : 0xffffff);
+                    sceneFlashLight.intensity = 18 * intensity;
                 }
-                playCollisionSound(intensity);
+                gameFeel.triggerImpact(impactPosition, camera, intensity, boostedImpact);
+                
+                if (boostedImpact) {
+                    lightning?.emit(impactPosition, intensity);
+                }
+                const arenaPanRange = Math.max(18, Number(state.settings.arenaSize || 4) * 8);
+                playCollisionSound(intensity, impactPosition.x / arenaPanRange, boostedImpact);
             }
 
             if (player1.glow.intensity > 1) player1.glow.intensity -= delta * 10;
@@ -2172,12 +2183,14 @@ function animate(_timestamp, _frame) {
             if (sceneFlashLight?.intensity > 0) sceneFlashLight.intensity -= delta * 40;
 
             // Frame-rate independent camera movement (constant speed, not delta-dependent)
-            const targetCamPos = new THREE.Vector3(p1Pos.x, Math.max(24, distance * 0.96), p1Pos.z + Math.max(24, distance * 0.96));
+            const centerPos = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
+            const arenaFraming = Math.max(26, Number(state.settings.arenaSize || 4) * 5.4, distance * 0.96);
+            const targetCamPos = new THREE.Vector3(centerPos.x, arenaFraming, centerPos.z + arenaFraming);
             const camSpeed = 0.08; // Interpolation factor per frame (0-1)
             camera.position.lerp(targetCamPos, camSpeed);
             
             // Smooth camera lookAt target
-            const targetLookAt = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
+            const targetLookAt = centerPos;
             if (!camera.userData.lookAtTarget) camera.userData.lookAtTarget = targetLookAt.clone();
             camera.userData.lookAtTarget.lerp(targetLookAt, camSpeed);
             camera.lookAt(camera.userData.lookAtTarget);
@@ -2199,7 +2212,7 @@ function animate(_timestamp, _frame) {
             const distance = p1Pos.distanceTo(p2Pos);
 
             // Match host camera behavior while ensuring the online client tracks active gameplay.
-            const camOffset = Math.max(24, distance * 0.96);
+            const camOffset = Math.max(26, Number(state.settings.arenaSize || 4) * 5.4, distance * 0.96);
             const targetCamPos = new THREE.Vector3(centerPos.x, camOffset, centerPos.z + camOffset);
             const camSpeed = 0.08;
             camera.position.lerp(targetCamPos, camSpeed);
@@ -2334,12 +2347,13 @@ function animate(_timestamp, _frame) {
                 if (winnerPlayer && !winnerPlayer.isDead && winnerPlayer.mesh) {
                     const t = clock.getElapsedTime();
                     const pos = winnerPlayer.mesh.position;
+                    const victoryRadius = Math.max(12, Number(state.settings.sphereSize || 2) * 6);
                     camera.position.set(
-                        pos.x + 6 * Math.cos(t * 0.5),
-                        pos.y + 3,
-                        pos.z + 6 * Math.sin(t * 0.5)
+                        pos.x + victoryRadius * Math.cos(t * 0.32),
+                        pos.y + victoryRadius * 0.62,
+                        pos.z + victoryRadius * Math.sin(t * 0.32)
                     );
-                    camera.lookAt(pos);
+                    camera.lookAt(pos.x, pos.y + Number(state.settings.sphereSize || 2) * 0.35, pos.z);
                     if (Math.random() > 0.9) particles?.emit(pos, { x: 0, y: 10, z: 0 }, winnerPlayer.color, 5);
                 } else {
                     // Winner missing/dead: keep camera centered on arena.
@@ -2379,6 +2393,7 @@ function animate(_timestamp, _frame) {
         vrUI.status.sprite.visible = false;
     }
 
+    if (!isInVR()) gameFeel.finishFrame(camera, delta);
     updateRenderer();
 }
 
@@ -2578,12 +2593,15 @@ function setupStoreSubscription() {
                     if (state.gameMode === 'ONLINE') {
                         const rematchRequested = Boolean(state.online?.rematchRequested);
                         const opponentRematchRequested = Boolean(state.online?.opponentRematchRequested);
-                        document.getElementById('restart-btn').textContent = rematchRequested ? 'Rematch Requested' : 'Rematch';
+                        const isNextSettingsPicker = state.online?.currentGame?.settingsPickerId === state.online?.playerId;
+                        document.getElementById('restart-btn').textContent = rematchRequested
+                            ? (isNextSettingsPicker ? 'Waiting for Opponent' : 'Waiting for Settings Picker')
+                            : (isNextSettingsPicker ? 'Choose Next Match' : 'View Next Match Settings');
                         document.getElementById('restart-btn').disabled = rematchRequested;
                         document.getElementById('restart-btn').style.opacity = rematchRequested ? '0.6' : '1';
                         if (opponentRematchRequested) {
                             const winnerEl = document.getElementById('winner-text');
-                            winnerEl.textContent = `${winnerEl.textContent} Opponent wants a rematch.`;
+                            winnerEl.textContent = `${winnerEl.textContent} Opponent is ready to configure the next match.`;
                         }
                     } else {
                         document.getElementById('restart-btn').textContent = 'Play Again';

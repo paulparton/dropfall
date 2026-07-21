@@ -1,11 +1,12 @@
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync } from 'fs';
-import { join, dirname, extname } from 'path';
+import { join, dirname, extname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
 import { networkInterfaces } from 'os';
 import { GameRoom } from './game/GameRoom.js';
+import { isLevelActive, validateLevelForLaunch } from '../shared/levelValidation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -204,12 +205,24 @@ class GameServer {
             return;
         }
 
-        // 5) Static files
-        let filePath = requestPath === '/' ? '/index.html' : requestPath;
-        filePath = join(PUBLIC_DIR, filePath);
+        // 5) Static files. Map the origin root to index.html before resolving the
+        // MIME type so browsers render the game instead of treating it as an
+        // application/octet-stream download.
+        const staticRequestPath = requestPath === '/' ? '/index.html' : requestPath;
+        let decodedStaticPath = staticRequestPath;
+        try {
+            decodedStaticPath = decodeURIComponent(staticRequestPath);
+        } catch {
+            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('Bad Request');
+            return;
+        }
+        const publicRoot = `${resolve(PUBLIC_DIR)}${sep}`;
+        const filePath = resolve(PUBLIC_DIR, decodedStaticPath.replace(/^[/\\]+/, ''));
+        const isPublicFile = filePath.startsWith(publicRoot) && existsSync(filePath) && statSync(filePath).isFile();
 
-        if (existsSync(filePath)) {
-            const ext = extname(requestPath).toLowerCase();
+        if (isPublicFile) {
+            const ext = extname(staticRequestPath).toLowerCase();
             const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
             res.writeHead(200, { 'Content-Type': mimeType });
             res.end(readFileSync(filePath));
@@ -299,12 +312,22 @@ class GameServer {
                     .map((f) => {
                         const fullPath = join(LEVELS_DIR, f);
                         const data = JSON.parse(readFileSync(fullPath, 'utf-8'));
+                        const validation = validateLevelForLaunch(data);
+                        const active = isLevelActive(data);
                         return {
                             id: f.replace('.json', ''),
                             name: data.name,
                             description: data.description,
                             difficulty: data.difficulty,
+                            mode: data.mode === 'race' ? 'race' : 'battle',
                             tileCount: data.tiles?.length || 0,
+                            active,
+                            isPublic: active,
+                            launchReady: validation.launchReady,
+                            validationIssues: validation.issues,
+                            validationWarnings: validation.warnings,
+                            recommendedSpawns: validation.recommendedSpawns,
+                            tiles: active ? data.tiles : undefined,
                             lastModified: statSync(fullPath).mtimeMs,
                         };
                     });
@@ -346,8 +369,10 @@ class GameServer {
                     }
 
                     const id = safeProvidedId || `level_${Date.now()}_${randomBytes(4).toString('hex')}`;
+                    level.active = level.active === true;
                     writeFileSync(join(LEVELS_DIR, `${id}.json`), JSON.stringify(level, null, 2));
-                    sendJson(200, { id, success: true });
+                    const validation = validateLevelForLaunch(level);
+                    sendJson(200, { id, success: true, active: level.active, launchReady: validation.launchReady, validationIssues: validation.issues, validationWarnings: validation.warnings });
                 } catch (err) {
                     sendJson(400, { error: err.message });
                 }
@@ -366,8 +391,10 @@ class GameServer {
                 try {
                     const level = JSON.parse(body);
                     level.id = levelId;
+                    level.active = level.active === true;
                     writeFileSync(join(LEVELS_DIR, `${levelId}.json`), JSON.stringify(level, null, 2));
-                    sendJson(200, { id: levelId, success: true });
+                    const validation = validateLevelForLaunch(level);
+                    sendJson(200, { id: levelId, success: true, active: level.active, launchReady: validation.launchReady, validationIssues: validation.issues, validationWarnings: validation.warnings });
                 } catch (err) {
                     sendJson(400, { error: err.message });
                 }
@@ -433,7 +460,7 @@ class GameServer {
     handleMessage(player, msg) {
         switch (msg.type) {
             case 'set_name':
-                player.name = msg.name.substring(0, 20);
+                player.name = (typeof msg.name === 'string' ? msg.name : 'Player').trim().slice(0, 20) || 'Player';
                 if (msg.isAdmin) {
                     player.isAdmin = true;
                 }
@@ -463,6 +490,10 @@ class GameServer {
 
             case 'start_game':
                 this.startGame(player);
+                break;
+
+            case 'update_game_settings':
+                this.updateGameSettings(player, msg.settings);
                 break;
 
             case 'set_customization':
@@ -585,7 +616,17 @@ class GameServer {
                 slot: playerInfo.slot,
                 customization: this.getDefaultCustomization(playerInfo.slot, player.name),
             },
+            game: room.getPublicGame(),
         }, player.id);
+
+        if (!room.isServerLobby) {
+            this.broadcastToGame(gameId, {
+                type: 'settings_picker_changed',
+                pickerId: room.settingsPickerId,
+                reason: room.settingsPickerReason,
+                game: room.getPublicGame(),
+            });
+        }
 
         this.broadcastStats();
     }
@@ -611,12 +652,20 @@ class GameServer {
             if (room.players.length === 0) {
                 room.destroy();
                 this.games.delete(room.id);
-            } else if (room.hostId === player.id) {
-                room.hostId = room.players[0].id;
-                const hostPlayer = this.players.get(room.players[0].id);
+            } else if (result?.newHostId) {
+                const hostPlayer = this.players.get(result.newHostId);
                 if (hostPlayer) hostPlayer.isHost = true;
                 this.broadcastToGame(room.id, { type: 'new_host', hostId: room.hostId });
             }
+        }
+
+        if (this.games.has(room.id) && !room.isServerLobby) {
+            this.broadcastToGame(room.id, {
+                type: 'settings_picker_changed',
+                pickerId: room.settingsPickerId,
+                reason: room.settingsPickerReason,
+                game: room.getPublicGame(),
+            });
         }
 
         player.currentGame = null;
@@ -624,6 +673,35 @@ class GameServer {
         player.isHost = false;
 
         this.sendToPlayer(player, { type: 'left_game' });
+        this.broadcastStats();
+    }
+
+    updateGameSettings(player, settings) {
+        const room = this.games.get(player.currentGame);
+        if (!room || room.state !== 'LOBBY') {
+            this.sendToPlayer(player, { type: 'error', message: 'Room settings can only be changed in the lobby' });
+            return;
+        }
+        if (room.settingsPickerId !== player.id || room.isServerLobby) {
+            this.sendToPlayer(player, { type: 'error', message: 'Only the selected player can change match settings' });
+            return;
+        }
+
+        const validatedSettings = room.updateSettings(player.id, settings);
+        if (!validatedSettings) {
+            this.sendToPlayer(player, { type: 'error', message: 'Unable to update room settings' });
+            return;
+        }
+
+        this.broadcastToGame(room.id, {
+            type: 'game_settings_updated',
+            settings: validatedSettings,
+            game: room.getPublicGame(),
+        });
+
+        for (const playerInfo of room.players) {
+            this.broadcastReadyState(room, playerInfo);
+        }
         this.broadcastStats();
     }
 
@@ -644,7 +722,7 @@ class GameServer {
             return;
         }
 
-        if (!player.isHost) return;
+        if (room.hostId !== player.id) return;
 
         if (room.players.length < 2) {
             this.sendToPlayer(player, { type: 'error', message: 'Need 2 players to start' });
@@ -803,9 +881,27 @@ class GameServer {
                 this.broadcastStats();
                 return;
             }
+
+            this.broadcastToGame(room.id, {
+                type: 'player_left',
+                playerId: player.id,
+                playerSlot: player.playerSlot,
+            });
+
+            if (room.players.length === 0) {
+                room.destroy();
+                this.games.delete(room.id);
+            } else if (result?.newHostId) {
+                const hostPlayer = this.players.get(result.newHostId);
+                if (hostPlayer) hostPlayer.isHost = true;
+                this.broadcastToGame(room.id, { type: 'new_host', hostId: result.newHostId });
+            }
+
+            player.currentGame = null;
+            player.playerSlot = null;
+            player.isHost = false;
         }
 
-        this.leaveGame(player);
         this.players.delete(player.id);
         this.broadcastStats();
     }
@@ -872,6 +968,13 @@ class GameServer {
                 client.send(JSON.stringify({ type: 'stats', ...stats }));
             }
         });
+
+        const games = this.getPublicGameList();
+        for (const player of this.players.values()) {
+            if (!player.currentGame && player.ws?.readyState === 1) {
+                this.sendToPlayer(player, { type: 'game_list', games });
+            }
+        }
     }
 
     getLanAddresses() {

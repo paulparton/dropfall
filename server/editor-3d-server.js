@@ -20,6 +20,7 @@ import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSy
 import { join, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
+import { isLevelActive, validateLevelForLaunch } from '../shared/levelValidation.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const EDITOR_PORT = process.env.EDITOR_PORT || 3001;
@@ -118,12 +119,19 @@ class Level3DEditorServer {
                     .filter(f => f.endsWith('.json'))
                     .map(f => {
                         const data = JSON.parse(readFileSync(join(LEVELS_DIR, f), 'utf-8'));
+                        const validation = validateLevelForLaunch(data);
                         return {
                             id: f.replace('.json', ''),
                             name: data.name,
                             description: data.description,
                             difficulty: data.difficulty,
+                            mode: data.mode === 'race' ? 'race' : 'battle',
                             tileCount: data.tiles?.length || 0,
+                            active: isLevelActive(data),
+                            launchReady: validation.launchReady,
+                            validationIssues: validation.issues,
+                            validationWarnings: validation.warnings,
+                            tiles: isLevelActive(data) ? data.tiles : undefined,
                             lastModified: statSync(join(LEVELS_DIR, f)).mtimeMs
                         };
                     });
@@ -158,10 +166,12 @@ class Level3DEditorServer {
                 try {
                     const level = JSON.parse(body);
                     const id = level.id || `level_${Date.now()}_${randomBytes(4).toString('hex')}`;
+                    level.active = level.active === true;
                     writeFileSync(join(LEVELS_DIR, `${id}.json`), JSON.stringify(level, null, 2));
+                    const validation = validateLevelForLaunch(level);
                     this.stats.levelsSaved++;
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ id, success: true }));
+                    res.end(JSON.stringify({ id, success: true, active: level.active, launchReady: validation.launchReady, validationIssues: validation.issues, validationWarnings: validation.warnings }));
                 } catch (err) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: err.message }));
@@ -179,9 +189,11 @@ class Level3DEditorServer {
                 try {
                     const level = JSON.parse(body);
                     level.id = id;
+                    level.active = level.active === true;
                     writeFileSync(join(LEVELS_DIR, `${id}.json`), JSON.stringify(level, null, 2));
+                    const validation = validateLevelForLaunch(level);
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ id, success: true }));
+                    res.end(JSON.stringify({ id, success: true, active: level.active, launchReady: validation.launchReady, validationIssues: validation.issues, validationWarnings: validation.warnings }));
                 } catch (err) {
                     res.writeHead(400, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ error: err.message }));

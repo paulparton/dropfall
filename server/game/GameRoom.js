@@ -1,6 +1,7 @@
 import { initPhysics, createWorld } from './PhysicsWorld.js';
 import { ServerArena } from './Arena.js';
 import { ServerPlayer } from './Player.js';
+import { MATCH_DEFAULTS, validateMatchSettings } from '../../shared/matchSettings.js';
 
 const TICK_RATE = 60;
 const BROADCAST_RATE = 20;
@@ -9,31 +10,20 @@ const ROUND_OVER_DELAY_MS = 2000;
 const COUNTDOWN_MS = 3000;
 const WINS_TO_WIN_MATCH = 3;
 
-const DEFAULT_SETTINGS = {
-    theme: 'tron',
-    sphereSize: 2.0,
-    sphereWeight: 200,
-    sphereAccel: 2000,
-    collisionBounce: 0.9,
-    arenaSize: 4,
-    destructionRate: 3.0,
-    iceRate: 2.0,
-    bonusRate: 6.0,
-    bonusDuration: 4.0,
-    boostRegenSpeed: 1.5,
-    boostDrainRate: 20,
-};
-
 export class GameRoom {
     constructor(id, hostId, hostName, settings = {}, options = {}) {
         this.id = id;
         this.hostId = hostId;
         this.hostName = hostName || 'Host';
-        this.settings = this._validateSettings({ ...DEFAULT_SETTINGS, ...settings });
+        this.settings = this._validateSettings({ ...MATCH_DEFAULTS, ...settings });
         this.isServerLobby = !!(options && options.isServerLobby);
+        this.random = typeof options?.random === 'function' ? options.random : Math.random;
 
         this.players = []; // { id, name, slot, ready, rematchRequested, disconnected, reconnectDeadline, ws, player, color, hat }
         this.state = 'LOBBY';
+        this.settingsPickerId = null;
+        this.settingsPickerReason = this.isServerLobby ? 'server_rules' : 'initial_random';
+        this.matchNumber = 1;
         this.tick = 0;
         this.scores = { p1: 0, p2: 0 };
         this.matchWinner = null;
@@ -53,21 +43,38 @@ export class GameRoom {
     }
 
     _validateSettings(settings) {
-        const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-        return {
-            ...settings,
-            sphereSize: clamp(settings.sphereSize, 0.5, 5.0),
-            sphereWeight: clamp(settings.sphereWeight, 10, 500),
-            sphereAccel: clamp(settings.sphereAccel, 500, 3000),
-            collisionBounce: clamp(settings.collisionBounce, 0.1, 1.5),
-            arenaSize: clamp(Math.round(settings.arenaSize), 2, 16),
-            destructionRate: clamp(settings.destructionRate, 0.5, 10.0),
-            iceRate: clamp(settings.iceRate, 0.5, 10.0),
-            bonusRate: clamp(settings.bonusRate, 2.0, 15.0),
-            bonusDuration: clamp(settings.bonusDuration, 1.0, 10.0),
-            boostRegenSpeed: clamp(settings.boostRegenSpeed, 0.1, 5.0),
-            boostDrainRate: clamp(settings.boostDrainRate, 1, 100),
-        };
+        return validateMatchSettings(settings);
+    }
+
+    updateSettings(id, settings) {
+        if (this.state !== 'LOBBY' || this.settingsPickerId !== id || this.isServerLobby) return null;
+
+        this.settings = this._validateSettings({ ...this.settings, ...(settings || {}) });
+        for (const playerInfo of this.players) {
+            playerInfo.ready = false;
+            playerInfo.rematchRequested = false;
+        }
+        this._invalidatePhysics();
+        return this.settings;
+    }
+
+    _invalidatePhysics() {
+        this._stopLoops();
+        for (const playerInfo of this.players) playerInfo.player = null;
+        this.arena = null;
+        if (this.world && typeof this.world.free === 'function') this.world.free();
+        this.world = null;
+        this.physicsReady = false;
+    }
+
+    _selectInitialSettingsPicker() {
+        if (this.isServerLobby || this.players.length < 2 || this.settingsPickerId) return this.settingsPickerId;
+        const eligiblePlayers = this.players.filter(player => !player.disconnected);
+        if (eligiblePlayers.length < 2) return null;
+        const index = Math.min(eligiblePlayers.length - 1, Math.floor(this.random() * eligiblePlayers.length));
+        this.settingsPickerId = eligiblePlayers[index].id;
+        this.settingsPickerReason = 'initial_random';
+        return this.settingsPickerId;
     }
 
     async initPhysics() {
@@ -96,6 +103,7 @@ export class GameRoom {
         };
 
         this.players.push(playerInfo);
+        this._selectInitialSettingsPicker();
         return playerInfo;
     }
 
@@ -115,10 +123,17 @@ export class GameRoom {
 
         this._clearReconnectCleanup(playerInfo.slot);
         this.players.splice(index, 1);
+        if (this.settingsPickerId === id) {
+            this.settingsPickerId = null;
+            this.settingsPickerReason = 'initial_random';
+        }
+        let newHostId = null;
         if (this.players.length > 0 && this.hostId === id) {
             this.hostId = this.players[0].id;
+            this.hostName = this.players[0].name;
+            newHostId = this.hostId;
         }
-        return { disconnected: false };
+        return { disconnected: false, newHostId };
     }
 
     _scheduleReconnectCleanup(slot) {
@@ -149,6 +164,10 @@ export class GameRoom {
         }
 
         this.players.splice(index, 1);
+        if (this.settingsPickerId === playerInfo.id) {
+            this.settingsPickerId = null;
+            this.settingsPickerReason = 'initial_random';
+        }
         this._broadcast({
             type: 'player_left',
             playerId: playerInfo.id,
@@ -167,6 +186,7 @@ export class GameRoom {
             }
         } else if (this.hostId === playerInfo.id) {
             this.hostId = this.players[0].id;
+            this.hostName = this.players[0].name;
             this._broadcast({ type: 'new_host', hostId: this.hostId });
         }
     }
@@ -183,6 +203,9 @@ export class GameRoom {
 
         if (this.hostId === reconnectingId) {
             this.hostId = newId;
+        }
+        if (this.settingsPickerId === reconnectingId) {
+            this.settingsPickerId = newId;
         }
 
         return playerInfo;
@@ -383,14 +406,23 @@ export class GameRoom {
 
         for (const playerInfo of this.players) {
             playerInfo.ready = false;
-            playerInfo.rematchRequested = false;
         }
+
+        const loser = this.players.find(playerInfo => playerInfo.slot !== this.matchWinner && !playerInfo.disconnected);
+        this.settingsPickerId = loser?.id || this.players.find(playerInfo => !playerInfo.disconnected)?.id || null;
+        this.settingsPickerReason = 'previous_match_loser';
 
         this._broadcast({
             type: 'match_over',
             winner: this.matchWinner,
             scores: this.scores,
+            nextSettingsPickerId: this.settingsPickerId,
+            game: this.getPublicGame(),
         });
+
+        if (this.players.length === 2 && this.players.every(playerInfo => playerInfo.rematchRequested)) {
+            this._returnToLobby();
+        }
     }
 
     _returnToLobby() {
@@ -399,13 +431,18 @@ export class GameRoom {
         this.roundOverAt = null;
         this.matchWinner = null;
         this.scores = { p1: 0, p2: 0 };
+        this.matchNumber += 1;
 
         for (const playerInfo of this.players) {
             playerInfo.ready = false;
             playerInfo.rematchRequested = false;
         }
 
-        this._broadcast({ type: 'rematch_start' });
+        this._broadcast({
+            type: 'rematch_start',
+            settingsPickerId: this.settingsPickerId,
+            game: this.getPublicGame(),
+        });
     }
 
     _broadcastState() {
@@ -467,7 +504,7 @@ export class GameRoom {
 
     requestRematch(id) {
         const playerInfo = this.players.find(p => p.id === id);
-        if (!playerInfo) return;
+        if (!playerInfo || (this.state !== 'ROUND_OVER' && this.state !== 'LOBBY')) return;
 
         playerInfo.rematchRequested = true;
         this._broadcast({
@@ -475,15 +512,8 @@ export class GameRoom {
             slot: playerInfo.slot - 1,
         });
 
-        if (this.players.length === 2 && this.players.every(p => p.rematchRequested)) {
-            this.scores = { p1: 0, p2: 0 };
-            this.matchWinner = null;
-
-            for (const p of this.players) {
-                p.ready = true;
-            }
-
-            this.startCountdown();
+        if (this.state === 'LOBBY' && this.players.length === 2 && this.players.every(p => p.rematchRequested)) {
+            this._returnToLobby();
         }
     }
 
@@ -521,16 +551,16 @@ export class GameRoom {
     getPublicGame() {
         return {
             id: this.id,
+            hostId: this.hostId,
             hostName: this.hostName,
             playerCount: this.players.filter(p => !p.disconnected).length,
             maxPlayers: 2,
             state: this.state,
             isServerLobby: this.isServerLobby,
-            settings: {
-                theme: this.settings.theme,
-                arenaSize: this.settings.arenaSize,
-                sphereSize: this.settings.sphereSize,
-            },
+            settingsPickerId: this.settingsPickerId,
+            settingsPickerReason: this.settingsPickerReason,
+            matchNumber: this.matchNumber,
+            settings: { ...this.settings },
             players: this.getPlayers(),
         };
     }

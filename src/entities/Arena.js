@@ -6,6 +6,7 @@ import { getThemeMaterials, getThemeColors, getThemeShaderMaterials } from '../u
 import { generateHexGrid, hexToPixel } from '../utils/math.js';
 import { useGameStore } from '../store.js';
 import { POWER_UP_EFFECTS } from './Player.js';
+import { selectRandomDestructionTiles } from '../utils/arenaDestruction.js';
 
 // Tile state to shader uniform mapping
 const STATE_MAP = { NORMAL: 0, ICE: 1, WARNING: 2, FALLING: 3, BONUS: 5 };
@@ -66,7 +67,8 @@ function getTileMaterials(theme, edgeColor, baseColor, iceColor) {
 }
 
 export class Arena {
-    constructor(customTiles) {        console.log('[Arena] Constructor called');        // Clear materials cache to ensure fresh materials with all variants
+    constructor(customTiles) {
+        // Clear materials cache to ensure fresh materials with all variants.
         TILE_MATERIALS_CACHE = {};
         
         this.tiles = [];
@@ -128,7 +130,6 @@ export class Arena {
         this.skybox = new THREE.Mesh(this.skyboxGeometry, this.skyboxMaterial);
         this.skybox.renderOrder = -1000;
         scene.add(this.skybox);
-        console.log('[Arena] Added skybox to scene');
 
         let tileCount = 0;
         hexes.forEach(hex => {
@@ -336,7 +337,7 @@ export class Arena {
 
                 if (tile.timer <= 0) {
                     tile.state = 'NORMAL';
-                    tile.collider.setFriction(0.0);
+                    tile.collider.setFriction(0.5);
                     tile.edges.material.color.setHex(this.edgeColor);
                 }
             } else if (tile.state === 'FALLING') {
@@ -376,11 +377,12 @@ export class Arena {
         const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
         if (stableTiles.length === 0) return;
 
-        for (let i = 0; i < 5 && stableTiles.length > 0; i++) {
-            const index = Math.floor(Math.random() * stableTiles.length);
-            const tile = stableTiles.splice(index, 1)[0];
+        // Every stable tile is eligible. Sampling without replacement keeps
+        // multi-tile drops random while preventing duplicate warnings.
+        const dropCount = stableTiles.length <= 30 ? 1 : stableTiles.length <= 80 ? 2 : 3;
+        for (const tile of selectRandomDestructionTiles(stableTiles, dropCount)) {
             tile.state = 'WARNING';
-            tile.timer = 3.0;
+            tile.timer = 2.5;
         }
     }
 

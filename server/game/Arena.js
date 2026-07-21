@@ -1,7 +1,9 @@
 import { generateHexGrid, hexToPixel, hexDistance } from '../../src/utils/math.js';
 import { createHexTile, RAPIER } from './PhysicsWorld.js';
+import { selectRandomDestructionTiles } from '../../src/utils/arenaDestruction.js';
 
 const TILE_STATES = ['NORMAL', 'WARNING', 'ICE', 'BONUS', 'FALLING', 'FALLEN'];
+const POWER_UP_TYPES = ['ACCELERATION_BOOST', 'SIZE_REDUCTION', 'WEIGHT_INCREASE', 'SPEED_BURST', 'LIGHT_TOUCH', 'SIZE_INCREASE', 'GRIP_BOOST', 'INVULNERABILITY'];
 
 export class ServerArena {
     constructor(world, settings) {
@@ -38,6 +40,7 @@ export class ServerArena {
                 collider,
                 state: 'NORMAL',
                 timer: 0,
+                powerUpType: null,
                 distanceToCenter: Math.sqrt(position.x ** 2 + position.z ** 2),
             });
         }
@@ -57,12 +60,11 @@ export class ServerArena {
     }
 
     _restoreTile(tile) {
-        if (tile.body.isRemoved()) return;
-
         tile.state = 'NORMAL';
         tile.timer = 0;
+        tile.powerUpType = null;
         tile.body.setBodyType(RAPIER.RigidBodyType.Fixed, true);
-        tile.body.setTranslation(tile.position.x, tile.position.y, tile.position.z, true);
+        tile.body.setTranslation(tile.position, true);
         tile.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
         tile.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         tile.body.setRotation({ w: 1, x: 0, y: 0, z: 0 }, true);
@@ -98,34 +100,36 @@ export class ServerArena {
             this._triggerBonus();
         }
 
-        this._updateWarningTiles(delta);
+        this._updateTimedTiles(delta);
     }
 
-    _updateWarningTiles(delta) {
+    _updateTimedTiles(delta) {
         for (const tile of this.tiles) {
             if (tile.state === 'WARNING') {
                 tile.timer -= delta;
                 if (tile.timer <= 0) {
                     this._dropTile(tile);
                 }
+            } else if (tile.state === 'ICE') {
+                tile.timer -= delta;
+                if (tile.timer <= 0) {
+                    tile.state = 'NORMAL';
+                    tile.timer = 0;
+                    tile.collider.setFriction(0.5);
+                }
             }
         }
     }
 
     _triggerDrop() {
-        // Drop an outer ring tile, preferring tiles furthest from center.
-        const candidates = this.tiles
-            .filter(t => t.state === 'NORMAL')
-            .sort((a, b) => b.distanceToCenter - a.distanceToCenter);
+        const candidates = this.tiles.filter(t => t.state === 'NORMAL');
 
         if (candidates.length === 0) return;
 
-        const maxDistance = candidates[0].distanceToCenter;
-        const ring = candidates.filter(t => t.distanceToCenter >= maxDistance - 1);
-        const tile = ring[Math.floor(Math.random() * ring.length)];
-        if (tile) {
+        const dropCount = candidates.length <= 30 ? 1 : candidates.length <= 80 ? 2 : 3;
+        for (const tile of selectRandomDestructionTiles(candidates, dropCount)) {
             tile.state = 'WARNING';
-            tile.timer = 2.0;
+            tile.timer = 2.5;
         }
     }
 
@@ -143,6 +147,7 @@ export class ServerArena {
         if (candidates.length === 0) return;
         const tile = candidates[Math.floor(Math.random() * candidates.length)];
         tile.state = 'ICE';
+        tile.timer = 5.0;
         tile.collider.setFriction(0.0);
     }
 
@@ -151,6 +156,7 @@ export class ServerArena {
         if (candidates.length === 0) return;
         const tile = candidates[Math.floor(Math.random() * candidates.length)];
         tile.state = 'BONUS';
+        tile.powerUpType = POWER_UP_TYPES[Math.floor(Math.random() * POWER_UP_TYPES.length)];
         tile.collider.setFriction(0.5);
     }
 
@@ -185,6 +191,7 @@ export class ServerArena {
                     r: tile.r,
                     state: tile.state,
                     timer: tile.timer,
+                    powerUpType: tile.powerUpType,
                 });
             }
         }

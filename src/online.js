@@ -304,12 +304,15 @@ class OnlineManager {
                         );
 
                         if (ep.slot === 1 || ep.slot === 2) {
-                            const p1Color = ep.slot === 1 ? ep.color : state.p1Color;
-                            const p2Color = ep.slot === 2 ? ep.color : state.p2Color;
-                            const p1Hat = ep.slot === 1 ? ep.hat : state.p1Hat;
-                            const p2Hat = ep.slot === 2 ? ep.hat : state.p2Hat;
-                            const p1Name = ep.slot === 1 ? ep.name : state.p1Name;
-                            const p2Name = ep.slot === 2 ? ep.name : state.p2Name;
+                            // A player can join before their customization
+                            // packet arrives. Preserve local defaults instead of
+                            // passing null into the persisted color serializer.
+                            const p1Color = ep.slot === 1 ? (ep.color ?? state.p1Color) : state.p1Color;
+                            const p2Color = ep.slot === 2 ? (ep.color ?? state.p2Color) : state.p2Color;
+                            const p1Hat = ep.slot === 1 ? (ep.hat ?? state.p1Hat) : state.p1Hat;
+                            const p2Hat = ep.slot === 2 ? (ep.hat ?? state.p2Hat) : state.p2Hat;
+                            const p1Name = ep.slot === 1 ? (ep.name ?? state.p1Name) : state.p1Name;
+                            const p2Name = ep.slot === 2 ? (ep.name ?? state.p2Name) : state.p2Name;
                             state.setPlayerColors?.(p1Color, p2Color);
                             state.setPlayerHats?.(p1Hat, p2Hat);
                             state.setPlayerNames?.(p1Name, p2Name);
@@ -321,14 +324,14 @@ class OnlineManager {
                 break;
 
             case 'left_game':
-                state.setOnlineCurrentGame(null);
-                state.resetOnlineState();
+                state.clearOnlineRoom?.();
                 state.enterOnlineLobby();
                 this.emit('leftGame');
                 break;
 
             case 'player_joined':
                 state.setOnlineOpponentConnected(true);
+                if (msg.game) state.setOnlineCurrentGame(msg.game);
                 const opponentName = msg.player.name || 'Player';
                 state.setOnlineOpponentName(opponentName);
 
@@ -366,8 +369,45 @@ class OnlineManager {
 
             case 'new_host':
                 state.setOnlineHost(msg.hostId === state.online.playerId);
+                if (state.online.currentGame) {
+                    state.setOnlineCurrentGame({ ...state.online.currentGame, hostId: msg.hostId });
+                }
                 this.emit('newHost', msg.hostId);
                 break;
+
+            case 'settings_picker_changed':
+                state.setOnlineCurrentGame(msg.game || {
+                    ...(state.online.currentGame || {}),
+                    settingsPickerId: msg.pickerId || null,
+                    settingsPickerReason: msg.reason || 'initial_random',
+                });
+                this.emit('settingsPickerChanged', {
+                    pickerId: msg.pickerId || null,
+                    reason: msg.reason || 'initial_random',
+                });
+                break;
+
+            case 'game_settings_updated':
+                state.setOnlineCurrentGame(msg.game || {
+                    ...(state.online.currentGame || {}),
+                    settings: msg.settings || {},
+                });
+                state.setOnlineReady?.(false);
+                state.setOnlineOpponentReady?.(false);
+                state.setOnlineAllReady?.(false);
+                this.emit('gameSettingsUpdated', msg.settings || {});
+                break;
+
+            case 'rejoin_success': {
+                const rejoinedGame = msg.game || {};
+                const slot = normalizeServerSlot(msg.slot);
+                state.setOnlineCurrentGame(rejoinedGame);
+                state.setOnlinePlayerSlot(slot);
+                state.setOnlineHost(rejoinedGame.hostId === state.online.playerId);
+                state.setOpponentDisconnected?.(false);
+                this.emit('rejoinSuccess', rejoinedGame);
+                break;
+            }
 
             case 'game_starting':
                 if (Array.isArray(msg.players) && msg.players.length > 0) {
@@ -453,10 +493,12 @@ class OnlineManager {
                 let matchWinnerName = 'Draw';
                 if (matchWinnerSlot === 1) matchWinnerName = 'Player 1';
                 else if (matchWinnerSlot === 2) matchWinnerName = 'Player 2';
+                if (msg.game) state.setOnlineCurrentGame(msg.game);
                 this.emit('matchOver', {
                     winner: matchWinnerName,
                     winnerSlot: matchWinnerSlot,
                     scores: msg.scores,
+                    nextSettingsPickerId: msg.nextSettingsPickerId || msg.game?.settingsPickerId || null,
                 });
                 break;
             }
@@ -527,6 +569,7 @@ class OnlineManager {
             }
 
             case 'rematch_start':
+                if (msg.game) state.setOnlineCurrentGame(msg.game);
                 state.setOnlineReady?.(false);
                 state.setOnlineOpponentReady?.(false);
                 state.setOnlineAllReady?.(false);
@@ -616,6 +659,10 @@ class OnlineManager {
 
     startGame() {
         this.send({ type: 'start_game' });
+    }
+
+    updateGameSettings(settings) {
+        this.send({ type: 'update_game_settings', settings });
     }
 
     sendInput(input) {

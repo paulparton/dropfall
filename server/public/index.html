@@ -6,10 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- Suggest portrait as primary orientation for mobile (hint, not enforced) -->
     <meta name="screen-orientation" content="portrait-primary" />
-    <title>Dropfall</title>
+    <title>Dropfall V2 — Star Circuit</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Orbitron:wght@500;600;700;800;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
       #menu, #game-over, #settings-panel { z-index: 50 !important; }
       .screen { z-index: 40 !important; }
@@ -26,12 +26,12 @@
         bottom: 80px !important;
       }
     </style>
-    <script type="module" crossorigin src="/assets/index-Dl8DyThW.js"></script>
+    <script type="module" crossorigin src="/assets/index-TRzxaJIx.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/physics-yV62z-mf.js">
-    <link rel="modulepreload" crossorigin href="/assets/three-DDTf6LWZ.js">
-    <link rel="stylesheet" crossorigin href="/assets/index--nLFXbpG.css">
+    <link rel="modulepreload" crossorigin href="/assets/three-Cd7rqvR0.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-CGP_IpRR.css">
   </head>
-  <body>
+  <body class="dropfall-v2">
     <!-- Game canvas container -->
     <div id="app" style="width: 100%; height: 100vh; position: absolute; top: 0; left: 0; z-index: 0;"></div>
     
@@ -85,108 +85,85 @@
     </div>
 
     <!-- Online Server Connect Screen -->
-    <div id="online-connect" class="screen hidden" style="pointer-events: auto;">
-      <div class="title-container">
-        <h1 class="retro-title">CONNECT</h1>
-        <h2 class="retro-subtitle">ONLINE SERVER</h2>
-      </div>
-      
-      <div class="online-panel">
-        <div id="online-connect-status"></div>
-        
-        <div class="online-input-group">
-          <label class="online-label">Server Address</label>
-          <input type="text" id="online-server-input" placeholder="192.168.1.100:3000" class="online-input">
-        </div>
-        
-        <div class="online-input-group">
-          <label class="online-label">Your Name</label>
-          <input type="text" id="online-name-input" placeholder="Enter your name" maxlength="20" class="online-input">
-        </div>
-        
-        <button id="online-connect-btn" class="retro-btn">CONNECT</button>
-        
-        <div id="online-connect-error"></div>
-      </div>
+    <div id="online-connect" class="screen hidden multiplayer-screen">
+      <div class="multiplayer-connect-shell">
+        <section class="multiplayer-connect-copy">
+          <button id="online-connect-back-btn" class="multiplayer-back">‹ Play Plaza</button>
+          <p class="multiplayer-kicker"><span></span> Dropfall Together</p>
+          <h1>Bring the<br><em>bounce online.</em></h1>
+          <p>Host a room, invite a rival, and tune every round together before the fun begins.</p>
+          <div class="multiplayer-feature-list">
+            <span><b>01</b> Fair synchronized physics</span>
+            <span><b>02</b> Live round settings</span>
+            <span><b>03</b> Friendly rematch flow</span>
+          </div>
+        </section>
 
-      <div id="online-lan-suggestion" class="online-help" style="display: none;">
-        <div id="online-lan-badge" style="
-          display: inline-block;
-          padding: 0.3rem 0.8rem;
-          border-radius: 999px;
-          background: rgba(0, 255, 136, 0.2);
-          color: #00ff88;
-          border: 1px solid #00ff88;
-          font-family: 'Courier New', monospace;
-          font-size: 0.85rem;
-          margin-bottom: 0.5rem;
-          letter-spacing: 1px;
-        ">LAN DETECTED</div>
-        <div id="online-lan-info"></div>
-      </div>
+        <section class="multiplayer-connect-card" aria-labelledby="online-connect-title">
+          <div class="multiplayer-card-status"><i></i> NETWORK ACCESS</div>
+          <h2 id="online-connect-title">Connect</h2>
+          <p>Choose your arena identity. The server is selected automatically for public builds.</p>
+          <div id="online-connect-status" class="multiplayer-inline-status" aria-live="polite"></div>
 
-      <div id="online-network-mode" style="
-        text-align: center;
-        font-family: 'Courier New', monospace;
-        font-size: 0.85rem;
-        color: #9deaff;
-        margin-top: 0.5rem;
-      "></div>
+          <div class="online-input-group">
+            <label class="online-label" for="online-name-input">Display name</label>
+            <input type="text" id="online-name-input" placeholder="Enter your name" maxlength="20" class="online-input" autocomplete="nickname">
+          </div>
+          <div class="online-input-group online-server-field">
+            <label class="online-label" for="online-server-input">Server address</label>
+            <input type="text" id="online-server-input" placeholder="192.168.1.100:3000" class="online-input" spellcheck="false">
+          </div>
 
-      <div class="online-help">
-        <p>Need a server? Run <code>npm run server</code> on any computer</p>
+          <button id="online-connect-btn" class="multiplayer-primary">Enter Lobby <span>›</span></button>
+          <div id="online-connect-error" class="multiplayer-error" role="alert"></div>
+          <div id="online-network-mode" class="multiplayer-network-mode"></div>
+          <div id="online-lan-suggestion" class="multiplayer-lan-suggestion" style="display: none;">
+            <div id="online-lan-badge">LAN DETECTED</div>
+            <div id="online-lan-info"></div>
+          </div>
+          <p class="multiplayer-server-help">Local host? Run <code>npm run server</code>, then connect from the same network.</p>
+        </section>
       </div>
-      
-      <button id="online-connect-back-btn" class="retro-btn" style="margin-top: 2rem;">BACK</button>
     </div>
 
     <!-- Online Lobby Screen -->
-    <div id="online-lobby" class="screen hidden" style="pointer-events: auto;">
-      <div class="title-container">
-        <h1 class="retro-title">ONLINE</h1>
-        <h2 class="retro-subtitle">MULTIPLAYER LOBBY</h2>
-      </div>
-      
-      <div class="online-server-bar">
-        <span id="online-connected-status" class="online-status-connected">● CONNECTED</span>
-        <span class="online-server-address">Server: <span id="online-server-url"></span></span>
-      </div>
-      
-      <div class="online-actions">
-        <button id="online-create-game-btn" class="retro-btn online-btn-create">CREATE GAME</button>
-        <button id="online-refresh-btn" class="retro-btn">REFRESH LIST</button>
-      </div>
-      
-      <div class="online-games-container">
-        <h3 class="online-section-title">AVAILABLE GAMES</h3>
-        <div id="online-games-list" class="online-games-list">
-          <div class="online-no-games">
-            <p>No games available</p>
-            <p>Create a game or wait for others to host</p>
+    <div id="online-lobby" class="screen hidden multiplayer-screen">
+      <div class="multiplayer-lobby-shell">
+        <header class="multiplayer-lobby-header">
+          <div>
+            <p class="multiplayer-kicker"><span></span> Matchmaking</p>
+            <h1>Room Browser</h1>
+            <p>Join an open arena or create a room with your own rule set.</p>
+          </div>
+          <div class="multiplayer-connection-card">
+            <span id="online-connected-status" class="online-status-connected"><i></i> CONNECTED</span>
+            <small id="online-server-url"></small>
+          </div>
+        </header>
+
+        <div class="multiplayer-lobby-toolbar">
+          <div>
+            <strong>Available rooms</strong>
+            <span id="online-room-count">Searching network…</span>
+          </div>
+          <div>
+            <button id="online-refresh-btn" class="multiplayer-secondary">↻ Refresh</button>
+            <button id="online-create-game-btn" class="multiplayer-primary">Create Room <span>+</span></button>
           </div>
         </div>
-      </div>
-      
-      <div id="online-my-game" class="hidden online-game-panel online-host-panel">
-        <h3 class="online-panel-title">YOUR GAME</h3>
-        <div id="online-game-info" class="online-game-info"></div>
-        <div class="online-game-actions">
-          <button id="online-start-btn" class="retro-btn online-btn-start" onclick="console.log('[HTML ONCLICK] Start button clicked!')">START GAME</button>
-          <button id="online-leave-btn" class="retro-btn online-btn-leave">LEAVE</button>
+
+        <div id="online-games-list" class="online-games-list" aria-live="polite">
+          <div class="online-no-games"><span>⌁</span><strong>Looking for rooms</strong><p>Open arenas will appear here automatically.</p></div>
         </div>
-      </div>
-      
-      <div id="online-joining" class="hidden online-game-panel online-join-panel">
-        <h3 class="online-panel-title">JOINING GAME...</h3>
-        <div class="online-game-info">
-          <p>Waiting for host to start...</p>
-          <button id="online-cancel-join-btn" class="retro-btn online-btn-leave" style="margin-top: 1rem;">CANCEL</button>
-        </div>
-      </div>
-      
-      <div class="online-footer">
-        <button id="online-disconnect-btn" class="retro-btn online-btn-leave">DISCONNECT</button>
-        <button id="online-lobby-back-btn" class="retro-btn">BACK</button>
+
+        <footer class="multiplayer-lobby-footer">
+          <button id="online-disconnect-btn" class="multiplayer-text-button">Disconnect</button>
+          <button id="online-lobby-back-btn" class="multiplayer-text-button">Return to Play Plaza</button>
+        </footer>
+
+        <!-- Compatibility hooks for the previous lobby implementation. -->
+        <div id="online-my-game" class="hidden"><div id="online-game-info"></div><button id="online-start-btn">Start</button><button id="online-leave-btn">Leave</button></div>
+        <div id="online-joining" class="hidden"><button id="online-cancel-join-btn">Cancel</button></div>
       </div>
     </div>
 
@@ -195,41 +172,69 @@
     </div>
     
     <!-- UI Overlay -->
-    <div id="menu" class="screen hidden" style="z-index: 50; pointer-events: auto;">
-      <div class="title-container">
-        <h1 class="retro-title">DROPFALL</h1>
-        <h2 class="retro-subtitle">CYBER ARENA</h2>
-      </div>
-      
-      <div class="controls-display">
-        <div class="control-box p1-controls">
-          <h3>PLAYER 1</h3>
-          <p>Keyboard: W A S D</p>
-          <p>Gamepad: Left Stick</p>
-          <p>Boost: SHIFT / A/X/R2</p>
-        </div>
-        <div id="p2-controls-display" class="control-box p2-controls">
-          <h3>PLAYER 2</h3>
-          <p>Keyboard: ARROWS</p>
-          <p>Gamepad: Left Stick</p>
-          <p>Boost: SHIFT / A/X/R2</p>
-        </div>
-      </div>
+    <div id="menu" class="screen hidden" aria-label="Dropfall play plaza">
+      <div class="menu-vignette" aria-hidden="true"></div>
+      <main class="menu-shell">
+        <section class="menu-hero">
+          <div class="menu-kicker"><span></span> Midnight collision protocol</div>
+          <div class="title-container menu-title-container">
+            <span class="v2-edition-badge">NEON EDITION</span>
+            <h1 class="retro-title">DROPFALL</h1>
+            <h2 class="retro-subtitle">STAR CIRCUIT</h2>
+          </div>
+          <p class="menu-tagline">Burn through the grid. Own the midnight. Outlast the circuit.</p>
 
-      <!-- Game mode selection buttons -->
-      <div style="display: flex; gap: 30px; justify-content: center; flex-wrap: wrap; margin: 20px 0;">
-        <button id="mode-single-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">🎮 SINGLE PLAYER</button>
-        <button id="mode-local-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">👥 LOCAL MULTIPLAYER</button>
-        <button id="mode-online-btn" class="retro-btn" style="padding: 30px 50px; font-size: 1.8rem; min-width: 200px;">🌐 ONLINE</button>
-      </div>
+          <div class="mode-list" aria-label="Choose game mode">
+            <button id="mode-single-btn" class="mode-card mode-card--featured">
+              <span class="mode-card__number">01</span>
+              <span class="mode-card__copy"><strong>Solo Showdown</strong><small>Outsmart a lively arena rival</small></span>
+              <span class="mode-card__meta">1 PLAYER</span>
+              <span class="mode-card__arrow" aria-hidden="true">›</span>
+            </button>
+            <button id="mode-local-btn" class="mode-card">
+              <span class="mode-card__number">02</span>
+              <span class="mode-card__copy"><strong>Couch Clash</strong><small>Two players, one joyful rivalry</small></span>
+              <span class="mode-card__meta">2 PLAYERS</span>
+              <span class="mode-card__arrow" aria-hidden="true">›</span>
+            </button>
+            <button id="mode-online-btn" class="mode-card">
+              <span class="mode-card__number">03</span>
+              <span class="mode-card__copy"><strong>Online Party</strong><small>Create a room and share the bounce</small></span>
+              <span class="mode-card__meta mode-card__meta--online"><i></i> ONLINE</span>
+              <span class="mode-card__arrow" aria-hidden="true">›</span>
+            </button>
+          </div>
 
-      <p style="color: #0ff; font-size: 1rem; margin-top: 15px; opacity: 0.8;">INSERT COIN TO START</p>
+          <div class="menu-utilities">
+            <button id="settings-btn" class="utility-button"><span aria-hidden="true">◇</span> Settings</button>
+            <label class="switch-control" for="autorestart-menu">
+              <input type="checkbox" id="autorestart-menu">
+              <span class="switch-control__track" aria-hidden="true"></span>
+              <span>Quick rounds</span>
+            </label>
+          </div>
+        </section>
 
-      <div style="margin-top: 15px; display: flex; align-items: center; gap: 10px; justify-content: center;">
-        <input type="checkbox" id="autorestart-menu" style="width: 20px; height: 20px; cursor: pointer;">
-        <label for="autorestart-menu" style="cursor: pointer; color: #0ff; font-family: 'Courier New', monospace;">Auto-Restart on Game Over</label>
-      </div>
-      <button id="settings-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">⚙️ SETTINGS</button>
+        <aside class="arena-brief" aria-label="How to play">
+          <div class="arena-brief__status"><span></span> CIRCUIT ONLINE</div>
+          <p class="arena-brief__eyebrow">PILOT BRIEF // FIRST TO THREE</p>
+          <h2>Rule the neon skyline.</h2>
+          <p>Read the unstable grid, chase volatile power-ups, and unleash your boost at the perfect impact.</p>
+          <div class="brief-stats">
+            <div><strong>03</strong><span>Wins to claim the match</span></div>
+            <div><strong>08</strong><span>Physics-bending power-ups</span></div>
+            <div><strong>05</strong><span>Reactive arena themes</span></div>
+          </div>
+          <div class="control-brief">
+            <div><span class="control-brief__player control-brief__player--one">P1</span><strong>WASD</strong><small>MOVE</small><strong>SHIFT</strong><small>BOOST</small></div>
+            <div id="p2-controls-display"><span class="control-brief__player control-brief__player--two">P2</span><strong>ARROWS</strong><small>MOVE</small><strong>R SHIFT</strong><small>BOOST</small></div>
+          </div>
+        </aside>
+      </main>
+      <footer class="menu-footer">
+        <span>BUILD 2.0 // STAR CIRCUIT EDITION</span>
+        <span>KEYBOARD · CONTROLLER · TOUCH · XR</span>
+      </footer>
     </div>
 
     <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100; pointer-events: auto; display: flex; flex-direction: column; align-items: center;">
@@ -256,7 +261,7 @@
             <div class="settings-theme-row">
               <label for="theme-select">Theme</label>
 <select id="theme-select" style="background: #000; color: #0ff; border: 1px solid #0ff; padding: 8px 12px; font-family: 'Courier New', Courier, monospace; font-size: 1rem;">
-                  <option value="default">Default (Cyber)</option>
+                  <option value="default">Star Circuit</option>
                   <option value="beach">Beach</option>
                   <option value="temple">Temple (Aztec)</option>
                   <option value="arctic">Arctic</option>
@@ -503,49 +508,79 @@
 
     <div id="hud" class="screen hidden" style="pointer-events: auto;">
       <div class="player-stats p1">
-        <div class="name">Player 1 (Red)</div>
+        <div class="player-stats__label">PLAYER ONE</div>
+        <div class="name">Player 1</div>
         <div class="boost-bar-container">
           <div id="p1-boost" class="boost-bar"></div>
         </div>
+        <div class="boost-caption"><span>BOOST</span><span>READY</span></div>
         <div id="p1-record" class="player-record">W: 0  L: 0</div>
         <div id="p1-powerups" class="powerup-status"></div>
       </div>
       <div id="score-display" class="score-display">
-        <span id="p1-score" class="p1-score-text">0</span> - <span id="p2-score" class="p2-score-text">0</span>
+        <small>ROUND SCORE · FIRST TO 3</small>
+        <div><span id="p1-score" class="p1-score-text">0</span><b>:</b><span id="p2-score" class="p2-score-text">0</span></div>
       </div>
       <div class="player-stats p2">
-        <div class="name">Player 2 (Blue)</div>
+        <div class="player-stats__label">PLAYER TWO</div>
+        <div class="name">Player 2</div>
         <div class="boost-bar-container">
           <div id="p2-boost" class="boost-bar"></div>
         </div>
+        <div class="boost-caption"><span>BOOST</span><span>READY</span></div>
         <div id="p2-record" class="player-record">W: 0  L: 0</div>
         <div id="p2-powerups" class="powerup-status"></div>
       </div>
       <div id="effects" class="effects-container"></div>
       <div id="powerup-notifications" class="powerup-notifications-container"></div>
-      <div id="countdown-display" class="score-display hidden" style="top: 50%; transform: translate(-50%, -50%); font-size: 8rem; z-index: 50; pointer-events: none;">3</div>
-      <div id="hud-controls" style="position: absolute; bottom: 20px; right: 20px; display: flex; gap: 10px; z-index: 100; pointer-events: auto;">
-        <button id="hud-restart-btn" class="retro-btn" style="padding: 0.5rem 1rem; font-size: 1rem; pointer-events: auto;">Restart</button>
-        <button id="hud-menu-btn" class="retro-btn" style="padding: 0.5rem 1rem; font-size: 1rem; pointer-events: auto;">Menu</button>
+      <div id="countdown-display" class="countdown-display hidden">3</div>
+      <div id="hud-controls">
+        <button id="hud-pause-btn" class="hud-action" aria-label="Pause game">Ⅱ <span>PAUSE</span></button>
+        <button id="hud-restart-btn" class="hud-action" aria-label="Restart match">↻ <span>RESTART</span></button>
+        <button id="hud-menu-btn" class="hud-action" aria-label="Return to menu">⌂ <span>MENU</span></button>
+      </div>
+    </div>
+
+    <div id="pause-menu" class="pause-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pause-title">
+      <div class="pause-panel">
+        <p class="pause-panel__eyebrow">MATCH SUSPENDED</p>
+        <h2 id="pause-title">PAUSED</h2>
+        <p>Physics and round timers are frozen.</p>
+        <div class="pause-actions">
+          <button id="pause-resume-btn" class="pause-primary">Resume Match <span>ESC</span></button>
+          <button id="pause-restart-btn">Restart Match</button>
+        <button id="pause-menu-btn">Return to Play Plaza</button>
+        </div>
+        <div class="pause-controls"><span>MOVE <b>WASD / STICK</b></span><span>BOOST <b>SHIFT / TRIGGER</b></span></div>
       </div>
     </div>
 
     <div id="game-over" class="screen hidden" style="pointer-events: auto;">
-      <h1 id="winner-text">Player X Wins!</h1>
-      <div style="margin: 20px 0; display: flex; align-items: center; gap: 10px; justify-content: center;">
-        <input type="checkbox" id="autorestart-gameover" style="width: 20px; height: 20px; cursor: pointer;">
-        <label for="autorestart-gameover" style="cursor: pointer; color: #0ff; font-family: 'Courier New', monospace; font-size: 1.2rem;">Auto-Restart on Game Over</label>
-      </div>
-      <div id="replay-card" class="hidden" style="margin: 15px auto; display: flex; align-items: center; justify-content: center; gap: 20px; padding: 12px 24px; border: 1px solid #0ff; border-radius: 8px; background: rgba(0, 20, 40, 0.85); max-width: 400px;">
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="color: #0ff; font-family: 'Courier New', monospace; font-size: 0.95rem;">Next round in</span>
-          <span id="replay-countdown-text" style="color: #0ff; font-family: 'Courier New', monospace; font-size: 1.4rem; font-weight: bold; min-width: 24px; text-align: center;">10</span>
+      <div class="result-panel">
+        <p class="result-panel__eyebrow">MATCH REPORT</p>
+        <h1 id="winner-text">Player X Wins!</h1>
+        <div id="game-over-score" class="result-score">0 <span>:</span> 0</div>
+        <div class="result-divider"><span></span><i>FINAL</i><span></span></div>
+        <label class="switch-control result-quick-rounds" for="autorestart-gameover">
+          <input type="checkbox" id="autorestart-gameover">
+          <span class="switch-control__track" aria-hidden="true"></span>
+          <span>Quick rounds</span>
+        </label>
+        <div id="replay-card" class="hidden replay-card">
+          <div>
+            <span>Next round in</span>
+            <strong id="replay-countdown-text">10</strong>
+          </div>
+          <button id="replay-view-btn" class="result-secondary">View Replay</button>
         </div>
-        <button id="replay-view-btn" class="retro-btn" style="font-size: 1rem; padding: 6px 16px; margin: 0;">View Replay</button>
+        <div class="result-actions">
+          <button id="restart-btn" class="result-primary">Play Again</button>
+          <button id="menu-btn" class="result-secondary">Play Plaza</button>
+        </div>
       </div>
-      <button id="restart-btn" class="retro-btn">Play Again</button>
-      <button id="menu-btn" class="retro-btn" style="margin-top: 20px; font-size: 1.5rem;">Return to Menu</button>
     </div>
+
+    <div id="game-feel-layer" aria-live="polite" aria-atomic="true"></div>
 
   </body>
 </html>

@@ -6,6 +6,7 @@ import { getAllColors, hexToString } from './ColorPalette.js';
 import { getAllPatterns, isPatternId, getDisplayColor, PatternOption } from './ColorPalette.js';
 import { createSwatchCanvas } from '../utils/materialFactory.js';
 import type * as THREE from 'three';
+import { getHatDefinition, HAT_VALUES } from '../utils/hatCatalog.js';
 
 export interface CustomizationResult {
   color: number | string;
@@ -18,8 +19,6 @@ export interface CustomizationOptions {
   initialColor?: number | string;
   initialHat?: string;
 }
-
-const HAT_OPTIONS = ['none', 'santa', 'cowboy', 'crown', 'wizard'];
 
 /**
  * Create and display a customization modal
@@ -120,7 +119,7 @@ export function createCustomizationModal(
 
   // Build hat options
   let hatHTML = '<div id="hat-options" style="display: flex; gap: 15px; margin: 20px auto; justify-content: center; flex-wrap: wrap;">';
-  HAT_OPTIONS.forEach((hat) => {
+  HAT_VALUES.forEach((hat) => {
     const isSelected = hat === selectedHat ? 'background: #00ff00; color: black;' : 'background: rgba(0, 255, 255, 0.3); color: white;';
     hatHTML += `
       <button class="hat-option" data-hat="${hat}" 
@@ -137,7 +136,7 @@ export function createCustomizationModal(
           min-width: 80px;
         "
       >
-        ${hat}
+        ${hat === 'none' ? 'None' : `${getHatDefinition(hat)?.icon ?? ''} ${getHatDefinition(hat)?.label ?? hat}`}
       </button>
     `;
   });

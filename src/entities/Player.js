@@ -7,6 +7,7 @@ import { isPatternId, getDisplayColor } from '../components/ColorPalette.js';
 import { useGameStore } from '../store.js';
 import { pixelToHex } from '../utils/math.js';
 import { setBoostSound } from '../audio.js';
+import { animateHatMesh, createHatMesh } from '../utils/hatFactory.js';
 
 // Theme-aware power-up colors
 function getThemeAwarePowerUpColors(theme) {
@@ -61,12 +62,14 @@ const POWER_UP_EFFECTS = [
             player.sizeMultiplier = 0.6;
             player.mesh.scale.set(0.6, 0.6, 0.6);
             player.auraMesh.scale.set(0.6, 0.6, 0.6);
+            player.collider?.setMass(player.sphereWeight * 0.7);
             player.powerUpColor = player.themeAwarePowerUpColors?.SIZE_REDUCTION || 0x0099ff;
         },
         remove: (player) => {
             player.sizeMultiplier = 1.0;
             player.mesh.scale.set(1.0, 1.0, 1.0);
             player.auraMesh.scale.set(1.0, 1.0, 1.0);
+            player.collider?.setMass(player.sphereWeight);
         }
     },
     {
@@ -77,10 +80,12 @@ const POWER_UP_EFFECTS = [
         color: 0x8800ff,
         apply: (player, duration) => {
             player.weightMultiplier = 2.0;
+            player.collider?.setMass(player.sphereWeight * 2);
             player.powerUpColor = player.themeAwarePowerUpColors?.WEIGHT_INCREASE || 0x8800ff;
         },
         remove: (player) => {
             player.weightMultiplier = 1.0;
+            player.collider?.setMass(player.sphereWeight);
         }
     },
     {
@@ -106,10 +111,12 @@ const POWER_UP_EFFECTS = [
         color: 0x00ff88,
         apply: (player, duration) => {
             player.gravityMultiplier = 0.5;
+            player.rigidBody?.setGravityScale(0.5, true);
             player.powerUpColor = player.themeAwarePowerUpColors?.LIGHT_TOUCH || 0x00ff88;
         },
         remove: (player) => {
             player.gravityMultiplier = 1.0;
+            player.rigidBody?.setGravityScale(1.0, true);
         }
     },
     {
@@ -122,12 +129,14 @@ const POWER_UP_EFFECTS = [
             player.sizeMultiplier = 1.6;
             player.mesh.scale.set(1.6, 1.6, 1.6);
             player.auraMesh.scale.set(1.6, 1.6, 1.6);
+            player.collider?.setMass(player.sphereWeight * 1.6);
             player.powerUpColor = player.themeAwarePowerUpColors?.SIZE_INCREASE || 0xffff00;
         },
         remove: (player) => {
             player.sizeMultiplier = 1.0;
             player.mesh.scale.set(1.0, 1.0, 1.0);
             player.auraMesh.scale.set(1.0, 1.0, 1.0);
+            player.collider?.setMass(player.sphereWeight);
         }
     },
     {
@@ -142,6 +151,7 @@ const POWER_UP_EFFECTS = [
         },
         remove: (player) => {
             player.frictionMultiplier = 1.0;
+            player.collider?.setFriction(0.5);
         }
     },
     {
@@ -152,10 +162,12 @@ const POWER_UP_EFFECTS = [
         color: 0xff00ff,
         apply: (player, duration) => {
             player.isInvulnerable = true;
+            player.collider?.setMass(player.sphereWeight * 4);
             player.powerUpColor = player.themeAwarePowerUpColors?.INVULNERABILITY || 0xff00ff;
         },
         remove: (player) => {
             player.isInvulnerable = false;
+            player.collider?.setMass(player.sphereWeight);
         }
     }
 ];
@@ -200,7 +212,11 @@ export class Player {
         const storeState = useGameStore.getState();
 
         // 1. Three.js Mesh
-        const geometry = new THREE.SphereGeometry(this.sphereSize, 16, 16); // PERFORMANCE: Reduced from 32, 32
+        // Two players are always the focal point. A smoother silhouette has a
+        // far larger visual payoff than the small vertex saving of the old
+        // faceted 16x16 sphere.
+        const isCompactDevice = typeof window !== 'undefined' && window.matchMedia?.('(max-width: 700px)').matches;
+        const geometry = new THREE.SphereGeometry(this.sphereSize, isCompactDevice ? 20 : 32, isCompactDevice ? 16 : 24);
         const { sphereMaterialParams } = getThemeMaterials(theme);
         const isPattern = isPatternId(this.color);
         const playerDisplayColor = typeof this.color === 'number' ? this.color : getDisplayColor(this.color);
@@ -282,7 +298,12 @@ export class Player {
         }
 
         // 5b. Hats
-        this.hatGroup = this._createHat(hatType);
+        const hatResult = createHatMesh(hatType, this.sphereSize);
+        this.hatGroup = hatResult?.group || null;
+        this.santaSegments = hatResult?.santaSegments || [];
+        this.santaPomGroup = hatResult?.santaPomGroup || null;
+        this.santaDroopX = hatResult?.santaDroopX || 0;
+        this.santaDroopZ = hatResult?.santaDroopZ ?? -1;
         if (this.hatGroup) {
             scene.add(this.hatGroup);
         }
@@ -362,17 +383,21 @@ export class Player {
                 const settings = useGameStore.getState().settings;
                 const duration = settings.bonusDuration;
                 
-                // Apply the effect
+                const startedAt = performance.now() / 1000;
+                const existingPowerUp = this.activePowerUps.find(powerUp => powerUp.type === chosenEffect.type);
                 chosenEffect.apply(this, duration);
-                
-                // Track the active power-up
-                this.activePowerUps.push({
-                    type: chosenEffect.type,
-                    effect: chosenEffect,
-                    startTime: performance.now() / 1000,
-                    duration: duration,
-                    name: chosenEffect.name
-                });
+                if (existingPowerUp) {
+                    existingPowerUp.startTime = startedAt;
+                    existingPowerUp.duration = duration;
+                } else {
+                    this.activePowerUps.push({
+                        type: chosenEffect.type,
+                        effect: chosenEffect,
+                        startTime: startedAt,
+                        duration,
+                        name: chosenEffect.name
+                    });
+                }
                 
                 // Show notification with icon
                 if (typeof window.showPowerUpNotification !== 'undefined') {
@@ -470,7 +495,7 @@ export class Player {
         const boostLevel = storeState[`${this.id}Boost`];
         
         const isFalling = position.y < -1.0;
-        const hasControl = this.freezeTimer <= 0 && !isFalling && storeState.gameState === 'PLAYING' && !this.isInvulnerable;
+        const hasControl = this.freezeTimer <= 0 && !isFalling && storeState.gameState === 'PLAYING';
         
         // Boost logic: Can only start boosting if above 20%, but can continue until 0%
         if (input.boost && boostLevel > 20 && !this.isBoosting && hasControl) {
@@ -582,7 +607,9 @@ export class Player {
         ctx.strokeStyle = 'rgba(0,0,0,0.9)';
         ctx.lineWidth = 7;
         ctx.strokeText(name, 128, 32);
-        ctx.fillStyle = hexColor;
+        ctx.shadowColor = hexColor;
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = '#ffffff';
         ctx.fillText(name, 128, 32);
         const texture = new THREE.CanvasTexture(canvas);
         const mat = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
@@ -1015,6 +1042,7 @@ export class Player {
         const speed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
         const wobbleIntensity = Math.min(speed * 0.002, 0.08);
         const time = performance.now() * 0.001;
+        animateHatMesh(this.hatGroup, time, speed);
         const wobbleX = Math.sin(time * 12) * wobbleIntensity;
         const wobbleZ = Math.cos(time * 15) * wobbleIntensity;
 

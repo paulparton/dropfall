@@ -7,6 +7,7 @@ import {
   type LevelTile,
   type RaceConfig,
 } from './demoLevels';
+import { isLevelActive, validateLevelForLaunch } from '../../shared/levelValidation.js';
 
 export type LevelData =
   | DemoLevel
@@ -39,6 +40,8 @@ export type LevelData =
       defaultP2Color?: number;
       defaultP1Hat?: string;
       defaultP2Hat?: string;
+      active?: boolean;
+      isPublic?: boolean;
       isDemo?: false;
     };
 
@@ -50,6 +53,10 @@ export type LevelSummary = {
   mode: LevelMode;
   tileCount: number;
   isDemo: boolean;
+  tiles?: LevelTile[];
+  launchReady: boolean;
+  validationWarnings?: string[];
+  validationIssues?: string[];
 };
 
 const DEFAULT_LEVEL_SUMMARY: LevelSummary = {
@@ -60,9 +67,11 @@ const DEFAULT_LEVEL_SUMMARY: LevelSummary = {
   mode: 'battle',
   tileCount: 0,
   isDemo: false,
+  launchReady: true,
 };
 
 function toDemoSummary(level: DemoLevel): LevelSummary {
+  const validation = validateLevelForLaunch(level);
   return {
     id: level.id,
     name: level.name,
@@ -71,6 +80,9 @@ function toDemoSummary(level: DemoLevel): LevelSummary {
     mode: level.mode,
     tileCount: level.tiles.length,
     isDemo: true,
+    tiles: level.tiles,
+    launchReady: validation.launchReady,
+    validationWarnings: validation.warnings,
   };
 }
 
@@ -85,6 +97,10 @@ function toServerSummary(level: unknown): LevelSummary | null {
     return null;
   }
 
+  if (candidate.active !== true || candidate.mode === 'race') {
+    return null;
+  }
+
   return {
     id: candidate.id,
     name: typeof candidate.name === 'string' ? candidate.name : candidate.id,
@@ -93,13 +109,21 @@ function toServerSummary(level: unknown): LevelSummary | null {
     mode: candidate.mode === 'race' ? 'race' : 'battle',
     tileCount: typeof candidate.tileCount === 'number' ? candidate.tileCount : 0,
     isDemo: false,
+    tiles: Array.isArray(candidate.tiles) ? candidate.tiles as LevelTile[] : undefined,
+    launchReady: candidate.launchReady === true,
+    validationIssues: Array.isArray(candidate.validationIssues)
+      ? candidate.validationIssues.filter((issue): issue is string => typeof issue === 'string')
+      : [],
+    validationWarnings: Array.isArray(candidate.validationWarnings)
+      ? candidate.validationWarnings.filter((warning): warning is string => typeof warning === 'string')
+      : [],
   };
 }
 
 export async function getAllLevels(): Promise<LevelSummary[]> {
   const allLevels: LevelSummary[] = [
     DEFAULT_LEVEL_SUMMARY,
-    ...demoLevels.map(toDemoSummary),
+    ...demoLevels.map(toDemoSummary).filter((level) => level.launchReady && level.mode === 'battle'),
   ];
 
   const seenIds = new Set(allLevels.map((level) => level.id));
@@ -131,7 +155,7 @@ export async function getLevelById(id: string): Promise<LevelData | null> {
 
   const demoLevel = demoLevels.find((level) => level.id === id);
   if (demoLevel) {
-    return demoLevel;
+    return validateLevelForLaunch(demoLevel).launchReady ? demoLevel : null;
   }
 
   const serverLevel = await getLevel(id);
@@ -140,6 +164,10 @@ export async function getLevelById(id: string): Promise<LevelData | null> {
   }
 
   const candidate = serverLevel as Record<string, unknown>;
+  if (!isLevelActive(candidate)) {
+    console.warn(`[LevelProvider] Rejected inactive arena: ${id}`);
+    return null;
+  }
   const mode: LevelMode = candidate.mode === 'race' ? 'race' : 'battle';
   const levelData = {
     ...(candidate as LevelData),
@@ -148,6 +176,11 @@ export async function getLevelById(id: string): Promise<LevelData | null> {
 
   if (candidate.raceConfig && typeof candidate.raceConfig === 'object') {
     levelData.raceConfig = candidate.raceConfig as RaceConfig;
+  }
+
+  const validation = validateLevelForLaunch(levelData);
+  if (!validation.launchReady) {
+    console.warn(`[LevelProvider] Loading active arena with playability warnings: ${id}`, validation.issues);
   }
 
   return levelData;

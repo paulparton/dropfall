@@ -1,4 +1,5 @@
 import { createStore } from 'zustand/vanilla';
+import { MATCH_DEFAULTS } from '../shared/matchSettings.js';
 
 function readStorage(key) {
     try {
@@ -26,12 +27,7 @@ function readJsonStorage(key, fallback) {
 }
 
 const defaultSettings = {
-    theme: 'tron',
-    sphereSize: 2.0,
-    sphereWeight: 200,
-    sphereAccel: 2000,
-    collisionBounce: 0.9,
-    arenaSize: 4,
+    ...MATCH_DEFAULTS,
     vrScale: 4,
     arMode: false,
     arModeType: 'roomscale',
@@ -39,13 +35,7 @@ const defaultSettings = {
     musicVolume: 0.6,
     sfxVolume: 0.8,
     particleAmount: 1.0,
-    destructionRate: 3.0,
-    iceRate: 2.0,
-    bonusRate: 6.0,
-    bonusDuration: 4.0,
     bloomLevel: 0,
-    boostRegenSpeed: 1.5,
-    boostDrainRate: 20,
     playerAuraSize: 1.4,
     playerAuraOpacity: 0.4,
     playerGlowIntensity: 3.0,

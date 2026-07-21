@@ -4,8 +4,19 @@ let audioCtx;
 let isMusicPlaying = false;
 let musicGain;
 let sfxGain;
+let sfxCompressor;
 let currentTempo = 135; // Fast EDM BPM
 let targetTempo = 135;
+
+export const MUSIC_TRACKS = Object.freeze({
+    tron: Object.freeze({
+        id: 'star-circuit-neon-apex',
+        title: 'Neon Apex',
+        style: 'Synth-wave / outrun',
+        key: 'F# minor',
+        baseBpm: 135,
+    }),
+});
 
 export function setMusicSpeed(multiplier) {
     targetTempo = 135 * multiplier;
@@ -28,13 +39,21 @@ export async function initAudio() {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();    
         musicGain = audioCtx.createGain();
         sfxGain = audioCtx.createGain();
+        sfxCompressor = audioCtx.createDynamicsCompressor();
         
         const settings = useGameStore.getState().settings;
         musicGain.gain.value = settings.musicVolume !== undefined ? settings.musicVolume : 0.6;
         sfxGain.gain.value = settings.sfxVolume !== undefined ? settings.sfxVolume : 0.8;
         
+        sfxCompressor.threshold.value = -12;
+        sfxCompressor.knee.value = 18;
+        sfxCompressor.ratio.value = 5;
+        sfxCompressor.attack.value = 0.003;
+        sfxCompressor.release.value = 0.2;
+
         musicGain.connect(audioCtx.destination);
-        sfxGain.connect(audioCtx.destination);
+        sfxGain.connect(sfxCompressor);
+        sfxCompressor.connect(audioCtx.destination);
     }
     if (audioCtx.state === 'suspended') {
         await audioCtx.resume();
@@ -272,6 +291,153 @@ export function playMusic() {
         osc2.start(time);
         osc.stop(time + 0.12 * durationScale);
         osc2.stop(time + 0.12 * durationScale);
+    }
+
+    // --- STAR CIRCUIT: "NEON APEX" ---
+    // A dedicated outrun palette: warm analog bass, wide gated chords,
+    // glassy pulse plucks, and a delayed lead motif. It deliberately shares
+    // the drum language of the other themes so transitions remain cohesive.
+    function playStarCircuitBass(time, note, durationScale, accent = false) {
+        const saw = audioCtx.createOscillator();
+        const square = audioCtx.createOscillator();
+        const filter = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+        saw.type = 'sawtooth';
+        square.type = 'square';
+        saw.frequency.value = note;
+        square.frequency.value = note / 2;
+        saw.detune.value = -4;
+        square.detune.value = 3;
+        filter.type = 'lowpass';
+        filter.Q.value = accent ? 6 : 3.5;
+        filter.frequency.setValueAtTime(accent ? 1650 : 1050, time);
+        filter.frequency.exponentialRampToValueAtTime(150, time + 0.28 * durationScale);
+        gain.gain.setValueAtTime(accent ? 0.18 : 0.13, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3 * durationScale);
+        saw.connect(filter);
+        square.connect(filter);
+        filter.connect(gain);
+        gain.connect(musicGain);
+        saw.start(time);
+        square.start(time);
+        saw.stop(time + 0.31 * durationScale);
+        square.stop(time + 0.31 * durationScale);
+    }
+
+    function playStarCircuitPad(time, notes, duration) {
+        const padBus = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.Q.value = 1.25;
+        filter.frequency.setValueAtTime(420, time);
+        filter.frequency.linearRampToValueAtTime(1250, time + duration * 0.55);
+        filter.frequency.exponentialRampToValueAtTime(360, time + duration);
+        padBus.gain.setValueAtTime(0, time);
+        padBus.gain.linearRampToValueAtTime(0.048, time + duration * 0.18);
+        padBus.gain.setValueAtTime(0.048, time + duration * 0.72);
+        padBus.gain.linearRampToValueAtTime(0, time + duration);
+        filter.connect(padBus);
+        padBus.connect(musicGain);
+
+        notes.forEach((note, index) => {
+            const left = audioCtx.createOscillator();
+            const right = audioCtx.createOscillator();
+            left.type = 'sawtooth';
+            right.type = index % 2 ? 'triangle' : 'sawtooth';
+            left.frequency.value = note;
+            right.frequency.value = note;
+            left.detune.value = -8 - index * 2;
+            right.detune.value = 8 + index * 2;
+            left.connect(filter);
+            right.connect(filter);
+            left.start(time);
+            right.start(time);
+            left.stop(time + duration);
+            right.stop(time + duration);
+        });
+    }
+
+    function playStarCircuitPulse(time, note, durationScale, bright = false) {
+        const primary = audioCtx.createOscillator();
+        const octave = audioCtx.createOscillator();
+        const filter = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+        primary.type = 'square';
+        octave.type = 'sine';
+        primary.frequency.value = note;
+        octave.frequency.value = note * 2;
+        filter.type = 'bandpass';
+        filter.Q.value = 5;
+        filter.frequency.setValueAtTime(bright ? 3200 : 2200, time);
+        filter.frequency.exponentialRampToValueAtTime(520, time + 0.16 * durationScale);
+        gain.gain.setValueAtTime(bright ? 0.075 : 0.052, time);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18 * durationScale);
+        primary.connect(filter);
+        octave.connect(filter);
+        filter.connect(gain);
+        gain.connect(musicGain);
+        primary.start(time);
+        octave.start(time);
+        primary.stop(time + 0.19 * durationScale);
+        octave.stop(time + 0.19 * durationScale);
+    }
+
+    function playStarCircuitLead(time, note, durationScale) {
+        const lead = audioCtx.createOscillator();
+        const shimmer = audioCtx.createOscillator();
+        const filter = audioCtx.createBiquadFilter();
+        const dry = audioCtx.createGain();
+        const delay = audioCtx.createDelay(0.5);
+        const wet = audioCtx.createGain();
+        lead.type = 'sawtooth';
+        shimmer.type = 'triangle';
+        lead.frequency.value = note;
+        shimmer.frequency.value = note * 1.002;
+        filter.type = 'lowpass';
+        filter.Q.value = 2.5;
+        filter.frequency.setValueAtTime(3600, time);
+        filter.frequency.exponentialRampToValueAtTime(680, time + 0.34 * durationScale);
+        dry.gain.setValueAtTime(0.09, time);
+        dry.gain.exponentialRampToValueAtTime(0.001, time + 0.38 * durationScale);
+        delay.delayTime.value = 0.19 * durationScale;
+        wet.gain.value = 0.28;
+        lead.connect(filter);
+        shimmer.connect(filter);
+        filter.connect(dry);
+        dry.connect(musicGain);
+        dry.connect(delay);
+        delay.connect(wet);
+        wet.connect(musicGain);
+        lead.start(time);
+        shimmer.start(time);
+        lead.stop(time + 0.4 * durationScale);
+        shimmer.stop(time + 0.4 * durationScale);
+    }
+
+    function playStarCircuitRiser(time, duration) {
+        const length = Math.max(1, Math.floor(audioCtx.sampleRate * duration));
+        const buffer = audioCtx.createBuffer(1, length, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let index = 0; index < length; index += 1) {
+            const envelope = index / length;
+            data[index] = (Math.random() * 2 - 1) * envelope * envelope;
+        }
+        const source = audioCtx.createBufferSource();
+        const filter = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+        source.buffer = buffer;
+        filter.type = 'bandpass';
+        filter.Q.value = 2.4;
+        filter.frequency.setValueAtTime(320, time);
+        filter.frequency.exponentialRampToValueAtTime(6200, time + duration);
+        gain.gain.setValueAtTime(0.001, time);
+        gain.gain.linearRampToValueAtTime(0.07, time + duration * 0.86);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(musicGain);
+        source.start(time);
+        source.stop(time + duration);
     }
 
     // --- NEW BEACH INSTRUMENTS ---
@@ -700,8 +866,21 @@ export function playMusic() {
     let nextNoteTime = audioCtx.currentTime;
     let step = 0;
     
-    // Cyber notes
-    const cyberBassNotes = [32.70, 32.70, 32.70, 36.71, 32.70, 32.70, 29.14, 32.70]; // C1, D1, Bb0
+    // Star Circuit — "Neon Apex" in F# minor.
+    const starCircuitBassNotes = [
+        46.25, 46.25, 46.25, 55.00, 46.25, 46.25, 41.20, 46.25,
+        36.71, 36.71, 36.71, 41.20, 36.71, 36.71, 41.20, 43.65,
+    ];
+    const starCircuitBassPattern = [1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1];
+    const starCircuitChords = [
+        [92.50, 110.00, 138.59, 164.81],  // F#m7
+        [73.42, 92.50, 110.00, 138.59],   // Dmaj7
+        [110.00, 138.59, 164.81, 207.65], // Aadd9
+        [82.41, 103.83, 123.47, 164.81],  // Eadd9
+    ];
+    const starCircuitPulseNotes = [369.99, 440.00, 554.37, 659.25, 554.37, 440.00, 369.99, 277.18];
+    const starCircuitLeadNotes = [369.99, 440.00, 493.88, 554.37, 659.25, 554.37, 493.88, 440.00];
+    const starCircuitLeadPattern = [-1, -1, 0, -1, 1, -1, 2, -1, -1, 3, -1, 4, -1, 3, 2, -1];
     
     // Beach notes (C major / A minor feel)
     const beachChords = [
@@ -914,26 +1093,48 @@ export function playMusic() {
                 }
 
             } else {
-                // Cyber rhythm — original layers
+                // Star Circuit: Neon Apex — four-on-the-floor outrun groove.
                 if (step % 4 === 0) playCyberKick(nextNoteTime, durationScale);
-                playCyberBass(nextNoteTime, cyberBassNotes[step % 8], durationScale);
+                if (step % 16 === 14) playCyberKick(nextNoteTime, durationScale * 0.72);
 
-                // Hi-hat on 8th notes (open on &-of-2)
-                if (step % 2 === 0) playCyberHiHat(nextNoteTime, durationScale, step % 8 === 4);
-
-                // Snare on beats 2 and 4
-                if (step % 16 === 4 || step % 16 === 12) playCyberSnare(nextNoteTime, durationScale);
-
-                // Pad chords (enter after 2 bars, sustained per 2-bar phrase)
-                if (step >= 32 && step % 32 === 0) {
-                    const padIdx = Math.floor(step / 32) % cyberPadChords.length;
-                    playCyberPad(nextNoteTime, cyberPadChords[padIdx], beatDuration * 8);
+                const bassStep = step % starCircuitBassPattern.length;
+                if (starCircuitBassPattern[bassStep]) {
+                    playStarCircuitBass(
+                        nextNoteTime,
+                        starCircuitBassNotes[bassStep],
+                        durationScale,
+                        step % 16 === 0 || step % 16 === 8,
+                    );
                 }
 
-                // Arpeggio pattern (enters after 4 bars)
-                if (step >= 64 && step % 4 === 2) {
-                    const arpIdx = Math.floor(step / 4) % cyberArpNotes.length;
-                    playCyberArp(nextNoteTime, cyberArpNotes[arpIdx], durationScale);
+                if (step % 2 === 0) playCyberHiHat(nextNoteTime, durationScale, step % 8 === 6);
+                if (step % 16 === 4 || step % 16 === 12) playCyberSnare(nextNoteTime, durationScale);
+
+                // Wide chords define the four-part F#m → D → A → E progression.
+                if (step % 32 === 0) {
+                    const chordIndex = Math.floor(step / 32) % starCircuitChords.length;
+                    playStarCircuitPad(nextNoteTime, starCircuitChords[chordIndex], beatDuration * 8);
+                }
+
+                // The pulse sequence is present from bar two and opens up every
+                // fourth bar, creating forward motion without masking impacts.
+                if (step >= 32 && step % 2 === 1) {
+                    const pulseIndex = Math.floor(step / 2) % starCircuitPulseNotes.length;
+                    playStarCircuitPulse(nextNoteTime, starCircuitPulseNotes[pulseIndex], durationScale, step % 16 === 15);
+                }
+
+                // Signature call-and-response lead enters after four bars.
+                if (step >= 64) {
+                    const leadIndex = starCircuitLeadPattern[step % 16];
+                    if (leadIndex >= 0) {
+                        const phraseOffset = Math.floor(step / 64) % 2 === 0 ? 0 : 3;
+                        const note = starCircuitLeadNotes[(leadIndex + phraseOffset) % starCircuitLeadNotes.length];
+                        playStarCircuitLead(nextNoteTime, note, durationScale);
+                    }
+                }
+
+                if (step >= 112 && step % 128 === 112) {
+                    playStarCircuitRiser(nextNoteTime, beatDuration * 4);
                 }
             }
             
@@ -945,15 +1146,48 @@ export function playMusic() {
     schedule();
 }
 
-export function playCollisionSound(intensity) {
+export function playCollisionSound(intensity, pan = 0, boosted = false) {
     if (!audioCtx) return;
-    
+
+    const safeIntensity = Math.min(5, Math.max(0.35, Number(intensity) || 0.35));
+    const impactLevel = 0.16 + Math.sqrt(safeIntensity / 5) * 0.48;
+    const impactBus = audioCtx.createGain();
+    impactBus.gain.value = boosted ? 1.08 : 0.92;
+    const panner = typeof audioCtx.createStereoPanner === 'function' ? audioCtx.createStereoPanner() : null;
+    if (panner) {
+        panner.pan.value = Math.min(0.85, Math.max(-0.85, Number(pan) || 0));
+        impactBus.connect(panner);
+        panner.connect(sfxGain);
+    } else {
+        impactBus.connect(sfxGain);
+    }
+
+    // A short body-conducted transient makes every theme read immediately as
+    // two heavy spheres colliding, while the themed layers provide character.
+    const t = audioCtx.currentTime;
+    const body = audioCtx.createOscillator();
+    const bodyGain = audioCtx.createGain();
+    body.type = boosted ? 'sawtooth' : 'sine';
+    body.frequency.setValueAtTime(145 + safeIntensity * 24, t);
+    body.frequency.exponentialRampToValueAtTime(42, t + 0.11);
+    bodyGain.gain.setValueAtTime(0.28 + impactLevel * 0.45, t);
+    bodyGain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+    body.connect(bodyGain);
+    bodyGain.connect(impactBus);
+    body.start(t);
+    body.stop(t + 0.14);
+
+    window.setTimeout(() => {
+        impactBus.disconnect();
+        panner?.disconnect();
+    }, 700);
+
     const theme = useGameStore.getState().settings.theme;
     
     if (theme === 'beach') {
         // Coconut bonk + splash — hollow woody thud with water splatter
         const t = audioCtx.currentTime;
-        const vol = intensity / 5;
+        const vol = impactLevel;
 
         // Layer 1: hollow wooden bonk (triangle wave, fast pitch drop)
         const bonk = audioCtx.createOscillator();
@@ -964,7 +1198,7 @@ export function playCollisionSound(intensity) {
         bonkGain.gain.setValueAtTime(1.6 * vol, t);
         bonkGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
         bonk.connect(bonkGain);
-        bonkGain.connect(sfxGain);
+        bonkGain.connect(impactBus);
         bonk.start(t);
         bonk.stop(t + 0.15);
 
@@ -986,14 +1220,14 @@ export function playCollisionSound(intensity) {
         splashGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
         splash.connect(splashFilt);
         splashFilt.connect(splashGain);
-        splashGain.connect(sfxGain);
+        splashGain.connect(impactBus);
         splash.start(t);
         splash.stop(t + 0.2);
 
     } else if (theme === 'temple') {
         // Heavy stone block impact — resonant thud + rubble scatter
         const t = audioCtx.currentTime;
-        const vol = intensity / 5;
+        const vol = impactLevel;
 
         // Layer 1: deep resonant thud (sine with sub-bass punch)
         const thud = audioCtx.createOscillator();
@@ -1004,7 +1238,7 @@ export function playCollisionSound(intensity) {
         thudGain.gain.setValueAtTime(2.2 * vol, t);
         thudGain.gain.exponentialRampToValueAtTime(0.01, t + 0.25);
         thud.connect(thudGain);
-        thudGain.connect(sfxGain);
+        thudGain.connect(impactBus);
         thud.start(t);
         thud.stop(t + 0.25);
 
@@ -1025,7 +1259,7 @@ export function playCollisionSound(intensity) {
         rubbleGain.gain.exponentialRampToValueAtTime(0.01, t + 0.22);
         rubble.connect(rubbleFilt);
         rubbleFilt.connect(rubbleGain);
-        rubbleGain.connect(sfxGain);
+        rubbleGain.connect(impactBus);
         rubble.start(t);
         rubble.stop(t + 0.22);
 
@@ -1038,14 +1272,14 @@ export function playCollisionSound(intensity) {
         clackGain.gain.setValueAtTime(1.4 * vol, t);
         clackGain.gain.exponentialRampToValueAtTime(0.01, t + 0.06);
         clack.connect(clackGain);
-        clackGain.connect(sfxGain);
+        clackGain.connect(impactBus);
         clack.start(t);
         clack.stop(t + 0.06);
 
     } else if (theme === 'arctic') {
         // Ice shatter — crystalline tinkle + sharp crack + glass scatter
         const t = audioCtx.currentTime;
-        const vol = intensity / 5;
+        const vol = impactLevel;
 
         // Layer 1: sharp crack (very short noise burst through highpass)
         const crackLen = Math.floor(audioCtx.sampleRate * 0.03);
@@ -1062,7 +1296,7 @@ export function playCollisionSound(intensity) {
         crackGain.gain.exponentialRampToValueAtTime(0.01, t + 0.03);
         crack.connect(crackFilt);
         crackFilt.connect(crackGain);
-        crackGain.connect(sfxGain);
+        crackGain.connect(impactBus);
         crack.start(t);
         crack.stop(t + 0.03);
 
@@ -1079,7 +1313,7 @@ export function playCollisionSound(intensity) {
             pg.gain.linearRampToValueAtTime(0.7 * vol, t + delay);
             pg.gain.exponentialRampToValueAtTime(0.01, t + delay + 0.15);
             ping.connect(pg);
-            pg.connect(sfxGain);
+            pg.connect(impactBus);
             ping.start(t);
             ping.stop(t + delay + 0.15);
         }
@@ -1100,14 +1334,14 @@ export function playCollisionSound(intensity) {
         scatGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
         scatter.connect(scatFilt);
         scatFilt.connect(scatGain);
-        scatGain.connect(sfxGain);
+        scatGain.connect(impactBus);
         scatter.start(t);
         scatter.stop(t + 0.2);
 
     } else if (theme === 'inferno') {
         // Volcanic explosion — sub-bass punch + sizzling crackle + fire burst
         const t = audioCtx.currentTime;
-        const vol = intensity / 5;
+        const vol = impactLevel;
 
         // Layer 1: sub-bass punch (sine dropping into sub frequencies)
         const boom = audioCtx.createOscillator();
@@ -1118,7 +1352,7 @@ export function playCollisionSound(intensity) {
         boomGain.gain.setValueAtTime(2.5 * vol, t);
         boomGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
         boom.connect(boomGain);
-        boomGain.connect(sfxGain);
+        boomGain.connect(impactBus);
         boom.start(t);
         boom.stop(t + 0.4);
 
@@ -1139,7 +1373,7 @@ export function playCollisionSound(intensity) {
         sizzGain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
         sizzle.connect(sizzFilt);
         sizzFilt.connect(sizzGain);
-        sizzGain.connect(sfxGain);
+        sizzGain.connect(impactBus);
         sizzle.start(t);
         sizzle.stop(t + 0.3);
 
@@ -1165,14 +1399,14 @@ export function playCollisionSound(intensity) {
         } else {
             burst.connect(burstGain);
         }
-        burstGain.connect(sfxGain);
+        burstGain.connect(impactBus);
         burst.start(t);
         burst.stop(t + 0.15);
 
     } else {
         // Cyber/Tron: Digital glitch — rapid bit-step zap + electric hum
         const t = audioCtx.currentTime;
-        const vol = intensity / 5;
+        const vol = impactLevel;
 
         // Layer 1: electric zap (square wave rapid frequency sweep)
         const zap = audioCtx.createOscillator();
@@ -1188,7 +1422,7 @@ export function playCollisionSound(intensity) {
         zapGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
         zap.connect(zapFilt);
         zapFilt.connect(zapGain);
-        zapGain.connect(sfxGain);
+        zapGain.connect(impactBus);
         zap.start(t);
         zap.stop(t + 0.15);
 
@@ -1205,7 +1439,7 @@ export function playCollisionSound(intensity) {
         }
         glitchGain.gain.setValueAtTime(0.01, t + steps * 0.04);
         glitch.connect(glitchGain);
-        glitchGain.connect(sfxGain);
+        glitchGain.connect(impactBus);
         glitch.start(t);
         glitch.stop(t + steps * 0.04 + 0.01);
 
@@ -1226,7 +1460,7 @@ export function playCollisionSound(intensity) {
         hum1.connect(humFilt);
         hum2.connect(humFilt);
         humFilt.connect(humGain);
-        humGain.connect(sfxGain);
+        humGain.connect(impactBus);
         hum1.start(t + 0.05);
         hum2.start(t + 0.05);
         hum1.stop(t + 0.3);

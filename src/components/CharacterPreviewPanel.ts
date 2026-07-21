@@ -8,8 +8,10 @@ import * as THREE from 'three';
 import { createHatMesh, disposeHatGroup, HatResult, SantaSegment } from '../utils/hatFactory.js';
 import { updateHatPhysics, createHatPhysicsState, HatPhysicsState } from '../utils/hatPhysics.js';
 import { createBallMaterial, createSwatchCanvas, getPatternEmissiveColor } from '../utils/materialFactory.js';
-import { createLevelThumbnailCanvas, type LevelTile } from '../utils/levelThumbnail.js';
+import { createHexArenaPreviewTiles, createLevelThumbnailCanvas, type LevelTile } from '../utils/levelThumbnail.js';
 import { useGameStore } from '../store.js';
+import { createMatchSettingsEditor } from './MatchSettingsEditor.js';
+import { HAT_CATALOG, HAT_VALUES } from '../utils/hatCatalog.js';
 
 export interface PreviewPlayerState {
   playerId: 'player1' | 'player2';
@@ -50,6 +52,9 @@ interface LevelSummary {
   difficulty: string;
   tileCount: number;
   isDemo: boolean;
+  tiles?: LevelTile[];
+  launchReady?: boolean;
+  validationIssues?: string[];
 }
 
 interface LevelDetails extends LevelSummary {
@@ -63,17 +68,6 @@ type LevelSelectFactory =
     onSelect: (levelId: string | null) => void;
   }) => unknown)
   | ((levels: LevelSummary[], currentLevelId: string | null, onSelect: (levelId: string | null) => void) => unknown);
-
-const HAT_LABELS: Record<string, string> = {
-  none: 'None',
-  santa: 'Santa',
-  cowboy: 'Cowboy',
-  afro: 'Afro',
-  crown: 'Crown',
-  dunce: 'Dunce',
-};
-
-const HAT_VALUES = ['none', 'santa', 'cowboy', 'afro', 'crown', 'dunce'];
 
 export const previewInstances: Map<'player1' | 'player2', PreviewInstance> = new Map();
 
@@ -144,6 +138,7 @@ export function createCharacterPreviewPanel(
 ): HTMLElement {
   const container = document.createElement('div');
   container.id = 'character-preview-panel';
+  container.className = 'dropfall-v2-preview';
   container.style.cssText = `
     width: 100%;
     height: 100%;
@@ -183,9 +178,14 @@ export function createCharacterPreviewPanel(
   `;
   container.appendChild(panelStyles);
 
+  const setupToolbar = document.createElement('div');
+  setupToolbar.className = `dropfall-setup-toolbar${isMultiplayer ? ' dropfall-setup-toolbar--local' : ''}`;
+  container.appendChild(setupToolbar);
+
   // ===== TOP: DIFFICULTY SELECTOR (Single player only) =====
   if (!isMultiplayer) {
     const difficultySection = document.createElement('div');
+    difficultySection.className = 'dropfall-preview-strip dropfall-preview-strip--difficulty';
     difficultySection.style.cssText = `
       width: 100%;
       max-width: 1180px;
@@ -289,11 +289,12 @@ export function createCharacterPreviewPanel(
     });
 
     difficultySection.appendChild(diffButtons);
-    container.appendChild(difficultySection);
+    setupToolbar.appendChild(difficultySection);
   }
 
   // ===== MIDDLE: LEVEL SELECTOR STRIP =====
   const levelSection = document.createElement('div');
+  levelSection.className = 'dropfall-preview-strip dropfall-preview-strip--level';
   levelSection.style.cssText = `
     width: 100%;
     max-width: 1180px;
@@ -368,7 +369,7 @@ export function createCharacterPreviewPanel(
     text-transform: uppercase;
     font-family: 'Rajdhani', system-ui, sans-serif;
   `;
-  levelThumbnailWrap.appendChild(levelFallbackText);
+  levelThumbnailWrap.appendChild(createLevelThumbnailCanvas(createHexArenaPreviewTiles(), 88, 52));
 
   levelInfo.append(levelThumbnailWrap, levelName);
   levelSection.appendChild(levelInfo);
@@ -405,7 +406,14 @@ export function createCharacterPreviewPanel(
   };
   levelSection.appendChild(levelButton);
 
-  container.appendChild(levelSection);
+  setupToolbar.appendChild(levelSection);
+
+  setupToolbar.appendChild(createMatchSettingsEditor({
+    title: 'MATCH SETTINGS',
+    subtitle: isMultiplayer
+      ? 'One shared ruleset for this local match.'
+      : 'Tune the same launch rules used by local and online matches.',
+  }));
 
   const setThumbnail = (tiles?: LevelTile[]) => {
     levelThumbnailWrap.innerHTML = '';
@@ -421,25 +429,32 @@ export function createCharacterPreviewPanel(
   };
 
   const updateLevelStrip = async (nextLevelId: string | null, availableLevels: LevelSummary[], providerAvailable: boolean) => {
-    selectedPreviewLevelId = nextLevelId;
+    const normalizedLevelId = nextLevelId === 'default' ? null : nextLevelId;
+    selectedPreviewLevelId = normalizedLevelId;
 
-    if (!nextLevelId) {
+    if (!normalizedLevelId) {
       levelName.textContent = 'Default Arena';
       levelName.title = 'Default Arena';
-      setThumbnail(undefined);
+      setThumbnail(createHexArenaPreviewTiles());
       return;
     }
 
-    const level = availableLevels.find((candidate) => candidate.id === nextLevelId);
+    const level = availableLevels.find((candidate) => candidate.id === normalizedLevelId);
     if (!level) {
+      selectedPreviewLevelId = null;
       levelName.textContent = 'Default Arena';
       levelName.title = 'Default Arena';
-      setThumbnail(undefined);
+      setThumbnail(createHexArenaPreviewTiles());
       return;
     }
 
     levelName.textContent = level.name;
     levelName.title = level.name;
+
+    if (level.tiles && level.tiles.length > 0) {
+      setThumbnail(level.tiles);
+      return;
+    }
 
     if (!providerAvailable) {
       setThumbnail(undefined);
@@ -459,44 +474,53 @@ export function createCharacterPreviewPanel(
   let levelList: LevelSummary[] = [];
   let hasLevelProvider = false;
 
-  const initializeLevels = async () => {
+  const setLevelButtonState = (label: string, disabled = false) => {
+    levelButton.textContent = label;
+    levelButton.disabled = disabled;
+    levelButton.style.opacity = disabled ? '0.55' : '1';
+    levelButton.style.cursor = disabled ? 'not-allowed' : 'pointer';
+  };
+
+  const refreshLevels = async () => {
     const provider = await loadLevelProvider();
     hasLevelProvider = Boolean(provider);
-
     if (!provider) {
-      levelButton.disabled = true;
-      levelButton.textContent = 'UNAVAILABLE';
-      levelButton.style.opacity = '0.55';
-      levelButton.style.cursor = 'not-allowed';
+      levelList = [];
+      cachedLevelSummaries = null;
+      return false;
+    }
+    levelList = await provider.getAllLevels();
+    cachedLevelSummaries = levelList;
+    return true;
+  };
+
+  const initializeLevels = async () => {
+    setLevelButtonState('LOADING', true);
+    if (!await refreshLevels()) {
+      setLevelButtonState('UNAVAILABLE', true);
       return;
     }
 
-    if (!cachedLevelSummaries) {
-      cachedLevelSummaries = await provider.getAllLevels();
-    }
-    levelList = cachedLevelSummaries;
-
     if (levelList.length === 0) {
-      levelButton.disabled = true;
-      levelButton.textContent = 'NO LEVELS';
-      levelButton.style.opacity = '0.55';
-      levelButton.style.cursor = 'not-allowed';
+      setLevelButtonState('NO LEVELS', true);
       return;
     }
 
     await updateLevelStrip(selectedPreviewLevelId, levelList, hasLevelProvider);
+    setLevelButtonState('SELECT');
   };
 
   void initializeLevels();
 
   levelButton.onclick = async () => {
-    if (levelButton.disabled) {
-      return;
-    }
+    if (levelButton.disabled) return;
 
-    if (levelList.length === 0) {
-      return;
-    }
+    setLevelButtonState('LOADING', true);
+    const refreshed = await refreshLevels();
+    setLevelButtonState(refreshed ? 'SELECT' : 'UNAVAILABLE', !refreshed);
+    if (!refreshed || levelList.length === 0) return;
+
+    await updateLevelStrip(selectedPreviewLevelId, levelList, hasLevelProvider);
 
     const modalFactory = await loadLevelSelectFactory();
     if (!modalFactory) {
@@ -507,24 +531,20 @@ export function createCharacterPreviewPanel(
       void updateLevelStrip(levelId, levelList, hasLevelProvider);
     };
 
-    try {
-      modalFactory({
-        levels: levelList,
-        currentLevelId: selectedPreviewLevelId,
-        onSelect: handleSelection,
-      });
-    } catch {
-      const fallbackFactory = modalFactory as (
-        levels: LevelSummary[],
-        currentLevelId: string | null,
-        onSelect: (levelId: string | null) => void,
-      ) => unknown;
-      fallbackFactory(levelList, selectedPreviewLevelId, handleSelection);
-    }
+    (modalFactory as (options: {
+      levels: LevelSummary[];
+      currentLevelId: string | null;
+      onSelect: (levelId: string | null) => void;
+    }) => unknown)({
+      levels: levelList,
+      currentLevelId: selectedPreviewLevelId,
+      onSelect: handleSelection,
+    });
   };
 
   // ===== BOTTOM: DUAL PLAYER CARDS =====
   const playersContainer = document.createElement('div');
+  playersContainer.className = 'dropfall-preview-player-grid';
   playersContainer.style.cssText = `
     display: flex;
     gap: 0;
@@ -583,6 +603,7 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   const fontStack = "'Rajdhani', 'Trebuchet MS', system-ui, sans-serif";
 
   const card = document.createElement('div');
+  card.className = `dropfall-preview-card dropfall-preview-card--${isP1 ? 'p1' : 'p2'}`;
   card.style.cssText = `
     flex: 1 1 0;
     max-width: 580px;
@@ -608,6 +629,7 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
 
   // Header bar
   const header = document.createElement('div');
+  header.className = 'dropfall-preview-card__header';
   header.style.cssText = `
     display: flex;
     align-items: center;
@@ -637,7 +659,7 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
 
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
-  nameInput.maxLength = 12;
+  nameInput.maxLength = 20;
   nameInput.placeholder = isP1 ? 'PLAYER 1' : (isMultiplayer ? 'PLAYER 2' : 'CPU');
   nameInput.value = player.playerName;
   nameInput.style.cssText = `
@@ -681,6 +703,7 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
 
   // Canvas container with responsive hero-preview height and accent glow
   const canvasContainer = document.createElement('div');
+  canvasContainer.className = 'dropfall-preview-card__stage';
   canvasContainer.style.cssText = `
     width: 100%;
     height: clamp(220px, 30vh, 340px);
@@ -728,12 +751,17 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
 
   // Customization section
   const customSection = document.createElement('div');
+  customSection.className = 'dropfall-preview-card__customize';
   customSection.style.cssText = `
     padding: 0.8rem 1rem 1rem;
     display: flex;
     flex-direction: column;
     gap: 0.55rem;
     border-top: 1px solid rgba(${accentRgb},0.14);
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(${accentRgb},0.35) transparent;
   `;
 
   const makeSectionLabel = (text: string): HTMLElement => {
@@ -928,24 +956,61 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
   customSection.appendChild(makeSectionLabel('HEADGEAR'));
 
   const hatRow = document.createElement('div');
-  hatRow.style.cssText = `display: flex; flex-wrap: wrap; gap: 6px;`;
+  hatRow.className = 'dropfall-hat-grid';
+  hatRow.style.cssText = `
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 44px;
+    gap: 6px;
+    max-height: 144px;
+    overflow-y: auto;
+    padding: 2px 5px 2px 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(${accentRgb},0.35) transparent;
+  `;
 
   let currentHat = player.hat;
 
-  HAT_VALUES.forEach(hatType => {
+  HAT_VALUES.forEach((hatType, hatIndex) => {
     const chip = document.createElement('button');
     chip.type = 'button';
-    chip.textContent = HAT_LABELS[hatType] ?? hatType;
+    chip.className = 'dropfall-hat-option';
     chip.dataset.hatType = hatType;
+    chip.style.setProperty('--hat-index', String(hatIndex));
+    const hatMeta = HAT_CATALOG.find(hat => hat.id === hatType);
+    const hatName = hatMeta?.label ?? 'None';
+    chip.title = hatName;
+    chip.setAttribute('aria-label', hatName);
+
+    const hatIcon = document.createElement('span');
+    hatIcon.className = 'dropfall-hat-option__icon';
+    hatIcon.setAttribute('aria-hidden', 'true');
+    hatIcon.textContent = hatMeta?.icon ?? '—';
+
+    const hatLabel = document.createElement('span');
+    hatLabel.className = 'dropfall-hat-option__label';
+    hatLabel.textContent = hatName;
+
+    chip.append(hatIcon, hatLabel);
     const isSel = hatType === currentHat;
+    chip.classList.toggle('is-selected', isSel);
+    chip.setAttribute('aria-pressed', String(isSel));
     chip.style.cssText = `
-      padding: 5px 12px;
-      border-radius: 5px;
+      --hat-index: ${hatIndex};
+      min-width: 0;
+      min-height: 44px;
+      padding: 5px 8px;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      align-items: center;
+      gap: 7px;
+      border-radius: 3px;
       font-family: ${fontStack};
-      font-size: 0.78rem;
+      font-size: 0.68rem;
       font-weight: 700;
-      letter-spacing: 1.5px;
+      letter-spacing: 1px;
       text-transform: uppercase;
+      text-align: left;
       cursor: pointer;
       border: 1px solid rgba(${accentRgb},${isSel ? '0.9' : '0.28'});
       background: rgba(${accentRgb},${isSel ? '0.3' : '0.05'});
@@ -959,6 +1024,8 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
       hatRow.querySelectorAll('button').forEach(el => {
         const c = el as HTMLButtonElement;
         const active = c.dataset.hatType === hatType;
+        c.classList.toggle('is-selected', active);
+        c.setAttribute('aria-pressed', String(active));
         c.style.border = `1px solid rgba(${accentRgb},${active ? '0.9' : '0.28'})`;
         c.style.background = `rgba(${accentRgb},${active ? '0.3' : '0.05'})`;
         c.style.color = active ? '#ffffff' : `rgba(${accentRgb},0.65)`;
@@ -1049,7 +1116,8 @@ function initializePreview(canvas: HTMLCanvasElement, initialColor: number | str
   canvas.height = height;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x060a14);
+  scene.background = new THREE.Color(0x6978cf);
+  scene.fog = new THREE.Fog(0x6978cf, 9, 18);
 
   const camera = new THREE.PerspectiveCamera(65, width / height, 0.1, 1000);
   camera.position.set(0, 2.5, 5);
@@ -1063,22 +1131,31 @@ function initializePreview(canvas: HTMLCanvasElement, initialColor: number | str
   });
   renderer.setSize(width, height);
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.shadowMap.enabled = false;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.35;
 
-  const ambientLight = new THREE.AmbientLight(0x1a2a4a, 0.9);
+  const ambientLight = new THREE.HemisphereLight(0xfff7df, 0x51458e, 3.0);
   scene.add(ambientLight);
 
-  const pointLight = new THREE.PointLight(0xffffff, 0.8);
+  const pointLight = new THREE.PointLight(0xffffff, 5.5, 18);
   pointLight.position.set(3, 4, 3);
   scene.add(pointLight);
 
-  const pointLight2 = new THREE.PointLight(0x4488cc, 0.35);
+  const pointLight2 = new THREE.PointLight(0x69f2d5, 4.5, 16);
   pointLight2.position.set(-3, 2, -1);
   scene.add(pointLight2);
 
-  const ballGeometry = new THREE.SphereGeometry(sphereSize, 16, 16);
+  const warmRimLight = new THREE.PointLight(0xffd63d, 3.8, 14);
+  warmRimLight.position.set(0, 1, -4);
+  scene.add(warmRimLight);
+
+  const ballGeometry = new THREE.SphereGeometry(sphereSize, 32, 24);
   const ballMaterial = createBallMaterial(initialColor) as THREE.MeshStandardMaterial;
   const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+  ball.castShadow = true;
   scene.add(ball);
 
   const auraGeometry = new THREE.SphereGeometry(1.15 * sphereSize, 16, 16);
@@ -1094,19 +1171,20 @@ function initializePreview(canvas: HTMLCanvasElement, initialColor: number | str
   const aura = new THREE.Mesh(auraGeometry, auraMaterial);
   scene.add(aura);
 
-  const groundGeometry = new THREE.PlaneGeometry(8, 8);
+  const groundGeometry = new THREE.CircleGeometry(5.5, 48);
   const groundMaterial = new THREE.MeshStandardMaterial({
-    color: 0x050d1a,
-    metalness: 0.1,
-    roughness: 0.9,
+    color: 0xfff1b8,
+    metalness: 0,
+    roughness: 0.82,
   });
   const ground = new THREE.Mesh(groundGeometry, groundMaterial);
   ground.rotation.x = -Math.PI / 2;
   ground.position.y = -1.5;
+  ground.receiveShadow = true;
   scene.add(ground);
 
-  const gridHelper = new THREE.GridHelper(8, 14, 0x0d2540, 0x091828);
-  gridHelper.position.y = -1.49;
+  const gridHelper = new THREE.GridHelper(9, 12, 0x755be8, 0xd3c57f);
+  gridHelper.position.y = -1.485;
   scene.add(gridHelper);
 
   const hatResult: HatResult | null = createHatMesh(initialHat, sphereSize);
@@ -1155,6 +1233,8 @@ function initializePreview(canvas: HTMLCanvasElement, initialColor: number | str
  */
 export function startPreviewAnimation(instance: PreviewInstance): void {
   if (!instance.renderer || !instance.ball) return;
+  const previewRenderer = instance.renderer;
+  const previewBall = instance.ball;
 
   let lastTime = Date.now();
   let directionChangeTimer = 2;
@@ -1187,7 +1267,7 @@ export function startPreviewAnimation(instance: PreviewInstance): void {
       instance.ballVelocity.z *= -0.9;
     }
 
-    instance.ball.position.copy(instance.ballPosition);
+    previewBall.position.copy(instance.ballPosition);
 
     const speed = instance.ballVelocity.length();
     if (speed > 0.1) {
@@ -1195,7 +1275,7 @@ export function startPreviewAnimation(instance: PreviewInstance): void {
       const rollAmount = speed * dt;
       const rollQuat = new THREE.Quaternion();
       rollQuat.setFromAxisAngle(rollAxis, rollAmount);
-      instance.ball.quaternion.multiplyQuaternions(rollQuat, instance.ball.quaternion);
+      previewBall.quaternion.multiplyQuaternions(rollQuat, previewBall.quaternion);
     }
 
     instance.rotationX += 0.004;
@@ -1215,7 +1295,7 @@ export function startPreviewAnimation(instance: PreviewInstance): void {
       updateHatPhysics(
         instance.hatGroup,
         { x: instance.ballVelocity.x, y: 0, z: instance.ballVelocity.z },
-        instance.ball.position,
+        previewBall.position,
         instance.sphereSize,
         instance.hatPhysics,
         dt,
@@ -1226,7 +1306,7 @@ export function startPreviewAnimation(instance: PreviewInstance): void {
       instance.hatSantaData.santaDroopZ = instance.hatPhysics.santaDroopZ;
     }
 
-    instance.renderer.render(instance.scene!, instance.camera!);
+    previewRenderer.render(instance.scene!, instance.camera!);
   };
 
   animate();

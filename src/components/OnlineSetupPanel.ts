@@ -1,722 +1,474 @@
-import { getAllColors, getDisplayColor, hexToString, isPatternId } from './ColorPalette.js';
+import { getAllColors, getAllPatterns, getDisplayColor, getPatternById, hexToString, isPatternId } from './ColorPalette.js';
 import { useGameStore } from '../store.js';
+import {
+  MATCH_DEFAULTS,
+  MATCH_PRESETS,
+  MATCH_SETTING_GROUPS,
+  MATCH_THEMES,
+  formatMatchSettingValue,
+} from '../../shared/matchSettings.js';
+import { HAT_CATALOG } from '../utils/hatCatalog.js';
 
 export interface OnlineManager {
   sendCustomization: (color: number | string, hat: string, name: string) => void;
   sendReady: (ready: boolean) => void;
   startGame: () => void;
+  leaveGame: () => void;
+  updateGameSettings: (settings: Record<string, string | number>) => void;
 }
 
-interface OnlinePlayerData {
-  name: string;
-  color: number | string;
-  hat: string;
-  ready: boolean;
+type RoomSettings = Record<string, string | number>;
+
+interface RoomPlayer {
+  id?: string;
+  slot?: number;
+  name?: string;
+  ready?: boolean;
+  color?: number | string;
+  hat?: string;
 }
 
-const HAT_OPTIONS = ['none', 'santa', 'cowboy', 'afro', 'crown', 'dunce'];
-const HAT_LABELS: Record<string, string> = {
-  none: 'None',
-  santa: 'Santa',
-  cowboy: 'Cowboy',
-  afro: 'Afro',
-  crown: 'Crown',
-  dunce: 'Dunce',
-};
-
-function getReadyBySlot(currentGame: unknown, slot: number): boolean | null {
-  if (!currentGame || typeof currentGame !== 'object') {
-    return null;
-  }
-
-  const game = currentGame as { players?: unknown[] };
-  const players = Array.isArray(game.players) ? game.players : [];
-  const player = players.find((entry) => {
-    if (!entry || typeof entry !== 'object') {
-      return false;
-    }
-
-    const typedEntry = entry as { slot?: number };
-    return typedEntry.slot === slot;
-  }) as { ready?: boolean } | undefined;
-
-  if (!player || typeof player.ready !== 'boolean') {
-    return null;
-  }
-
-  return Boolean(player.ready);
+interface SettingDefinition {
+  id: string;
+  key: string;
+  label: string;
+  description: string;
+  min: number;
+  max: number;
+  step: number;
+  format: string;
 }
 
-function getStatusText(options: {
-  opponentConnected: boolean;
-  myReady: boolean;
-  opponentReady: boolean;
-  isHost: boolean;
-}): string {
-  if (!options.opponentConnected) {
-    return 'Waiting for opponent to join...';
-  }
+const HATS: ReadonlyArray<readonly [string, string]> = [
+  ['none', 'No hat'],
+  ...HAT_CATALOG.map((hat) => [hat.id, `${hat.icon} ${hat.label}`] as const),
+];
 
-  if (options.myReady && options.opponentReady) {
-    return options.isHost
-      ? 'Both ready. Host can start the match.'
-      : 'Both ready. Waiting for host to start...';
-  }
 
-  if (!options.myReady && !options.opponentReady) {
-    return 'Waiting for players to ready up...';
-  }
-
-  if (!options.myReady) {
-    return 'Opponent is ready. Toggle READY when you are set.';
-  }
-
-  return 'You are ready. Waiting for opponent...';
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
 }
 
 function normalizeName(value: string): string {
   return value.trim().slice(0, 20);
 }
 
-function hasOpponentCustomization(options: {
-  opponent: OnlinePlayerData;
-  opponentConnected: boolean;
-  opponentCustomization: unknown;
-}): boolean {
-  const { opponent, opponentConnected, opponentCustomization } = options;
-  if (!opponentConnected) {
-    return false;
+function playerForSlot(game: Record<string, unknown>, slot: number): RoomPlayer | null {
+  const players = Array.isArray(game.players) ? game.players as RoomPlayer[] : [];
+  return players.find((player) => player?.slot === slot) || null;
+}
+
+function makeBall(color: number | string, hat: string, waiting = false): HTMLDivElement {
+  const wrap = element('div', `online-room-ball${waiting ? ' online-room-ball--waiting' : ''}`);
+  if (waiting) {
+    wrap.append(element('span', undefined, '?'));
+    return wrap;
   }
 
-  if (opponentCustomization && typeof opponentCustomization === 'object') {
-    return true;
+  const cssColor = hexToString(getDisplayColor(color));
+  wrap.style.setProperty('--ball-color', cssColor);
+  const sphere = element('div', 'online-room-ball__sphere');
+  if (isPatternId(color)) {
+    const pattern = getPatternById(color);
+    if (pattern) {
+      const colors = pattern.previewColors.map(hexToString);
+      sphere.style.background = `radial-gradient(circle at 30% 24%, #fff 0 4%, transparent 18%), linear-gradient(135deg, ${colors.join(', ')})`;
+    }
   }
-
-  const hasName = opponent.name.trim().length > 0;
-  return hasName;
+  if (hat !== 'none') sphere.dataset.hat = HATS.find(([id]) => id === hat)?.[1] || hat;
+  wrap.append(sphere);
+  return wrap;
 }
 
 export function createOnlineSetupPanel(
   container: HTMLElement,
   online: OnlineManager,
-  isHost: boolean,
+  _initialIsHost: boolean,
 ): { cleanup: () => void } {
-  const getStateRecord = (): Record<string, unknown> => {
-    return useGameStore.getState() as unknown as Record<string, unknown>;
-  };
-
-  const initialState = getStateRecord();
-  const initialOnline = (initialState.online || {}) as Record<string, unknown>;
-
+  const initialState = useGameStore.getState();
+  const initialOnline = initialState.online || {};
   const mySlot = typeof initialOnline.playerSlot === 'number' ? initialOnline.playerSlot : 1;
   const opponentSlot = mySlot === 1 ? 2 : 1;
 
-  const getLocalNameFromState = (state: Record<string, unknown>): string => {
-    const stateOnline = (state.online || {}) as Record<string, unknown>;
-    const onlineName = typeof stateOnline.myName === 'string' ? stateOnline.myName.trim() : '';
-    if (onlineName) {
-      return onlineName.slice(0, 20);
-    }
+  let localName = String(initialOnline.myName || (mySlot === 2 ? initialState.p2Name : initialState.p1Name) || 'Player').slice(0, 20);
+  let localColor: number | string = mySlot === 2 ? initialState.p2Color : initialState.p1Color;
+  let localHat = String(mySlot === 2 ? initialState.p2Hat : initialState.p1Hat) || 'none';
+  let roomSettings: RoomSettings = {
+    ...MATCH_DEFAULTS,
+    ...((initialOnline.currentGame?.settings || {}) as RoomSettings),
+  };
+  let settingsTimer: number | null = null;
+  let customizationTimer: number | null = null;
+  let pendingSettingsJson: string | null = null;
 
-    if (mySlot === 2 && typeof state.p2Name === 'string') {
-      return String(state.p2Name).slice(0, 20);
-    }
+  const root = element('div', 'online-room');
+  const header = element('header', 'online-room-header');
+  const headerCopy = element('div');
+  const kicker = element('p', 'multiplayer-kicker');
+  kicker.append(element('span'), document.createTextNode(' Private match'));
+  const title = element('h1', undefined, 'Room Setup');
+  const roomMeta = element('p', 'online-room-meta', 'Synchronizing room…');
+  headerCopy.append(kicker, title, roomMeta);
+  const headerActions = element('div', 'online-room-header__actions');
+  const roleBadge = element('span', 'online-room-role', 'PLAYER');
+  const leaveButton = element('button', 'multiplayer-text-button', 'Leave Room');
+  leaveButton.type = 'button';
+  headerActions.append(roleBadge, leaveButton);
+  header.append(headerCopy, headerActions);
 
-    const fallback = typeof state.p1Name === 'string' ? String(state.p1Name) : 'Player';
-    return fallback.slice(0, 20);
+  const layout = element('div', 'online-room-layout');
+  const playersPanel = element('section', 'online-room-players');
+  const playersHeading = element('div', 'online-room-section-heading');
+  playersHeading.append(element('div', undefined, 'Competitors'), element('span', undefined, 'CUSTOMIZE & READY'));
+
+  const makePlayerCard = (local: boolean) => {
+    const card = element('article', `online-room-player online-room-player--${local ? 'local' : 'opponent'}`);
+    const cardTop = element('div', 'online-room-player__top');
+    const slotLabel = element('span', 'online-room-player__slot', local ? `YOU · P${mySlot}` : `RIVAL · P${opponentSlot}`);
+    const readyBadge = element('span', 'online-room-ready-badge', 'NOT READY');
+    cardTop.append(slotLabel, readyBadge);
+    const preview = element('div', 'online-room-player__preview');
+    const identity = element('div', 'online-room-player__identity');
+    card.append(cardTop, preview, identity);
+    return { card, slotLabel, readyBadge, preview, identity };
   };
 
-  const getLocalColorFromState = (state: Record<string, unknown>): number | string => {
-    if (mySlot === 2 && (typeof state.p2Color === 'number' || typeof state.p2Color === 'string')) {
-      return state.p2Color as number | string;
-    }
+  const localCard = makePlayerCard(true);
+  const opponentCard = makePlayerCard(false);
 
-    if (typeof state.p1Color === 'number' || typeof state.p1Color === 'string') {
-      return state.p1Color as number | string;
-    }
+  const nameLabel = element('label', 'online-room-field-label', 'Display name');
+  const nameInput = element('input', 'online-room-input');
+  nameInput.type = 'text';
+  nameInput.maxLength = 20;
+  nameInput.value = localName;
+  nameLabel.append(nameInput);
 
-    return 0x00ffff;
-  };
+  const colorLabel = element('div', 'online-room-field-label', 'Ball color');
+  const colorGrid = element('div', 'online-room-colors');
+  const colorButtons: HTMLButtonElement[] = [];
+  for (const option of getAllColors()) {
+    const button = element('button', 'online-room-color') as HTMLButtonElement;
+    button.type = 'button';
+    button.title = option.name;
+    button.dataset.color = String(option.hex);
+    button.style.setProperty('--swatch', hexToString(option.hex));
+    colorButtons.push(button);
+    colorGrid.append(button);
+  }
+  for (const pattern of getAllPatterns()) {
+    const button = element('button', 'online-room-color online-room-color--pattern') as HTMLButtonElement;
+    button.type = 'button';
+    button.title = pattern.name;
+    button.dataset.color = pattern.id;
+    button.style.background = `linear-gradient(135deg, ${pattern.previewColors.map(hexToString).join(', ')})`;
+    colorButtons.push(button);
+    colorGrid.append(button);
+  }
+  colorLabel.append(colorGrid);
 
-  const getLocalHatFromState = (state: Record<string, unknown>): string => {
-    if (mySlot === 2 && typeof state.p2Hat === 'string') {
-      return state.p2Hat;
-    }
+  const hatLabel = element('label', 'online-room-field-label', 'Headgear');
+  const hatSelect = element('select', 'online-room-input');
+  for (const [id, label] of HATS) {
+    const option = element('option', undefined, label);
+    option.value = id;
+    hatSelect.append(option);
+  }
+  hatSelect.value = localHat;
+  hatLabel.append(hatSelect);
+  localCard.identity.append(nameLabel, colorLabel, hatLabel);
 
-    if (typeof state.p1Hat === 'string') {
-      return state.p1Hat;
-    }
+  const opponentName = element('strong', 'online-room-opponent-name', 'Waiting for opponent');
+  const opponentDetail = element('span', 'online-room-opponent-detail', 'Open player slot');
+  opponentCard.identity.append(opponentName, opponentDetail);
 
-    return 'none';
-  };
+  const versus = element('div', 'online-room-versus', 'VS');
+  const playerCards = element('div', 'online-room-player-grid');
+  playerCards.append(localCard.card, versus, opponentCard.card);
 
-  let localName = getLocalNameFromState(initialState);
-  let localColor = getLocalColorFromState(initialState);
-  let localHat = getLocalHatFromState(initialState);
-  let localReady = false;
-  let syncTimer: number | null = null;
+  const status = element('div', 'online-room-status');
+  const statusLight = element('i');
+  const statusText = element('span', undefined, 'Waiting for room state…');
+  status.append(statusLight, statusText);
 
-  const root = document.createElement('div');
-  root.style.cssText = `
-    width: 100%;
-    height: 100%;
-    box-sizing: border-box;
-    padding: 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    background: radial-gradient(circle at top, rgba(0, 255, 255, 0.12), rgba(0, 0, 0, 0.75) 55%);
-    overflow: auto;
-  `;
-
-  const title = document.createElement('h2');
-  title.textContent = 'ONLINE MATCH';
-  title.style.cssText = `
-    margin: 0;
-    text-align: center;
-    color: #0ff;
-    font-family: 'Courier New', monospace;
-    letter-spacing: 2px;
-    text-shadow: 0 0 14px rgba(0, 255, 255, 0.8);
-  `;
-  root.appendChild(title);
-
-  const cardsWrap = document.createElement('div');
-  cardsWrap.style.cssText = `
-    display: flex;
-    gap: 1rem;
-    align-items: stretch;
-    justify-content: center;
-    width: 100%;
-    flex-wrap: wrap;
-  `;
-
-  const makeCard = (labelText: string): {
-    card: HTMLDivElement;
-    header: HTMLHeadingElement;
-    preview: HTMLDivElement;
-    readyBadge: HTMLSpanElement;
-    nameInputOrText: HTMLInputElement | HTMLDivElement;
-    hatSelectOrText: HTMLSelectElement | HTMLDivElement;
-    colorStrip: HTMLDivElement;
-  } => {
-    const card = document.createElement('div');
-    card.style.cssText = `
-      flex: 1 1 320px;
-      max-width: 420px;
-      min-width: 280px;
-      border: 2px solid #0ff;
-      border-radius: 10px;
-      background: rgba(0, 20, 40, 0.55);
-      box-shadow: 0 0 24px rgba(0, 255, 255, 0.2);
-      padding: 0.9rem;
-      display: flex;
-      flex-direction: column;
-      gap: 0.7rem;
-    `;
-
-    const top = document.createElement('div');
-    top.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap: 0.6rem;';
-
-    const header = document.createElement('h3');
-    header.textContent = labelText;
-    header.style.cssText = `
-      margin: 0;
-      color: #0ff;
-      font-size: 0.95rem;
-      font-family: 'Courier New', monospace;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      text-shadow: 0 0 8px rgba(0, 255, 255, 0.7);
-    `;
-
-    const readyBadge = document.createElement('span');
-    readyBadge.textContent = 'READY';
-    readyBadge.style.cssText = `
-      display: none;
-      padding: 0.22rem 0.45rem;
-      font-size: 0.74rem;
-      border-radius: 999px;
-      font-weight: bold;
-      color: #001b00;
-      background: #00ff88;
-      box-shadow: 0 0 10px rgba(0, 255, 136, 0.8);
-      font-family: 'Courier New', monospace;
-      letter-spacing: 0.8px;
-    `;
-
-    top.append(header, readyBadge);
-    card.appendChild(top);
-
-    const preview = document.createElement('div');
-    preview.style.cssText = `
-      width: 100%;
-      min-height: 132px;
-      border: 2px dashed rgba(0, 255, 255, 0.45);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(0, 0, 0, 0.5);
-    `;
-    card.appendChild(preview);
-
-    const nameInputOrText = document.createElement('input');
-    nameInputOrText.style.cssText = `
-      width: 100%;
-      box-sizing: border-box;
-      border: 2px solid #0ff;
-      border-radius: 6px;
-      background: #09121f;
-      color: #ffffff;
-      padding: 0.45rem 0.6rem;
-      font-family: 'Courier New', monospace;
-      font-size: 0.95rem;
-      outline: none;
-    `;
-    card.appendChild(nameInputOrText);
-
-    const colorStrip = document.createElement('div');
-    colorStrip.style.cssText = `
-      display: flex;
-      gap: 0.45rem;
-      overflow-x: auto;
-      padding-bottom: 0.25rem;
-      scrollbar-width: thin;
-    `;
-    card.appendChild(colorStrip);
-
-    const hatSelectOrText = document.createElement('select');
-    hatSelectOrText.style.cssText = `
-      width: 100%;
-      box-sizing: border-box;
-      border: 2px solid #0ff;
-      border-radius: 6px;
-      background: #09121f;
-      color: #0ff;
-      padding: 0.42rem 0.5rem;
-      font-family: 'Courier New', monospace;
-      font-size: 0.92rem;
-      outline: none;
-    `;
-    card.appendChild(hatSelectOrText);
-
-    return { card, header, preview, readyBadge, nameInputOrText, hatSelectOrText, colorStrip };
-  };
-
-  const localCardParts = makeCard('YOU');
-  const opponentCardParts = makeCard('OPPONENT');
-
-  const localNameInput = localCardParts.nameInputOrText as HTMLInputElement;
-  localNameInput.type = 'text';
-  localNameInput.maxLength = 20;
-  localNameInput.placeholder = 'Your name';
-
-  const localHatSelect = localCardParts.hatSelectOrText as HTMLSelectElement;
-  HAT_OPTIONS.forEach((hat) => {
-    const option = document.createElement('option');
-    option.value = hat;
-    option.textContent = HAT_LABELS[hat] || hat;
-    localHatSelect.appendChild(option);
-  });
-
-  const opponentNameDisplay = document.createElement('div');
-  opponentNameDisplay.style.cssText = `
-    width: 100%;
-    box-sizing: border-box;
-    border: 2px solid rgba(0, 255, 255, 0.35);
-    border-radius: 6px;
-    background: rgba(9, 18, 31, 0.9);
-    color: #d6f9ff;
-    padding: 0.5rem 0.6rem;
-    font-family: 'Courier New', monospace;
-    font-size: 0.92rem;
-    min-height: 38px;
-    display: flex;
-    align-items: center;
-  `;
-
-  const opponentHatDisplay = document.createElement('div');
-  opponentHatDisplay.style.cssText = `
-    width: 100%;
-    box-sizing: border-box;
-    border: 2px solid rgba(0, 255, 255, 0.35);
-    border-radius: 6px;
-    background: rgba(9, 18, 31, 0.9);
-    color: #c4edf3;
-    padding: 0.45rem 0.6rem;
-    font-family: 'Courier New', monospace;
-    font-size: 0.88rem;
-    min-height: 36px;
-    display: flex;
-    align-items: center;
-    text-transform: capitalize;
-  `;
-
-  opponentCardParts.card.replaceChild(opponentNameDisplay, opponentCardParts.nameInputOrText);
-  opponentCardParts.nameInputOrText = opponentNameDisplay;
-  opponentCardParts.card.replaceChild(opponentHatDisplay, opponentCardParts.hatSelectOrText);
-  opponentCardParts.hatSelectOrText = opponentHatDisplay;
-
-  cardsWrap.append(localCardParts.card, opponentCardParts.card);
-  root.appendChild(cardsWrap);
-
-  const controls = document.createElement('div');
-  controls.style.cssText = `
-    width: 100%;
-    max-width: 920px;
-    margin: 0 auto;
-    border: 2px solid rgba(0, 255, 255, 0.5);
-    border-radius: 10px;
-    padding: 0.85rem;
-    box-sizing: border-box;
-    background: rgba(0, 10, 25, 0.8);
-    display: flex;
-    flex-direction: column;
-    gap: 0.65rem;
-  `;
-
-  const buttonsRow = document.createElement('div');
-  buttonsRow.style.cssText = 'display:flex; justify-content:center; gap: 0.8rem; flex-wrap: wrap;';
-
-  const readyButton = document.createElement('button');
+  const playerActions = element('div', 'online-room-player-actions');
+  const readyButton = element('button', 'multiplayer-primary', 'Ready Up');
   readyButton.type = 'button';
-  readyButton.style.cssText = `
-    min-width: 170px;
-    padding: 0.7rem 1.2rem;
-    border-radius: 8px;
-    border: 2px solid #0ff;
-    background: rgba(0, 255, 255, 0.14);
-    color: #0ff;
-    font-family: 'Courier New', monospace;
-    font-weight: bold;
-    letter-spacing: 1px;
-    cursor: pointer;
-    text-transform: uppercase;
-  `;
-
-  const startButton = document.createElement('button');
+  const startButton = element('button', 'online-room-start', 'Start Match');
   startButton.type = 'button';
-  startButton.textContent = 'START GAME';
-  startButton.style.cssText = `
-    min-width: 170px;
-    padding: 0.7rem 1.2rem;
-    border-radius: 8px;
-    border: 2px solid #00ff88;
-    background: rgba(0, 255, 136, 0.18);
-    color: #c6ffe5;
-    font-family: 'Courier New', monospace;
-    font-weight: bold;
-    letter-spacing: 1px;
-    cursor: pointer;
-    text-transform: uppercase;
-  `;
+  playerActions.append(readyButton, startButton);
+  playersPanel.append(playersHeading, playerCards, status, playerActions);
 
-  if (!isHost) {
-    startButton.style.display = 'none';
+  const settingsPanel = element('aside', 'online-room-settings');
+  const settingsHeader = element('div', 'online-room-settings__header');
+  const settingsHeaderCopy = element('div');
+  const settingsHeading = element('h2', undefined, 'Match Settings');
+  const settingsDescription = element('p', undefined, 'The selected player is choosing the rules for the upcoming match.');
+  settingsHeaderCopy.append(settingsHeading, settingsDescription);
+  const settingsLock = element('span', 'online-room-settings__lock', 'HOST CONTROL');
+  settingsHeader.append(settingsHeaderCopy, settingsLock);
+
+  const presetRow = element('div', 'online-room-presets');
+  const presetButtons: HTMLButtonElement[] = [];
+  for (const preset of MATCH_PRESETS) {
+    const button = element('button', undefined, preset.label);
+    button.type = 'button';
+    button.dataset.preset = preset.label;
+    presetButtons.push(button);
+    presetRow.append(button);
   }
 
-  const status = document.createElement('div');
-  status.style.cssText = `
-    min-height: 1.2rem;
-    color: #9deaff;
-    text-align: center;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-    letter-spacing: 0.4px;
-  `;
+  const settingsScroll = element('div', 'online-room-settings__scroll');
+  const themeField = element('label', 'online-room-setting online-room-setting--theme');
+  const themeText = element('span');
+  themeText.append(element('strong', undefined, 'Arena theme'), element('small', undefined, 'Shared environment treatment'));
+  const themeSelect = element('select', 'online-room-setting__select');
+  for (const theme of MATCH_THEMES) {
+    const option = element('option', undefined, theme.label);
+    option.value = theme.value;
+    themeSelect.append(option);
+  }
+  themeField.append(themeText, themeSelect);
+  settingsScroll.append(themeField);
 
-  buttonsRow.append(readyButton, startButton);
-  controls.append(buttonsRow, status);
-  root.appendChild(controls);
-
-  const localColors = getAllColors();
-  localColors.forEach((entry) => {
-    const swatch = document.createElement('button');
-    swatch.type = 'button';
-    swatch.title = entry.name;
-    swatch.dataset.colorHex = hexToString(entry.hex);
-    swatch.style.cssText = `
-      width: 28px;
-      min-width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      border: none;
-      cursor: pointer;
-      background: ${hexToString(entry.hex)};
-      box-shadow: 0 0 8px rgba(0, 255, 255, 0.2);
-    `;
-
-    swatch.addEventListener('click', () => {
-      localColor = entry.hex;
-      const state = getStateRecord();
-      const setPlayerColors = state.setPlayerColors as ((p1Color: number | string, p2Color: number | string) => void) | undefined;
-      if (setPlayerColors) {
-        if (mySlot === 2) {
-          setPlayerColors(state.p1Color as number | string, localColor);
-        } else {
-          setPlayerColors(localColor, state.p2Color as number | string);
-        }
-      }
-      queueCustomizationSync();
-      refresh();
-    });
-
-    localCardParts.colorStrip.appendChild(swatch);
-  });
-
-  localNameInput.addEventListener('input', () => {
-    localName = normalizeName(localNameInput.value);
-    const state = getStateRecord();
-    const setPlayerNames = state.setPlayerNames as ((p1Name: string, p2Name: string) => void) | undefined;
-
-    if (setPlayerNames) {
-      const p1 = mySlot === 2 ? String(state.p1Name || 'Player 1') : localName || 'Player';
-      const p2 = mySlot === 2 ? (localName || 'Player') : String(state.p2Name || 'Player 2');
-      setPlayerNames(p1, p2);
+  const settingControls = new Map<string, { input: HTMLInputElement; output: HTMLOutputElement; definition: SettingDefinition }>();
+  for (const group of MATCH_SETTING_GROUPS as Array<{ title: string; fields: SettingDefinition[] }>) {
+    const groupNode = element('section', 'online-room-setting-group');
+    groupNode.append(element('h3', undefined, group.title));
+    for (const definition of group.fields) {
+      const field = element('label', 'online-room-setting');
+      const copy = element('span');
+      copy.append(element('strong', undefined, definition.label), element('small', undefined, definition.description));
+      const control = element('span', 'online-room-setting__control');
+      const input = element('input') as HTMLInputElement;
+      input.type = 'range';
+      input.min = String(definition.min);
+      input.max = String(definition.max);
+      input.step = String(definition.step);
+      input.dataset.setting = definition.key;
+      const output = element('output') as HTMLOutputElement;
+      control.append(input, output);
+      field.append(copy, control);
+      groupNode.append(field);
+      settingControls.set(definition.key, { input, output, definition });
     }
+    settingsScroll.append(groupNode);
+  }
+  settingsPanel.append(settingsHeader, presetRow, settingsScroll);
+  layout.append(playersPanel, settingsPanel);
+  root.append(header, layout);
 
-    const setOnlineName = state.setOnlineName as ((name: string) => void) | undefined;
-    if (setOnlineName) {
-      setOnlineName(localName);
+  function updateSettingControls(): void {
+    themeSelect.value = String(roomSettings.theme || 'tron');
+    for (const [key, control] of settingControls) {
+      const value = Number(roomSettings[key] ?? MATCH_DEFAULTS[key as keyof typeof MATCH_DEFAULTS]);
+      control.input.value = String(value);
+      control.output.value = formatMatchSettingValue(control.definition, value);
+      control.output.textContent = formatMatchSettingValue(control.definition, value);
     }
+  }
 
-    queueCustomizationSync();
-    refresh();
-  });
+  function queueSettingsUpdate(immediate = false): void {
+    const state = useGameStore.getState();
+    const isLocalPicker = state.online?.currentGame?.settingsPickerId === state.online?.playerId;
+    if (!isLocalPicker || state.online?.currentGame?.isServerLobby) return;
+    if (settingsTimer !== null) window.clearTimeout(settingsTimer);
 
-  localHatSelect.addEventListener('change', () => {
-    localHat = localHatSelect.value;
-    const state = getStateRecord();
-    const setPlayerHats = state.setPlayerHats as ((p1Hat: string, p2Hat: string) => void) | undefined;
+    const send = () => {
+      const outgoing = { ...roomSettings };
+      pendingSettingsJson = JSON.stringify(outgoing);
+      online.updateGameSettings(outgoing);
+      settingsTimer = null;
+    };
 
-    if (setPlayerHats) {
-      if (mySlot === 2) {
-        setPlayerHats(String(state.p1Hat || 'none'), localHat);
-      } else {
-        setPlayerHats(localHat, String(state.p2Hat || 'none'));
-      }
-    }
+    if (immediate) send();
+    else settingsTimer = window.setTimeout(send, 120);
+  }
 
-    queueCustomizationSync();
-    refresh();
-  });
-
-  readyButton.addEventListener('click', () => {
-    const nextReady = !localReady;
-    localReady = nextReady;
-    online.sendReady(nextReady);
-
-    const state = getStateRecord();
-    const setOnlineMyReady = state.setOnlineMyReady as ((ready: boolean) => void) | undefined;
-    const setOnlineReady = state.setOnlineReady as ((ready: boolean) => void) | undefined;
-    if (setOnlineMyReady) {
-      setOnlineMyReady(nextReady);
-    } else if (setOnlineReady) {
-      setOnlineReady(nextReady);
-    }
-
-    refresh();
-  });
-
-  startButton.addEventListener('click', () => {
-    if (!startButton.disabled) {
-      online.startGame();
-    }
-  });
-
-  function queueCustomizationSync(): void {
-    if (syncTimer !== null) {
-      window.clearTimeout(syncTimer);
-    }
-
-    syncTimer = window.setTimeout(() => {
-      const fallbackName = (localStorage.getItem('dropfall_p1name') || 'Player').slice(0, 20);
-      const outgoingName = (localName || fallbackName).slice(0, 20);
-      online.sendCustomization(localColor, localHat, outgoingName);
-      syncTimer = null;
+  function queueCustomization(): void {
+    if (customizationTimer !== null) window.clearTimeout(customizationTimer);
+    customizationTimer = window.setTimeout(() => {
+      online.sendCustomization(localColor, localHat, localName || 'Player');
+      customizationTimer = null;
     }, 100);
   }
 
-  function renderBallPreview(target: HTMLElement, color: number | string, hat: string, dim = false): void {
-    const displayColor = getDisplayColor(color);
-    const colorCss = hexToString(displayColor);
-
-    let circleBackground = `radial-gradient(circle at 30% 30%, rgba(255,255,255,0.75), ${colorCss} 55%, rgba(0, 0, 0, 0.6))`;
-    if (isPatternId(color)) {
-      circleBackground = `conic-gradient(from 40deg, ${colorCss}, rgba(255,255,255,0.2), ${colorCss})`;
-    }
-
-    target.innerHTML = '';
-
-    const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap: 0.4rem;';
-
-    const circle = document.createElement('div');
-    circle.style.cssText = `
-      width: 88px;
-      height: 88px;
-      border-radius: 50%;
-      background: ${circleBackground};
-      border: 2px solid ${colorCss};
-      box-shadow: 0 0 20px ${colorCss}66;
-      opacity: ${dim ? '0.55' : '1'};
-    `;
-
-    const hatLabel = document.createElement('div');
-    hatLabel.textContent = `Hat: ${HAT_LABELS[hat] || hat}`;
-    hatLabel.style.cssText = `
-      color: ${dim ? 'rgba(190,210,220,0.8)' : '#d7faff'};
-      font-family: 'Courier New', monospace;
-      font-size: 0.8rem;
-      text-transform: uppercase;
-      letter-spacing: 0.7px;
-    `;
-
-    wrap.append(circle, hatLabel);
-    target.appendChild(wrap);
+  function markCustomizationChanged(): void {
+    const state = useGameStore.getState();
+    if (state.online?.myReady) online.sendReady(false);
+    queueCustomization();
   }
 
-  function refresh(): void {
-    const state = getStateRecord();
-    const onlineState = (state.online || {}) as Record<string, unknown>;
-
-    const stateMyName = getLocalNameFromState(state);
-    const stateMyColor = getLocalColorFromState(state);
-    const stateMyHat = getLocalHatFromState(state);
-
-    localName = localName || stateMyName;
-    localColor = localColor ?? stateMyColor;
-    localHat = localHat || stateMyHat;
-
-    localNameInput.value = localName;
-    localHatSelect.value = localHat;
-
-    const myReadyFromOnline = typeof onlineState.myReady === 'boolean' ? Boolean(onlineState.myReady) : null;
-    const myReadyFromGame = getReadyBySlot(onlineState.currentGame, mySlot);
-    if (myReadyFromOnline !== null) {
-      localReady = myReadyFromOnline;
-    } else if (myReadyFromGame !== null) {
-      localReady = myReadyFromGame;
-    }
-
-    const opponentConnected = Boolean(onlineState.opponentConnected);
-
-    const opponentColorFromOnline = (typeof onlineState.opponentColor === 'number' || typeof onlineState.opponentColor === 'string')
-      ? (onlineState.opponentColor as number | string)
-      : null;
-
-    const opponentColor = opponentColorFromOnline ?? (opponentSlot === 1
-      ? (state.p1Color as number | string)
-      : (state.p2Color as number | string));
-
-    const opponentHatFromOnline = typeof onlineState.opponentHat === 'string' ? onlineState.opponentHat : null;
-    const opponentHat = opponentHatFromOnline ?? (opponentSlot === 1
-      ? String(state.p1Hat || 'none')
-      : String(state.p2Hat || 'none'));
-
-    const opponentNameBySlot = opponentSlot === 1
-      ? String(state.p1Name || '')
-      : String(state.p2Name || '');
-
-    const opponentName = String(onlineState.opponentName || opponentNameBySlot || 'Opponent').slice(0, 20);
-
-    const opponentReady = typeof onlineState.opponentReady === 'boolean'
-      ? Boolean(onlineState.opponentReady)
-      : Boolean(getReadyBySlot(onlineState.currentGame, opponentSlot));
-
-    const localPlayer: OnlinePlayerData = {
-      name: localName || 'Player',
-      color: localColor,
-      hat: localHat,
-      ready: localReady,
-    };
-
-    const opponentPlayer: OnlinePlayerData = {
-      name: opponentName,
-      color: opponentColor ?? 0x666666,
-      hat: opponentHat || 'none',
-      ready: opponentReady,
-    };
-
-    const hasOpponentData = hasOpponentCustomization({
-      opponent: opponentPlayer,
-      opponentConnected,
-      opponentCustomization: onlineState.opponentCustomization,
-    });
-
-    renderBallPreview(localCardParts.preview, localPlayer.color, localPlayer.hat, false);
-
-    if (hasOpponentData) {
-      renderBallPreview(opponentCardParts.preview, opponentPlayer.color, opponentPlayer.hat, false);
-      opponentNameDisplay.textContent = opponentPlayer.name;
-      opponentHatDisplay.textContent = `Hat: ${HAT_LABELS[opponentPlayer.hat] || opponentPlayer.hat}`;
-    } else {
-      opponentCardParts.preview.innerHTML = `
-        <div style="color: rgba(180, 220, 235, 0.8); font-family: 'Courier New', monospace; font-size: 0.85rem; text-align: center; padding: 0 0.5rem;">
-          Waiting for opponent...
-        </div>
-      `;
-      opponentNameDisplay.textContent = 'Waiting for opponent...';
-      opponentHatDisplay.textContent = 'Hat: -';
-    }
-
-    const localDisplayColor = getDisplayColor(localPlayer.color);
-    const localColorCss = hexToString(localDisplayColor);
-    localCardParts.card.style.borderColor = localColorCss;
-    localCardParts.card.style.boxShadow = `0 0 24px ${localColorCss}44`;
-    localCardParts.header.style.color = localColorCss;
-    localNameInput.style.borderColor = localColorCss;
-    localHatSelect.style.borderColor = localColorCss;
-    localHatSelect.style.color = localColorCss;
-
-    const swatches = localCardParts.colorStrip.querySelectorAll('button');
-    swatches.forEach((node) => {
-      const button = node as HTMLButtonElement;
-      const selectedColorCss = hexToString(getDisplayColor(localPlayer.color));
-      const colorHex = button.dataset.colorHex || '#00ffff';
-      button.style.boxShadow = colorHex === selectedColorCss
-        ? `0 0 8px ${colorHex}, 0 0 0 2px #ffff00`
-        : `0 0 8px ${colorHex}`;
-    });
-
-    localCardParts.readyBadge.style.display = localPlayer.ready ? 'inline-flex' : 'none';
-    opponentCardParts.readyBadge.style.display = opponentPlayer.ready ? 'inline-flex' : 'none';
-
-    readyButton.textContent = localPlayer.ready ? 'UNREADY' : 'READY';
-    readyButton.style.borderColor = localPlayer.ready ? '#00ff88' : '#0ff';
-    readyButton.style.color = localPlayer.ready ? '#d4ffe8' : '#0ff';
-    readyButton.style.background = localPlayer.ready ? 'rgba(0, 255, 136, 0.2)' : 'rgba(0, 255, 255, 0.14)';
-
-    const canStart = isHost && localPlayer.ready && opponentPlayer.ready && opponentConnected;
-    startButton.disabled = !canStart;
-    startButton.style.opacity = canStart ? '1' : '0.5';
-    startButton.style.cursor = canStart ? 'pointer' : 'not-allowed';
-
-    status.textContent = getStatusText({
-      opponentConnected,
-      myReady: localPlayer.ready,
-      opponentReady: opponentPlayer.ready,
-      isHost,
-    });
-  }
-
-  const unsubscribe = useGameStore.subscribe(() => {
+  nameInput.addEventListener('input', () => {
+    localName = normalizeName(nameInput.value);
+    markCustomizationChanged();
+  });
+  hatSelect.addEventListener('change', () => {
+    localHat = hatSelect.value;
+    markCustomizationChanged();
     refresh();
   });
+  for (const button of colorButtons) {
+    button.addEventListener('click', () => {
+      const colorValue = String(button.dataset.color || '');
+      localColor = colorValue.startsWith('pattern:') ? colorValue : Number(colorValue);
+      markCustomizationChanged();
+      refresh();
+    });
+  }
 
-  container.innerHTML = '';
-  container.appendChild(root);
+  themeSelect.addEventListener('change', () => {
+    roomSettings.theme = themeSelect.value;
+    queueSettingsUpdate(true);
+  });
+  for (const [key, control] of settingControls) {
+    control.input.addEventListener('input', () => {
+      const value = Number(control.input.value);
+      roomSettings[key] = value;
+      control.output.value = formatMatchSettingValue(control.definition, value);
+      control.output.textContent = formatMatchSettingValue(control.definition, value);
+      queueSettingsUpdate();
+    });
+  }
+  for (const button of presetButtons) {
+    button.addEventListener('click', () => {
+      const preset = MATCH_PRESETS.find((item) => item.label === button.dataset.preset);
+      if (!preset) return;
+      for (const [key, value] of Object.entries(preset.settings)) {
+        if (value !== undefined) roomSettings[key] = value;
+      }
+      updateSettingControls();
+      queueSettingsUpdate(true);
+    });
+  }
 
-  queueCustomizationSync();
+  readyButton.addEventListener('click', () => {
+    const state = useGameStore.getState();
+
+    // Readiness is a lock on the exact customization and rule set being shown.
+    // Flush queued edits first so a trailing debounce cannot immediately revoke
+    // the ready state after the player clicks the button.
+    if (customizationTimer !== null) {
+      window.clearTimeout(customizationTimer);
+      customizationTimer = null;
+    }
+    const isLocalPicker = state.online?.currentGame?.settingsPickerId === state.online?.playerId;
+    if (settingsTimer !== null && isLocalPicker && !state.online?.currentGame?.isServerLobby) {
+      window.clearTimeout(settingsTimer);
+      settingsTimer = null;
+      const outgoing = { ...roomSettings };
+      pendingSettingsJson = JSON.stringify(outgoing);
+      online.updateGameSettings(outgoing);
+    }
+
+    online.sendCustomization(localColor, localHat, localName || 'Player');
+    online.sendReady(!Boolean(state.online?.myReady));
+  });
+  startButton.addEventListener('click', () => online.startGame());
+  leaveButton.addEventListener('click', () => online.leaveGame());
+
+  function refresh(): void {
+    const state = useGameStore.getState();
+    const onlineState = state.online || {};
+    const game = (onlineState.currentGame || {}) as Record<string, unknown>;
+    const serverSettings = { ...MATCH_DEFAULTS, ...((game.settings || {}) as RoomSettings) };
+    const serverSettingsJson = JSON.stringify(serverSettings);
+    if (pendingSettingsJson) {
+      if (serverSettingsJson === pendingSettingsJson) pendingSettingsJson = null;
+    } else {
+      roomSettings = serverSettings;
+      updateSettingControls();
+    }
+
+    const isHost = Boolean(onlineState.isHost);
+    const serverLobby = Boolean(game.isServerLobby);
+    const playerId = String(onlineState.playerId || '');
+    const settingsPickerId = String(game.settingsPickerId || '');
+    const isSettingsPicker = !serverLobby && Boolean(settingsPickerId) && settingsPickerId === playerId;
+    const pickerPlayer = Array.isArray(game.players)
+      ? (game.players as RoomPlayer[]).find((player) => player.id === settingsPickerId)
+      : null;
+    const pickerName = String(pickerPlayer?.name || (isSettingsPicker ? localName || 'You' : 'Opponent')).slice(0, 20);
+    const opponentConnected = Boolean(onlineState.opponentConnected || playerForSlot(game, opponentSlot));
+    const localReady = Boolean(onlineState.myReady ?? playerForSlot(game, mySlot)?.ready);
+    const opponentReady = Boolean(onlineState.opponentReady ?? playerForSlot(game, opponentSlot)?.ready);
+    const opponent = playerForSlot(game, opponentSlot);
+    const opponentIsSettingsPicker = !serverLobby && Boolean(settingsPickerId) && opponent?.id === settingsPickerId;
+    const opponentNameValue = String(onlineState.opponentName || opponent?.name || 'Opponent').slice(0, 20);
+    const opponentColor = onlineState.opponentColor ?? opponent?.color ?? (opponentSlot === 1 ? state.p1Color : state.p2Color);
+    const opponentHat = String(onlineState.opponentHat || opponent?.hat || 'none');
+
+    title.textContent = `Match ${Math.max(1, Number(game.matchNumber || 1))} Setup`;
+    const themeName = MATCH_THEMES.find((theme) => theme.value === String(roomSettings.theme || 'tron'))?.label || 'Star Circuit';
+    roomMeta.textContent = `${serverLobby ? 'QUICK MATCH' : `ROOM ${String(game.id || 'PENDING').replace(/^game_/, '#')}`} · ${themeName.toUpperCase()} · ${Math.round(Number(roomSettings.arenaSize || 4))} RINGS`;
+    roleBadge.textContent = serverLobby ? 'QUICK MATCH' : isSettingsPicker ? 'YOUR SETTINGS PICK' : isHost ? 'ROOM HOST' : 'ROOM GUEST';
+    roleBadge.classList.toggle('online-room-role--host', isHost || isSettingsPicker);
+
+    localCard.preview.replaceChildren(makeBall(localColor, localHat));
+    opponentCard.preview.replaceChildren(makeBall(opponentColor, opponentHat, !opponentConnected));
+    opponentName.textContent = opponentConnected ? opponentNameValue : 'Waiting for opponent';
+    opponentDetail.textContent = opponentConnected ? `Player ${opponentSlot} · ${HATS.find(([id]) => id === opponentHat)?.[1] || opponentHat}` : 'Open player slot';
+
+    localCard.readyBadge.textContent = localReady ? 'READY' : 'NOT READY';
+    localCard.readyBadge.classList.toggle('is-ready', localReady);
+    opponentCard.readyBadge.textContent = opponentReady ? 'READY' : opponentConnected ? 'NOT READY' : 'OPEN';
+    opponentCard.readyBadge.classList.toggle('is-ready', opponentReady);
+    localCard.card.classList.toggle('is-settings-picker', isSettingsPicker);
+    opponentCard.card.classList.toggle('is-settings-picker', opponentIsSettingsPicker);
+    localCard.slotLabel.textContent = `YOU · P${mySlot}${isSettingsPicker ? ' · SETTINGS PICKER' : ''}`;
+    opponentCard.slotLabel.textContent = `RIVAL · P${opponentSlot}${opponentIsSettingsPicker ? ' · SETTINGS PICKER' : ''}`;
+
+    for (const button of colorButtons) {
+      button.classList.toggle('is-selected', String(button.dataset.color) === String(localColor));
+    }
+
+    const settingsEditable = isSettingsPicker && !localReady;
+    settingsHeading.textContent = serverLobby ? 'Match Settings' : isSettingsPicker ? 'Choose Match Settings' : 'Live Match Settings';
+    settingsDescription.textContent = serverLobby
+      ? 'Quick Match uses server-managed gameplay rules.'
+      : isSettingsPicker
+        ? 'You were selected to configure the upcoming match. Every change is shown live to your opponent.'
+        : settingsPickerId
+          ? `${pickerName} is configuring the upcoming match. Changes appear here live.`
+          : 'The settings picker will be selected randomly when a second player joins.';
+    settingsLock.textContent = serverLobby
+      ? 'SERVER RULES'
+      : isSettingsPicker
+        ? (localReady ? 'UNREADY TO EDIT' : 'YOUR PICK')
+        : settingsPickerId ? `${pickerName.toUpperCase()} PICKING` : 'AWAITING PICKER';
+    themeSelect.disabled = !settingsEditable;
+    for (const { input } of settingControls.values()) input.disabled = !settingsEditable;
+    for (const button of presetButtons) button.disabled = !settingsEditable;
+    settingsPanel.classList.toggle('is-locked', !settingsEditable);
+
+    readyButton.textContent = localReady ? 'Cancel Ready' : 'Ready Up';
+    readyButton.disabled = !opponentConnected;
+    const canStart = isHost && opponentConnected && localReady && opponentReady && !serverLobby;
+    startButton.hidden = !isHost || serverLobby;
+    startButton.disabled = !canStart;
+
+    if (!opponentConnected) statusText.textContent = 'Waiting for a second player to join the room.';
+    else if (localReady && opponentReady) statusText.textContent = serverLobby ? 'Both players ready. Match launching…' : isHost ? 'Both players ready. Launch when ready.' : 'Both players ready. Waiting for the host.';
+    else if (localReady) statusText.textContent = 'You are locked in. Waiting for your opponent.';
+    else if (opponentReady) statusText.textContent = 'Opponent is ready. Review the rules and ready up.';
+    else if (isSettingsPicker) statusText.textContent = 'Choose the match rules, then ready up when the settings are final.';
+    else if (settingsPickerId) statusText.textContent = `${pickerName} is choosing. Review the live settings and ready up when satisfied.`;
+    else statusText.textContent = 'Waiting for an opponent before randomly selecting the settings picker.';
+    status.classList.toggle('is-ready', localReady && opponentReady);
+  }
+
+  const unsubscribe = useGameStore.subscribe(refresh);
+  container.replaceChildren(root);
+  updateSettingControls();
+  queueCustomization();
   refresh();
 
   return {
     cleanup: () => {
-      if (syncTimer !== null) {
-        window.clearTimeout(syncTimer);
-        syncTimer = null;
-      }
+      if (settingsTimer !== null) window.clearTimeout(settingsTimer);
+      if (customizationTimer !== null) window.clearTimeout(customizationTimer);
       unsubscribe();
       root.remove();
     },

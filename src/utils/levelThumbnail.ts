@@ -152,3 +152,15 @@ export function createLevelThumbnailCanvas(
   renderLevelThumbnail(canvas, tiles);
   return canvas;
 }
+
+export function createHexArenaPreviewTiles(radius = 4): LevelTile[] {
+  const tiles: LevelTile[] = [];
+  for (let q = -radius; q <= radius; q += 1) {
+    const minR = Math.max(-radius, -q - radius);
+    const maxR = Math.min(radius, -q + radius);
+    for (let r = minR; r <= maxR; r += 1) {
+      tiles.push({ coord: { q, r }, ability: 'NORMAL' });
+    }
+  }
+  return tiles;
+}

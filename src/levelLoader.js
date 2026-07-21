@@ -2,14 +2,20 @@
  * Level Loader - Fetches and manages custom levels from the editor server
  */
 
-function getLevelApiBase() {
+export function getLevelApiBase() {
     if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_LEVEL_API_URL) {
         return import.meta.env.VITE_LEVEL_API_URL.replace(/\/$/, '');
     }
-    // Fallback for local development with the editor server
-    const host = window.location.hostname;
-    const isLocal = host === 'localhost' || host === '127.0.0.1';
-    return isLocal ? 'http://localhost:3001/api' : `${window.location.origin}/api`;
+
+    // The game server owns the level catalogue in production and when running
+    // on localhost:3000. Vite proxies /api to the editor server during frontend
+    // development, so every browser build can use the same-origin contract.
+    if (window.location.protocol === 'http:' || window.location.protocol === 'https:') {
+        return `${window.location.origin}/api`;
+    }
+
+    // Desktop/file builds cannot use a relative HTTP API.
+    return 'http://localhost:3001/api';
 }
 
 const LEVEL_API_BASE = getLevelApiBase();

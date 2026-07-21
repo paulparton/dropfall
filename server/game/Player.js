@@ -18,6 +18,9 @@ export class ServerPlayer {
         this.isDead = false;
         this.frozenTimer = 0;
         this.iceCooldown = 0;
+        this.accelMultiplier = 1;
+        this.gravityMultiplier = 1;
+        this.activePowerUps = [];
 
         this.startPosition = this._getStartPosition(slot);
         this._createBody();
@@ -47,13 +50,19 @@ export class ServerPlayer {
         this.isBoosting = false;
         this.frozenTimer = 0;
         this.iceCooldown = 0;
+        this.accelMultiplier = 1;
+        this.gravityMultiplier = 1;
+        this.activePowerUps = [];
         this.input = { forward: 0, right: 0, boost: false };
 
-        this.body.setTranslation(this.startPosition.x, this.startPosition.y, this.startPosition.z, true);
+        this.body.setTranslation(this.startPosition, true);
         this.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
         this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
         this.body.setRotation({ w: 1, x: 0, y: 0, z: 0 }, true);
         this.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
+        this.body.setGravityScale(1, true);
+        this.collider.setMass(this.sphereWeight);
+        this.collider.setFriction(0.5);
     }
 
     setInput(input) {
@@ -88,12 +97,15 @@ export class ServerPlayer {
                     this.iceCooldown = 2.0;
                 }
                 if (tile.state === 'BONUS') {
-                    this._applyRandomPowerUp();
+                    this._applyPowerUp(tile.powerUpType);
                     tile.state = 'NORMAL';
+                    tile.powerUpType = null;
                     tile.collider.setFriction(0.5);
                 }
             }
         }
+
+        this._updatePowerUps(delta);
 
         // Boost logic: can start above 20%, continues until 0%.
         if (this.input.boost && this.boostLevel > 20 && !this.isBoosting) {
@@ -111,7 +123,7 @@ export class ServerPlayer {
         }
 
         // Movement impulse. Match client: sphereAccel * delta per tick.
-        const speed = this.sphereAccel * delta;
+        const speed = this.sphereAccel * this.accelMultiplier * delta;
         const forceX = this.input.right * speed * boostMultiplier;
         const forceZ = -this.input.forward * speed * boostMultiplier;
 
@@ -126,10 +138,48 @@ export class ServerPlayer {
         this.body.applyImpulse({ x: forceX, y: 0, z: forceZ }, true);
     }
 
-    _applyRandomPowerUp() {
-        // Simplified power-ups for the server: just apply a temporary boost refill
-        // and a size/weight modifier. Full power-up replication is a future enhancement.
-        this.boostLevel = Math.min(100, this.boostLevel + 30);
+    _applyPowerUp(type) {
+        if (!type) return;
+        const duration = Number(this.settings.bonusDuration || 4);
+        const existing = this.activePowerUps.find(effect => effect.type === type);
+        if (existing) existing.remaining = duration;
+        else this.activePowerUps.push({ type, remaining: duration });
+
+        if (type === 'ACCELERATION_BOOST') this.accelMultiplier = 2;
+        if (type === 'SIZE_REDUCTION') {
+            this.accelMultiplier = Math.max(this.accelMultiplier, 1.35);
+            this.collider.setMass(this.sphereWeight * 0.7);
+        }
+        if (type === 'WEIGHT_INCREASE') this.collider.setMass(this.sphereWeight * 2);
+        if (type === 'SPEED_BURST') {
+            const velocity = this.body.linvel();
+            const length = Math.hypot(velocity.x, velocity.z) || 1;
+            this.body.applyImpulse({ x: velocity.x / length * 50, y: 0, z: velocity.z / length * 50 }, true);
+        }
+        if (type === 'LIGHT_TOUCH') {
+            this.gravityMultiplier = 0.5;
+            this.body.setGravityScale(0.5, true);
+        }
+        if (type === 'SIZE_INCREASE') this.collider.setMass(this.sphereWeight * 1.6);
+        if (type === 'GRIP_BOOST') this.collider.setFriction(1.5);
+        if (type === 'INVULNERABILITY') this.collider.setMass(this.sphereWeight * 4);
+    }
+
+    _updatePowerUps(delta) {
+        const expired = [];
+        for (const effect of this.activePowerUps) {
+            effect.remaining -= delta;
+            if (effect.remaining <= 0) expired.push(effect.type);
+        }
+        if (!expired.length) return;
+        this.activePowerUps = this.activePowerUps.filter(effect => effect.remaining > 0);
+        const has = type => this.activePowerUps.some(effect => effect.type === type);
+        this.accelMultiplier = has('ACCELERATION_BOOST') ? 2 : has('SIZE_REDUCTION') ? 1.35 : 1;
+        this.gravityMultiplier = has('LIGHT_TOUCH') ? 0.5 : 1;
+        this.body.setGravityScale(this.gravityMultiplier, true);
+        this.collider.setFriction(has('GRIP_BOOST') ? 1.5 : 0.5);
+        const massMultiplier = has('INVULNERABILITY') ? 4 : has('WEIGHT_INCREASE') ? 2 : has('SIZE_INCREASE') ? 1.6 : has('SIZE_REDUCTION') ? 0.7 : 1;
+        this.collider.setMass(this.sphereWeight * massMultiplier);
     }
 
     serialize() {
@@ -143,6 +193,7 @@ export class ServerPlayer {
             rotation: { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
             boost: this.boostLevel,
             isDead: this.isDead,
+            activePowerUps: this.activePowerUps.map(effect => ({ ...effect })),
         };
     }
 }

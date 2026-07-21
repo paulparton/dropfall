@@ -269,7 +269,7 @@ Migrations must preserve previously shipped settings and levels or provide a cle
 
 ## 9. Delivery plan
 
-### Phase A — polished vertical slice (implemented in this repository pass)
+### Phase A — polished vertical slice (implemented)
 
 - Production command-center hierarchy and responsive visual system.
 - Broadcast-style readable HUD and result presentation.
@@ -277,6 +277,11 @@ Migrations must preserve previously shipped settings and levels or provide a cle
 - Input reset on focus loss, fixed touch directions, and gameplay key ownership.
 - Automatic desktop render-resolution governor with performance metrics.
 - Existing solo/local/online gameplay, AI, levels, customization, themes, replay, and XR retained.
+- Shared pre-match match-settings schema across offline UI, online rooms, client state, and server validation.
+- Live online settings picker lifecycle with random initial selection and previous-match-loser selection.
+- Curated arena launch validation, deterministic safe spawns, preview thumbnails, and perimeter-collapse pacing.
+- Arena-aware gameplay/victory cameras, polished countdown, identity color preservation, and authoritative power-up selection.
+- Root static-route MIME correction and safe path resolution.
 
 ### Phase B — architecture and hardening
 
@@ -306,9 +311,9 @@ Migrations must preserve previously shipped settings and levels or provide a cle
 | Core duel and scoring | Implemented | Balance and deterministic rules audit |
 | Solo AI | Implemented, three difficulties | Behavior tests and tuning telemetry |
 | Local multiplayer | Implemented | Device matrix and controller assignment UX |
-| Authoritative online | Implemented baseline | Protocol versioning, adverse-network E2E, abuse hardening |
-| Arena/themes/power-ups | Implemented baseline | Curated content pass and fairness validation |
-| Customization/setup | Implemented | Cosmetic asset/content production |
+| Authoritative online | Picker lifecycle, live rules, readiness, reconnect baseline, and server simulation implemented | Protocol versioning, adverse-network E2E, load and abuse hardening |
+| Arena/themes/power-ups | Five validated release arenas, paced collapse, timed ice, and server-selected power-ups | Additional balanced content and seeded determinism |
+| Customization/setup | Unified offline flow; online uses the shared rule schema and full cosmetic roster | Cosmetic asset production and final accessibility audit |
 | Replay | Implemented round replay | Versioned deterministic replay/export |
 | Command center/HUD/result | Production visual pass implemented | Visual regression and localization |
 | Offline pause and focus safety | Implemented | Controller-driven pause navigation |

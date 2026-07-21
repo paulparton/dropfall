@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SantaSegment } from './hatFactory.js';
+import { animateHatMesh, SantaSegment } from './hatFactory.js';
 
 export interface HatPhysicsState {
   hatTiltX: number;
@@ -94,6 +94,7 @@ export function updateHatPhysics(
   const speed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
   const wobbleIntensity = Math.min(speed * 0.002, 0.08);
   const time = performance.now() * 0.001;
+  animateHatMesh(hatGroup, time, speed);
   const wobbleX = Math.sin(time * 12) * wobbleIntensity;
   const wobbleZ = Math.cos(time * 15) * wobbleIntensity;
 
@@ -134,7 +135,7 @@ export function updateHatPhysics(
     const speedDroop = Math.min(speed * velInfluence, 1.2);
 
     for (let i = 0; i < state.santaSegments.length; i++) {
-      const seg = state.santaSegments[i];
+      const seg = state.santaSegments[i]!;
       const flopFactor = 0.3 + (i / state.santaSegments.length) * 0.7;
       const segStiffness = stiffness * (1.0 - flopFactor * 0.65);
       const segDamping = damping * (1.0 - flopFactor * 0.35);
