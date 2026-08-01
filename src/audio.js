@@ -1470,6 +1470,50 @@ export function playCollisionSound(intensity, pan = 0, boosted = false) {
 
 const boostNodes = {};
 
+export function playHurryUpChirp(secondsLeft = 10) {
+    if (!audioCtx || !sfxGain) return;
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume().catch(() => {});
+    }
+
+    const remaining = Math.max(0, Math.ceil(Number(secondsLeft) || 0));
+    const urgent = remaining <= 3;
+    const baseTime = audioCtx.currentTime;
+    const pulses = urgent ? 2 : 1;
+
+    for (let pulse = 0; pulse < pulses; pulse++) {
+        const time = baseTime + pulse * 0.12;
+        const oscillator = audioCtx.createOscillator();
+        const harmonic = audioCtx.createOscillator();
+        const filter = audioCtx.createBiquadFilter();
+        const gain = audioCtx.createGain();
+
+        oscillator.type = 'square';
+        harmonic.type = 'sine';
+        const frequency = 620 + (10 - Math.min(10, remaining)) * 55 + pulse * 130;
+        oscillator.frequency.setValueAtTime(frequency, time);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 1.22, time + 0.09);
+        harmonic.frequency.setValueAtTime(frequency * 2, time);
+
+        filter.type = 'bandpass';
+        filter.frequency.value = frequency * 1.25;
+        filter.Q.value = 4;
+
+        gain.gain.setValueAtTime(0.001, time);
+        gain.gain.exponentialRampToValueAtTime(urgent ? 0.5 : 0.34, time + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+
+        oscillator.connect(filter);
+        harmonic.connect(filter);
+        filter.connect(gain);
+        gain.connect(sfxGain);
+        oscillator.start(time);
+        harmonic.start(time);
+        oscillator.stop(time + 0.11);
+        harmonic.stop(time + 0.11);
+    }
+}
+
 export function setBoostSound(playerId, isBoosting) {
     if (!audioCtx) return;
     

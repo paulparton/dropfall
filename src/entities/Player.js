@@ -7,170 +7,112 @@ import { isPatternId, getDisplayColor } from '../components/ColorPalette.js';
 import { useGameStore } from '../store.js';
 import { pixelToHex } from '../utils/math.js';
 import { setBoostSound } from '../audio.js';
-import { animateHatMesh, createHatMesh } from '../utils/hatFactory.js';
+import { animateHatMesh, createHatMesh, getHatFitTransform } from '../utils/hatFactory.js';
+import {
+    POWER_UP_DEFINITIONS,
+    getThemeAwarePowerUpColor,
+} from '../../shared/powerUps.js';
 
-// Theme-aware power-up colors
 function getThemeAwarePowerUpColors(theme) {
-    if (theme === 'arctic') {
-        return {
-            ACCELERATION_BOOST: 0xccddff,   // Pale blue
-            SIZE_REDUCTION:    0x88ccff,   // Light cyan
-            WEIGHT_INCREASE:   0xb0d0ff,   // Soft periwinkle
-            SPEED_BURST:       0x77ddff,   // Frosty cyan
-            LIGHT_TOUCH:       0xddecff,   // Nearly white-blue
-            SIZE_INCREASE:     0xaaddff,   // Pale ice blue
-            GRIP_BOOST:        0x99ddff,   // Soft cyan-blue
-            INVULNERABILITY:   0xbbddff    // Pale frosty white
-        };
-    }
-    // Default neon colors for other themes
-    return {
-        ACCELERATION_BOOST: 0xff6600,
-        SIZE_REDUCTION:     0x0099ff,
-        WEIGHT_INCREASE:    0x8800ff,
-        SPEED_BURST:        0xff0000,
-        LIGHT_TOUCH:        0x00ff88,
-        SIZE_INCREASE:      0xffff00,
-        GRIP_BOOST:         0x00ccff,
-        INVULNERABILITY:    0xff00ff
-    };
+    return Object.fromEntries(
+        POWER_UP_DEFINITIONS.map(definition => [
+            definition.type,
+            getThemeAwarePowerUpColor(definition.type, theme),
+        ]),
+    );
 }
 
-// Power-up effect definitions
-const POWER_UP_EFFECTS = [
-    {
-        type: 'ACCELERATION_BOOST',
-        name: 'Speed Demon',
-        icon: '⚡',
-        description: 'Double your acceleration for lightning-fast movement',
-        color: 0xff6600,
-        apply: (player, duration) => {
-            player.sphereAccelMultiplier = 2.0;
-            player.powerUpColor = player.themeAwarePowerUpColors?.ACCELERATION_BOOST || 0xff6600;
-        },
-        remove: (player) => {
-            player.sphereAccelMultiplier = 1.0;
-        }
+const EFFECT_HANDLERS = {
+    ACCELERATION_BOOST: {
+        apply: player => { player.sphereAccelMultiplier = 2.0; },
+        remove: player => { player.sphereAccelMultiplier = 1.0; },
     },
-    {
-        type: 'SIZE_REDUCTION',
-        name: 'Shrink',
-        icon: '🔽',
-        description: 'Reduce your size to 60% for agility and dodging',
-        color: 0x0099ff,
-        apply: (player, duration) => {
+    SIZE_REDUCTION: {
+        apply: player => {
             player.sizeMultiplier = 0.6;
-            player.mesh.scale.set(0.6, 0.6, 0.6);
-            player.auraMesh.scale.set(0.6, 0.6, 0.6);
+            player.mesh?.scale.set(0.6, 0.6, 0.6);
+            player.auraMesh?.scale.set(0.6, 0.6, 0.6);
             player.collider?.setMass(player.sphereWeight * 0.7);
-            player.powerUpColor = player.themeAwarePowerUpColors?.SIZE_REDUCTION || 0x0099ff;
         },
-        remove: (player) => {
+        remove: player => {
             player.sizeMultiplier = 1.0;
-            player.mesh.scale.set(1.0, 1.0, 1.0);
-            player.auraMesh.scale.set(1.0, 1.0, 1.0);
+            player.mesh?.scale.set(1.0, 1.0, 1.0);
+            player.auraMesh?.scale.set(1.0, 1.0, 1.0);
             player.collider?.setMass(player.sphereWeight);
-        }
+        },
     },
-    {
-        type: 'WEIGHT_INCREASE',
-        name: 'Heavy Metal',
-        icon: '⚖️',
-        description: 'Double your weight for more momentum and collision power',
-        color: 0x8800ff,
-        apply: (player, duration) => {
+    WEIGHT_INCREASE: {
+        apply: player => {
             player.weightMultiplier = 2.0;
             player.collider?.setMass(player.sphereWeight * 2);
-            player.powerUpColor = player.themeAwarePowerUpColors?.WEIGHT_INCREASE || 0x8800ff;
         },
-        remove: (player) => {
+        remove: player => {
             player.weightMultiplier = 1.0;
             player.collider?.setMass(player.sphereWeight);
-        }
-    },
-    {
-        type: 'SPEED_BURST',
-        name: 'Rocket Boost',
-        icon: '🚀',
-        description: 'Instant velocity boost in your current direction',
-        color: 0xff0000,
-        apply: (player, duration) => {
-            const vel = player.rigidBody.linvel();
-            const speed = Math.sqrt(vel.x ** 2 + vel.z ** 2);
-            const boost = speed > 0 ? new THREE.Vector3(vel.x, 0, vel.z).normalize().multiplyScalar(50) : new THREE.Vector3(50, 0, 0);
-            player.rigidBody.applyImpulse({ x: boost.x, y: 0, z: boost.z }, true);
-            player.powerUpColor = player.themeAwarePowerUpColors?.SPEED_BURST || 0xff0000;
         },
-        remove: (player) => {}
     },
-    {
-        type: 'LIGHT_TOUCH',
-        name: 'Floaty',
-        icon: '🪶',
-        description: 'Reduce gravity by 50% for lighter, longer jumps',
-        color: 0x00ff88,
-        apply: (player, duration) => {
+    SPEED_BURST: {
+        apply: player => {
+            const velocity = player.rigidBody.linvel();
+            const speed = Math.hypot(velocity.x, velocity.z);
+            const boost = speed > 0
+                ? new THREE.Vector3(velocity.x, 0, velocity.z).normalize().multiplyScalar(50)
+                : new THREE.Vector3(50, 0, 0);
+            player.rigidBody.applyImpulse({ x: boost.x, y: 0, z: boost.z }, true);
+        },
+        remove: () => {},
+    },
+    LIGHT_TOUCH: {
+        apply: player => {
             player.gravityMultiplier = 0.5;
             player.rigidBody?.setGravityScale(0.5, true);
-            player.powerUpColor = player.themeAwarePowerUpColors?.LIGHT_TOUCH || 0x00ff88;
         },
-        remove: (player) => {
+        remove: player => {
             player.gravityMultiplier = 1.0;
             player.rigidBody?.setGravityScale(1.0, true);
-        }
+        },
     },
-    {
-        type: 'SIZE_INCREASE',
-        name: 'Mega',
-        icon: '🆙',
-        description: 'Grow to 160% size for dominance and reach',
-        color: 0xffff00,
-        apply: (player, duration) => {
+    SIZE_INCREASE: {
+        apply: player => {
             player.sizeMultiplier = 1.6;
-            player.mesh.scale.set(1.6, 1.6, 1.6);
-            player.auraMesh.scale.set(1.6, 1.6, 1.6);
+            player.mesh?.scale.set(1.6, 1.6, 1.6);
+            player.auraMesh?.scale.set(1.6, 1.6, 1.6);
             player.collider?.setMass(player.sphereWeight * 1.6);
-            player.powerUpColor = player.themeAwarePowerUpColors?.SIZE_INCREASE || 0xffff00;
         },
-        remove: (player) => {
+        remove: player => {
             player.sizeMultiplier = 1.0;
-            player.mesh.scale.set(1.0, 1.0, 1.0);
-            player.auraMesh.scale.set(1.0, 1.0, 1.0);
+            player.mesh?.scale.set(1.0, 1.0, 1.0);
+            player.auraMesh?.scale.set(1.0, 1.0, 1.0);
             player.collider?.setMass(player.sphereWeight);
-        }
-    },
-    {
-        type: 'GRIP_BOOST',
-        name: 'Traction',
-        icon: '🔗',
-        description: '3x grip for precise control and no slip',
-        color: 0x00ccff,
-        apply: (player, duration) => {
-            player.frictionMultiplier = 3.0;
-            player.powerUpColor = player.themeAwarePowerUpColors?.GRIP_BOOST || 0x00ccff;
         },
-        remove: (player) => {
+    },
+    GRIP_BOOST: {
+        apply: player => { player.frictionMultiplier = 3.0; },
+        remove: player => {
             player.frictionMultiplier = 1.0;
             player.collider?.setFriction(0.5);
-        }
+        },
     },
-    {
-        type: 'INVULNERABILITY',
-        name: 'Fortress',
-        icon: '🛡️',
-        description: 'Complete protection from knockback effects',
-        color: 0xff00ff,
-        apply: (player, duration) => {
+    INVULNERABILITY: {
+        apply: player => {
             player.isInvulnerable = true;
             player.collider?.setMass(player.sphereWeight * 4);
-            player.powerUpColor = player.themeAwarePowerUpColors?.INVULNERABILITY || 0xff00ff;
         },
-        remove: (player) => {
+        remove: player => {
             player.isInvulnerable = false;
             player.collider?.setMass(player.sphereWeight);
-        }
-    }
-];
+        },
+    },
+};
+
+const POWER_UP_EFFECTS = POWER_UP_DEFINITIONS.map(definition => ({
+    ...definition,
+    apply: player => {
+        EFFECT_HANDLERS[definition.type].apply(player);
+        player.powerUpColor = player.themeAwarePowerUpColors?.[definition.type] || definition.color;
+    },
+    remove: player => EFFECT_HANDLERS[definition.type].remove(player),
+}));
 
 export { POWER_UP_EFFECTS, getThemeAwarePowerUpColors };
 
@@ -356,6 +298,7 @@ export class Player {
         }
 
         if (this.isDead) return;
+        if (!this.isLocal) return;
 
         // Update timers
         if (this.freezeTimer > 0) this.freezeTimer -= delta;
@@ -386,7 +329,9 @@ export class Player {
                 const startedAt = performance.now() / 1000;
                 const existingPowerUp = this.activePowerUps.find(powerUp => powerUp.type === chosenEffect.type);
                 chosenEffect.apply(this, duration);
-                if (existingPowerUp) {
+                if (chosenEffect.durationKind === 'instant') {
+                    this.powerUpColor = null;
+                } else if (existingPowerUp) {
                     existingPowerUp.startTime = startedAt;
                     existingPowerUp.duration = duration;
                 } else {
@@ -402,7 +347,7 @@ export class Player {
                 // Show notification with icon
                 if (typeof window.showPowerUpNotification !== 'undefined') {
                     const playerName = this.id === 'player1' ? 'P1' : 'P2';
-                    window.showPowerUpNotification(playerName, chosenEffect.name, chosenEffect.icon, chosenEffect.color);
+                    window.showPowerUpNotification(playerName, chosenEffect);
                 }
                 
                 // Convert bonus tile back to normal
@@ -464,29 +409,41 @@ export class Player {
         
         // Update and clean up power-ups
         const now = performance.now() / 1000;
-        this.activePowerUps = this.activePowerUps.filter(powerUp => {
+        const expiredPowerUps = [];
+        const remainingPowerUps = this.activePowerUps.filter(powerUp => {
             const elapsed = now - powerUp.startTime;
             if (elapsed >= powerUp.duration) {
-                powerUp.effect.remove(this);
-                // Reset modified properties when power-up expires
-                if (this.activePowerUps.length === 1 && this.activePowerUps[0] === powerUp) {
-                    this.powerUpColor = null;
-                }
+                expiredPowerUps.push(powerUp);
                 return false;
             }
             return true;
         });
+        if (expiredPowerUps.length > 0) {
+            expiredPowerUps.forEach(powerUp => powerUp.effect.remove(this));
+            const stackingOrder = [
+                'ACCELERATION_BOOST',
+                'LIGHT_TOUCH',
+                'GRIP_BOOST',
+                'SIZE_REDUCTION',
+                'SIZE_INCREASE',
+                'WEIGHT_INCREASE',
+                'INVULNERABILITY',
+            ];
+            remainingPowerUps
+                .slice()
+                .sort((a, b) => stackingOrder.indexOf(a.type) - stackingOrder.indexOf(b.type))
+                .forEach(powerUp => powerUp.effect.apply(this));
+            if (remainingPowerUps.length === 0) this.powerUpColor = null;
+        }
+        this.activePowerUps = remainingPowerUps;
         
         // Apply friction multiplier from active power-ups
         if (this.frictionMultiplier > 1.0 && this.collider) {
             this.collider.setFriction(0.5 * this.frictionMultiplier);
         }
 
-        // 4. Handle Input - skip for remote players (online client receives positions from host)
-        if (!this.isLocal) {
-            return; // Remote player - position is set by host, don't apply local input
-        }
-
+        // 4. Handle local predicted input. Remote players returned above after
+        // their visual transform was synchronized from the snapshot buffer.
         const storeState = useGameStore.getState();
         const input = storeState.gameState === 'PLAYING' ? this.inputFn() : { forward: false, backward: false, left: false, right: false, boost: false };
         const speed = this.sphereAccel * this.sphereAccelMultiplier * delta;
@@ -1047,9 +1004,10 @@ export class Player {
         const wobbleZ = Math.cos(time * 15) * wobbleIntensity;
 
         const sizeScale = this.sizeMultiplier || 1.0;
+        const fit = getHatFitTransform(this.hatGroup, this.sphereSize, sizeScale);
         this.hatGroup.position.set(
             position.x,
-            position.y + this.sphereSize * sizeScale + this.hatBobOffset,
+            position.y + fit.attachmentHeight + this.hatBobOffset,
             position.z
         );
 
@@ -1058,9 +1016,9 @@ export class Player {
 
         const invSquash = 1.0 / Math.sqrt(this.hatSquash);
         this.hatGroup.scale.set(
-            sizeScale * invSquash,
-            sizeScale * this.hatSquash,
-            sizeScale * invSquash
+            fit.scale * invSquash,
+            fit.scale * this.hatSquash,
+            fit.scale * invSquash
         );
 
         if (this.santaSegments && this.santaSegments.length > 0) {

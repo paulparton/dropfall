@@ -8,47 +8,70 @@ A WebSocket-based game server for Dropfall online multiplayer.
 # Install dependencies
 npm install
 
-# Start the server
-npm run server
+# Build the game and start the LAN server
+npm run start
 ```
 
-The server will start on port 3000 by default. You can change the port:
+The server listens on every IPv4 network interface and uses port 3000 by
+default. You can change the port:
 
 ```bash
-PORT=8080 npm run server
+PORT=8080 npm run start
 ```
 
 ## Accessing the Server
 
-- **Admin Panel**: `http://localhost:3000` - Configure games, view stats
-- **Game Clients**: Connect from the game using the server's IP address
+- **This computer**: `http://localhost:3000`
+- **Local hostname**: `http://your-computer.local:3000`
+- **Local IP**: for example, `http://192.168.1.100:3000`
+
+The startup output prints the exact hostname and IP URLs available on the
+current computer.
 
 ## Network Setup
 
 For other players to connect:
 
-1. Find the server computer's local IP address (e.g., `192.168.1.100`)
-2. Players enter this IP in the game's online multiplayer menu: `192.168.1.100:3000`
+1. Connect the phone or tablet to the same Wi-Fi network as the server.
+2. Run `npm run start` on the server computer.
+3. Open the printed `.local` or IP URL in the mobile browser.
+4. If macOS asks whether Node may accept incoming connections, choose **Allow**.
 
-### Port Forwarding (for internet play)
+Dropfall uses the page's hostname for its level API and multiplayer WebSocket,
+so a game opened at `http://your-computer.local:3000` stays on that hostname
+instead of trying to connect to `localhost` on the mobile device.
 
-If you want players outside your network to connect:
+Optional binding overrides:
 
-1. Forward port 3000 (or your custom port) on your router
-2. Use your public IP address instead of local IP
+```bash
+DROPFALL_HOST=0.0.0.0 \
+DROPFALL_LOCAL_HOSTNAME=skippy.local \
+DROPFALL_ALLOWED_ORIGINS=http://skippy.local:3000 \
+npm run start
+```
+
+### Internet deployment
+
+Do not expose the development server by directly forwarding the port. Internet
+deployments require TLS termination, an exact `DROPFALL_ALLOWED_ORIGINS`
+allowlist, managed secrets, rate and connection controls at the edge, monitoring,
+and the release authentication/data services described in the release refresh
+specification.
 
 ## Features
 
 - **Quake-style matchmaking**: Create and join game lobbies
 - **Real-time game sync**: WebSocket-based player position and state sync
-- **Admin panel**: View connected players, create test games, configure settings
+- **Loopback operator panel**: View local development status and create test games
 - **Multi-game support**: Architecture supports adding more games
 
 ## API
 
 ### WebSocket Protocol
 
-Connect via `ws://server:port/`
+Connect via `ws://server:port/` on trusted local networks or `wss://` in hosted
+environments. Browser origins must be same-origin or included in
+`DROPFALL_ALLOWED_ORIGINS`.
 
 **Client → Server Messages:**
 
@@ -94,9 +117,23 @@ The server uses:
 - `ws` library for WebSocket connections
 - In-memory storage for games and players (no database required)
 
-## Security Notes
+## Security baseline
 
-- This is designed for local network play
-- No authentication by default
-- No encryption (use WSS for internet play)
-- For production deployment, add authentication and rate limiting
+- WebSocket messages are schema-validated, size-limited, rate-limited, and
+  protected by an origin allowlist and heartbeat.
+- Match reconnects require a rotating random token. A client cannot claim an
+  arbitrary disconnected slot.
+- The legacy admin/editor pages are loopback-only unless
+  `DROPFALL_ENABLE_DEV_TOOLS=1` is deliberately set.
+- Level reads, creation, and updates are temporarily public. Level deletion requires
+  `DROPFALL_EDITOR_TOKEN` as a bearer token and is disabled when it is absent.
+- Published battle arenas remain selectable even when they contain disconnected,
+  decorative, or otherwise unreachable tiles; validation data is advisory only.
+- Set `DROPFALL_ALLOWED_ORIGINS` to a comma-separated list of exact production
+  origins. Wildcard CORS is not supported.
+- Use WSS/HTTPS at the production ingress. The Node process intentionally leaves
+  TLS termination to the hosting platform or reverse proxy.
+- This is the release-foundation boundary, not the final account service.
+  Ranked play, UGC publishing, profiles, entitlements, and moderation still
+  require the durable authenticated backend specified in
+  `DROPFALL_RELEASE_REFRESH_SPEC.md`.

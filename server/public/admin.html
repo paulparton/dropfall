@@ -570,22 +570,25 @@
 
             const gamesEl = document.getElementById('lobby-list');
             if (stats.lobbiesWaiting === 0) {
-                gamesEl.innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">🎮</div>
-                        <div>No active lobbies</div>
-                    </div>
-                `;
+                renderEmptyState(gamesEl, '🎮', 'No active lobbies');
             }
 
             if (stats.gamesInProgress === 0) {
-                document.getElementById('games-list').innerHTML = `
-                    <div class="empty-state">
-                        <div class="empty-state-icon">⚔️</div>
-                        <div>No games in progress</div>
-                    </div>
-                `;
+                renderEmptyState(document.getElementById('games-list'), '⚔️', 'No games in progress');
             }
+        }
+
+        function renderEmptyState(container, icon, message) {
+            container.replaceChildren();
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            const iconNode = document.createElement('div');
+            iconNode.className = 'empty-state-icon';
+            iconNode.textContent = icon;
+            const copy = document.createElement('div');
+            copy.textContent = message;
+            empty.append(iconNode, copy);
+            container.appendChild(empty);
         }
 
         function attemptReconnect() {
@@ -612,7 +615,10 @@
             const time = new Date().toLocaleTimeString();
             const line = document.createElement('div');
             line.className = `console-line ${type}`;
-            line.innerHTML = `<span class="console-time">[${time}]</span>${message}`;
+            const timeNode = document.createElement('span');
+            timeNode.className = 'console-time';
+            timeNode.textContent = `[${time}]`;
+            line.append(timeNode, document.createTextNode(String(message)));
             console.appendChild(line);
             console.scrollTop = console.scrollHeight;
         }
@@ -628,26 +634,27 @@
                 .then(games => {
                     const el = document.getElementById('lobby-list');
                     if (games.length === 0) {
-                        el.innerHTML = `
-                            <div class="empty-state">
-                                <div class="empty-state-icon">🎮</div>
-                                <div>No active lobbies</div>
-                            </div>
-                        `;
+                        renderEmptyState(el, '🎮', 'No active lobbies');
                     } else {
-                        el.innerHTML = games.map(game => `
-                            <div class="game-item">
-                                <div class="game-item-header">
-                                    <span class="game-item-title">${game.hostName}'s Game</span>
-                                    <span class="game-item-status waiting">Waiting</span>
-                                </div>
-                                <div class="game-item-details">
-                                    Players: ${game.playerCount}/${game.maxPlayers} |
-                                    Theme: ${game.settings.theme} |
-                                    Arena: ${game.settings.arenaSize}
-                                </div>
-                            </div>
-                        `).join('');
+                        el.replaceChildren();
+                        games.forEach(game => {
+                            const item = document.createElement('div');
+                            item.className = 'game-item';
+                            const header = document.createElement('div');
+                            header.className = 'game-item-header';
+                            const title = document.createElement('span');
+                            title.className = 'game-item-title';
+                            title.textContent = `${String(game.hostName || 'Player')}'s Game`;
+                            const state = document.createElement('span');
+                            state.className = 'game-item-status waiting';
+                            state.textContent = 'Waiting';
+                            header.append(title, state);
+                            const details = document.createElement('div');
+                            details.className = 'game-item-details';
+                            details.textContent = `Players: ${Number(game.playerCount || 0)}/${Number(game.maxPlayers || 2)} | Theme: ${String(game.settings?.theme || 'tron')} | Arena: ${Number(game.settings?.arenaSize || 4)}`;
+                            item.append(header, details);
+                            el.appendChild(item);
+                        });
                     }
                 })
                 .catch(e => log('Failed to fetch games', 'warning'));
@@ -662,8 +669,8 @@
             const config = getConfig();
             ws.send(JSON.stringify({
                 type: 'set_name',
-                name: 'Server Admin',
-                isAdmin: true
+                name: 'Server Operator',
+                protocolVersion: 1
             }));
 
             setTimeout(() => {

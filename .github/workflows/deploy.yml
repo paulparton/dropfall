@@ -23,6 +23,18 @@ jobs:
       - name: Run tests
         run: npm run test
 
+      - name: Type-check
+        run: npm run type-check
+
+      - name: Validate release assets
+        run: npm run validate:assets
+
+      - name: Build release client
+        run: npm run build
+
+      - name: Audit dependency tree
+        run: npm run audit
+
       - name: Install Railway CLI
         run: npm install -g @railway/cli
 

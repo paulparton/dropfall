@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { GameRoom } from '../server/game/GameRoom.js';
 
 function createRoom(randomValue = 0) {
@@ -113,6 +113,79 @@ describe('multiplayer room settings', () => {
     expect(room.state).toBe('LOBBY');
     expect(room.matchNumber).toBe(2);
     expect(room.settingsPickerId).toBe('guest-id');
+  });
+
+  it('keeps a baseline snapshot so both clients can visualize setting deltas', () => {
+    const room = createRoom();
+    const baseline = room.getPublicGame().settingsBaseline;
+
+    room.updateSettings('host-id', { arenaSize: 8, collisionBounce: 1.3 });
+    const game = room.getPublicGame();
+
+    expect(game.settings.arenaSize).toBe(8);
+    expect(game.settings.collisionBounce).toBe(1.3);
+    expect(game.settingsBaseline).toEqual(baseline);
+    expect(game.settingsBaseline.arenaSize).toBe(5);
+  });
+
+  it('lets only the non-picker start hurry-up and forces the picker ready after ten seconds', () => {
+    vi.useFakeTimers();
+    const room = createRoom(0);
+    const messages: Array<Record<string, unknown>> = [];
+    for (const player of room.players) player.ws = { readyState: 1 };
+    room.onBroadcast = (_playerId: string, message: Record<string, unknown>) => messages.push(message);
+
+    try {
+      expect(room.settingsPickerId).toBe('host-id');
+      expect(room.startHurryUp('host-id')).toBeNull();
+      expect(room.startHurryUp('guest-id')).toMatchObject({ targetId: 'host-id', durationMs: 10000 });
+      expect(room.getPublicGame().hurryUp?.targetSlot).toBe(1);
+
+      vi.advanceTimersByTime(10000);
+
+      expect(room.players.find(player => player.id === 'host-id')?.ready).toBe(true);
+      expect(room.getPublicGame().hurryUp).toBeNull();
+      expect(messages.some(message => message.type === 'hurry_up_started')).toBe(true);
+      expect(messages.some(message => message.type === 'hurry_up_finished')).toBe(true);
+      expect(messages.some(message => message.type === 'ready_state' && message.forced === true)).toBe(true);
+      expect(room.updateSettings('host-id', { arenaSize: 10 })).toBeNull();
+    } finally {
+      room.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  it('retains a disconnected player slot during between-match setup', () => {
+    const room = createRoom();
+    room.hasStartedMatch = true;
+    room.state = 'LOBBY';
+
+    const result = room.removePlayer('guest-id');
+
+    expect(result).toMatchObject({ disconnected: true, slot: 2 });
+    expect(room.players).toHaveLength(2);
+    expect(room.players.find(player => player.id === 'guest-id')?.disconnected).toBe(true);
+
+    const reconnected = room.reconnect('guest-id', 'guest-rejoined', { readyState: 1 });
+    expect(reconnected).toMatchObject({ id: 'guest-rejoined', slot: 2, disconnected: false });
+    room.destroy();
+  });
+
+  it('returns the survivor to a usable lobby when reconnect grace expires', () => {
+    const room = createRoom();
+    room.hasStartedMatch = true;
+    room.state = 'PLAYING';
+    room.removePlayer('guest-id');
+    const disconnected = room.players.find(player => player.id === 'guest-id');
+    if (disconnected) disconnected.reconnectDeadline = Date.now() - 1;
+
+    room._cleanupDisconnectedSlot(2);
+
+    expect(room.state).toBe('LOBBY');
+    expect(room.players).toHaveLength(1);
+    expect(room.settingsPickerId).toBe('host-id');
+    expect(room.players[0].ready).toBe(false);
+    room.destroy();
   });
 
   it('transfers room ownership independently from settings authority', () => {

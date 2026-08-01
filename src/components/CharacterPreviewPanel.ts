@@ -982,10 +982,16 @@ function createPlayerCard(player: PreviewPlayerState, onPlayerStateChange?: Func
     chip.title = hatName;
     chip.setAttribute('aria-label', hatName);
 
-    const hatIcon = document.createElement('span');
+    const hatIcon = hatMeta ? document.createElement('img') : document.createElement('span');
     hatIcon.className = 'dropfall-hat-option__icon';
-    hatIcon.setAttribute('aria-hidden', 'true');
-    hatIcon.textContent = hatMeta?.icon ?? '—';
+    if (hatIcon instanceof HTMLImageElement && hatMeta) {
+      hatIcon.src = hatMeta.iconPath;
+      hatIcon.alt = '';
+      hatIcon.loading = 'lazy';
+    } else {
+      hatIcon.setAttribute('aria-hidden', 'true');
+      hatIcon.textContent = '—';
+    }
 
     const hatLabel = document.createElement('span');
     hatLabel.className = 'dropfall-hat-option__label';

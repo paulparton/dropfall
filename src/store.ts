@@ -11,6 +11,8 @@ import type {
 } from './types/Game';
 import type { InputPayload } from './types/Input';
 import type { AudioContext } from './types/Audio';
+import { BATTLE_RULES } from '../shared/gameRules.js';
+import { normalizeHatId } from '../shared/cosmetics.js';
 
 /**
  * Game settings structure controlling gameplay mechanics and UI
@@ -244,8 +246,8 @@ const defaultSettings: GameSettings = {
   playerGlowIntensity: 3.0,
   playerGlowRange: 30,
   autoRestart: false,
-  p1Hat: localStorage.getItem('dropfall_p1hat') || 'none',
-  p2Hat: localStorage.getItem('dropfall_p2hat') || 'none',
+  p1Hat: normalizeHatId(localStorage.getItem('dropfall_p1hat')),
+  p2Hat: normalizeHatId(localStorage.getItem('dropfall_p2hat')),
   p1Color: parseInt(localStorage.getItem('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
   p2Color: parseInt(localStorage.getItem('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
   powerUpWeights: {
@@ -407,12 +409,14 @@ export const useGameStore = create<GameStore>()(
       },
 
       setPlayerHats: (p1Hat, p2Hat) => {
-        localStorage.setItem('dropfall_p1hat', p1Hat);
-        localStorage.setItem('dropfall_p2hat', p2Hat);
+        const normalizedP1Hat = normalizeHatId(p1Hat);
+        const normalizedP2Hat = normalizeHatId(p2Hat);
+        localStorage.setItem('dropfall_p1hat', normalizedP1Hat);
+        localStorage.setItem('dropfall_p2hat', normalizedP2Hat);
         return set((state: GameStore) => ({ 
-          p1Hat,
-          p2Hat,
-          settings: { ...state.settings, p1Hat, p2Hat }
+          p1Hat: normalizedP1Hat,
+          p2Hat: normalizedP2Hat,
+          settings: { ...state.settings, p1Hat: normalizedP1Hat, p2Hat: normalizedP2Hat }
         }));
       },
 
@@ -523,10 +527,10 @@ export const useGameStore = create<GameStore>()(
           if (winner === 'Player 1') newP1Score++;
           if (winner === 'Player 2') newP2Score++;
 
-          if (newP1Score >= 3 || newP2Score >= 3) {
+          if (newP1Score >= BATTLE_RULES.winsToWinMatch || newP2Score >= BATTLE_RULES.winsToWinMatch) {
             return {
               gameState: 'GAME_OVER',
-              winner: newP1Score >= 3 ? 'Player 1' : 'Player 2',
+              winner: newP1Score >= BATTLE_RULES.winsToWinMatch ? 'Player 1' : 'Player 2',
               p1Score: newP1Score,
               p2Score: newP2Score,
             };

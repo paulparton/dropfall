@@ -19,17 +19,24 @@
     "test:watch": "vitest",
     "test:e2e": "vitest run --config vitest.e2e.config.js",
     "type-check": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.js"
+    "lint": "eslint src",
+    "validate:assets": "node scripts/validate-assets.mjs",
+    "audit": "npm audit --audit-level=high",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "check:release-foundation": "npm run type-check && npm test && npm run validate:assets && npm run build && npm run audit"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@testing-library/dom": "^10.4.1",
     "@types/node": "^20.0.0",
     "@types/three": "^0.183.1",
-    "@typescript-eslint/eslint-plugin": "^7.0.0",
-    "@typescript-eslint/parser": "^7.0.0",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.65.0",
+    "@typescript-eslint/parser": "^8.65.0",
     "@vitejs/plugin-basic-ssl": "^2.1.0",
     "@vitest/coverage-v8": "^4.1.2",
-    "eslint": "^8.57.0",
+    "eslint": "^10.8.0",
+    "globals": "^17.8.0",
     "jsdom": "^29.0.1",
     "puppeteer": "^23.0.0",
     "terser": "^5.48.0",
@@ -41,7 +48,7 @@
   "dependencies": {
     "@dimforge/rapier3d-compat": "^0.19.3",
     "three": "^0.183.1",
-    "ws": "^8.18.0",
+    "ws": "^8.21.1",
     "zod": "^4.3.6",
     "zustand": "^5.0.11"
   },

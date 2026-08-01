@@ -1,0 +1,20 @@
+{
+  "name": "Dropfall: Star Circuit",
+  "short_name": "Dropfall",
+  "description": "A fast physics duel across collapsing neon arenas.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#05000f",
+  "theme_color": "#0b0324",
+  "categories": ["games"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

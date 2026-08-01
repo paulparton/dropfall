@@ -15,6 +15,52 @@ export interface HatResult {
   santaDroopZ: number;
 }
 
+export interface HatFitProfile {
+  scale: number;
+  verticalOffset: number;
+}
+
+const DEFAULT_HAT_FIT: Readonly<HatFitProfile> = Object.freeze({
+  scale: 1,
+  verticalOffset: 0,
+});
+
+const HAT_FIT_PROFILES: Readonly<Record<string, Readonly<HatFitProfile>>> = Object.freeze({
+  // Seat the brim's inner opening around the sphere's curved cap. The ball
+  // intentionally rises slightly through the opening so no camera angle can
+  // reveal daylight between the brim and the player.
+  cowboy: Object.freeze({ scale: 0.86, verticalOffset: -0.22 }),
+  // The crown should wrap the curved cap of the ball rather than balance on
+  // its highest point. This inset matches its base radius to the sphere.
+  crown: Object.freeze({ scale: 0.84, verticalOffset: -0.29 }),
+  // The bandana is the pirate cosmetic's contact layer. Sink it into the
+  // sphere so the tricorn feels worn and the dreadlocks frame the ball.
+  pirate_captain: Object.freeze({ scale: 0.92, verticalOffset: -0.16 }),
+  // Both fabric brims should overlap the ball's curved crown, with the
+  // sculpted body rising from that seated contact point.
+  arcane_witch: Object.freeze({ scale: 0.9, verticalOffset: -0.18 }),
+  galaxy_chef: Object.freeze({ scale: 0.88, verticalOffset: -0.2 }),
+  // Headphones are authored around the wearer's centre: the earcups belong
+  // beside the sphere, while only the arch rises above it.
+  sonic_headphones: Object.freeze({ scale: 1.04, verticalOffset: -1.04 }),
+});
+
+export function getHatFitProfile(type: string): Readonly<HatFitProfile> {
+  return HAT_FIT_PROFILES[type] ?? DEFAULT_HAT_FIT;
+}
+
+export function getHatFitTransform(
+  group: THREE.Group,
+  sphereSize: number,
+  sizeMultiplier = 1,
+): { scale: number; attachmentHeight: number } {
+  const fit = getHatFitProfile(String(group.userData.hatType || ''));
+  return {
+    scale: sizeMultiplier * fit.scale,
+    attachmentHeight: sphereSize * sizeMultiplier * (1 + fit.verticalOffset),
+  };
+}
+
 type HatMaterial = THREE.MeshStandardMaterial | THREE.MeshPhysicalMaterial | THREE.MeshBasicMaterial;
 
 export function createHatMesh(type: string, sphereSize: number): HatResult | null {
@@ -458,11 +504,211 @@ export function createHatMesh(type: string, sphereSize: number): HatResult | nul
       break;
     }
     case 'pirate_captain': {
-      const felt = mat(0x17141f, { roughness: .88, side: THREE.DoubleSide });
-      add(new THREE.SphereGeometry(s * .86, 24, 14, 0, Math.PI * 2, 0, Math.PI * .52), felt, [0, s * .08, 0], [0, 0, 0], [1.3, .9, .86]);
-      add(new THREE.TorusGeometry(s * .74, s * .13, 10, 32, Math.PI), felt, [0, s * .55, s * .2], [0, 0, 0], [1.45, 1, 1]);
-      add(new THREE.BoxGeometry(s * 1.28, s * .12, s * .08), physical(0xe9b84a, { metalness: .8 }), [0, s * .32, s * .74]);
-      add(new THREE.CircleGeometry(s * .25, 20), mat(0xffffff, { emissive: 0x666666, emissiveIntensity: .25, side: THREE.DoubleSide }), [0, s * .67, s * .79], [0, 0, 0], [1, 1, 1], 'pirateBadge');
+      const weatheredFelt = mat(0x21140f, {
+        roughness: .94,
+        emissive: 0x100704,
+        emissiveIntensity: .04,
+        side: THREE.DoubleSide,
+      });
+      const wornEdge = mat(0x6d4226, {
+        roughness: .72,
+        metalness: .08,
+        emissive: 0x231006,
+        emissiveIntensity: .07,
+      });
+      const bandana = mat(0x8e1833, {
+        roughness: .8,
+        emissive: 0x310510,
+        emissiveIntensity: .08,
+        side: THREE.DoubleSide,
+      });
+      const dreadMat = mat(0x4a2814, {
+        roughness: .96,
+        emissive: 0x160905,
+        emissiveIntensity: .055,
+      });
+      const antiqueGold = physical(0xb7862e, {
+        metalness: .78,
+        roughness: .34,
+        emissive: 0x402000,
+        emissiveIntensity: .12,
+      });
+
+      // The bandana forms a visible, soft contact layer against the ball.
+      add(
+        new THREE.SphereGeometry(s * .79, 28, 14, 0, Math.PI * 2, 0, Math.PI * .54),
+        bandana,
+        [0, -s * .16, 0],
+        [0, 0, 0],
+        [1, .72, 1],
+        'pirateBandana',
+      );
+      add(
+        new THREE.TorusGeometry(s * .71, s * .085, 8, 32),
+        bandana,
+        [0, -s * .12, 0],
+        [Math.PI / 2, 0, 0],
+      );
+
+      // Build the brim as one swept surface. Its three broad outer points
+      // curl upward into the familiar tricorn profile without the boxy,
+      // overlapping panels of the old model.
+      const brimPositions: number[] = [];
+      const brimIndices: number[] = [];
+      const brimAngularSteps = 48;
+      const brimRadialSteps = 6;
+      const tricornRadius = (angle: number) =>
+        s * (.92 + .15 * Math.cos(3 * (angle - Math.PI / 2)));
+      const tricornEdgeHeight = (angle: number) =>
+        s * (.39 + .08 * Math.cos(3 * (angle - Math.PI / 2)));
+      for (let angleIndex = 0; angleIndex <= brimAngularSteps; angleIndex += 1) {
+        const angle = angleIndex / brimAngularSteps * Math.PI * 2;
+        const outerRadius = tricornRadius(angle);
+        for (let radialIndex = 0; radialIndex <= brimRadialSteps; radialIndex += 1) {
+          const t = radialIndex / brimRadialSteps;
+          const radius = THREE.MathUtils.lerp(s * .47, outerRadius, t);
+          const lift = Math.pow(t, 1.75) * tricornEdgeHeight(angle);
+          brimPositions.push(
+            Math.cos(angle) * radius,
+            s * .025 + lift,
+            Math.sin(angle) * radius,
+          );
+        }
+      }
+      const brimRow = brimRadialSteps + 1;
+      for (let angleIndex = 0; angleIndex < brimAngularSteps; angleIndex += 1) {
+        for (let radialIndex = 0; radialIndex < brimRadialSteps; radialIndex += 1) {
+          const a = angleIndex * brimRow + radialIndex;
+          const b = a + brimRow;
+          brimIndices.push(a, b, a + 1, b, b + 1, a + 1);
+        }
+      }
+      const brimGeometry = new THREE.BufferGeometry();
+      brimGeometry.setAttribute('position', new THREE.Float32BufferAttribute(brimPositions, 3));
+      brimGeometry.setIndex(brimIndices);
+      brimGeometry.computeVertexNormals();
+      add(brimGeometry, weatheredFelt, [0, 0, 0], [0, 0, 0], [1, 1, 1], 'pirateBrim');
+
+      add(
+        new THREE.CylinderGeometry(s * .5, s * .64, s * .67, 24),
+        weatheredFelt,
+        [0, s * .34, 0],
+        [0, 0, 0],
+        [1, 1, .9],
+        'pirateCrown',
+      );
+      add(
+        new THREE.TorusGeometry(s * .585, s * .052, 8, 28),
+        wornEdge,
+        [0, s * .12, 0],
+        [Math.PI / 2, 0, 0],
+        [1, 1, .92],
+      );
+
+      const edgePoints = Array.from({ length: brimAngularSteps }, (_, index) => {
+        const angle = index / brimAngularSteps * Math.PI * 2;
+        const radius = tricornRadius(angle);
+        return new THREE.Vector3(
+          Math.cos(angle) * radius,
+          s * .025 + tricornEdgeHeight(angle),
+          Math.sin(angle) * radius,
+        );
+      });
+      const frontTrimCurve = new THREE.CatmullRomCurve3(edgePoints, true);
+      add(
+        new THREE.TubeGeometry(frontTrimCurve, 64, s * .026, 6, true),
+        wornEdge,
+        [0, 0, 0],
+        [0, 0, 0],
+        [1, 1, 1],
+        'pirateTrim',
+      );
+
+      // A restrained antique medallion gives the front a focal point without
+      // falling back to a flat novelty badge.
+      add(
+        new THREE.CylinderGeometry(s * .105, s * .105, s * .055, 12),
+        antiqueGold,
+        [0, s * .43, s * .59],
+        [Math.PI / 2, 0, 0],
+        [1, 1.28, 1],
+        'pirateMedallion',
+      );
+      add(
+        new THREE.OctahedronGeometry(s * .055, 0),
+        physical(0x6dd6c7, { metalness: .45, roughness: .24, emissiveIntensity: .25 }),
+        [0, s * .43, s * .625],
+        [0, 0, Math.PI / 4],
+        [1, 1.25, .45],
+      );
+
+      // Route each lock over the actual player sphere. These constants mirror
+      // the pirate fit profile above, allowing the tube centreline to remain
+      // one tube-radius outside the surface from root to tip.
+      const pirateFitScale = .92;
+      const pirateAttachment = .84;
+      const dreadSpecs: Array<[number, number, number]> = [
+        [.18, -1.28, 0],
+        [.92, -1.42, .7],
+        [1.66, -1.22, 1.4],
+        [2.4, -1.36, 2.1],
+        [3.14, -1.25, 2.8],
+        [3.88, -1.43, 3.5],
+        [4.62, -1.2, 4.2],
+        [5.36, -1.34, 4.9],
+      ];
+      const beadColors = [0xc89b3c, 0x3f9f97, 0x9d263d];
+      dreadSpecs.forEach(([baseAngle, endY, phase], index) => {
+        const radius = s * (.058 + (index % 3) * .008);
+        const worldClearance = radius * pirateFitScale + s * .008;
+        const surfacePoint = (t: number) => {
+          const localY = THREE.MathUtils.lerp(-.08, endY, t);
+          const worldY = pirateAttachment + pirateFitScale * localY;
+          const sphereRing = Math.sqrt(Math.max(0, 1 - worldY * worldY));
+          const localRing = (sphereRing + worldClearance / s) / pirateFitScale;
+          const angle = baseAngle + Math.sin(t * Math.PI * 1.35 + phase) * .035;
+          return new THREE.Vector3(
+            Math.cos(angle) * localRing * s,
+            localY * s,
+            Math.sin(angle) * localRing * s,
+          );
+        };
+        const worldCurvePoints = Array.from({ length: 9 }, (_, pointIndex) =>
+          surfacePoint(pointIndex / 8));
+        const root = worldCurvePoints[0]!.clone();
+        const pivot = new THREE.Group();
+        pivot.name = `pirateDread${index}`;
+        pivot.position.copy(root);
+
+        const dreadCurve = new THREE.CatmullRomCurve3(
+          worldCurvePoints.map((point) => point.sub(root)),
+          false,
+          'centripetal',
+        );
+        const dread = new THREE.Mesh(
+          new THREE.TubeGeometry(dreadCurve, 28, radius, 8, false),
+          dreadMat,
+        );
+        dread.name = `pirateDreadMesh${index}`;
+        pivot.add(dread);
+
+        if (index % 2 === 0 || index === 5) {
+          const beadPoint = dreadCurve.getPoint(index === 5 ? .68 : .53);
+          const bead = new THREE.Mesh(
+            new THREE.CylinderGeometry(s * .095, s * .095, s * .14, 8),
+            physical(beadColors[index % beadColors.length]!, {
+              metalness: .55,
+              roughness: .3,
+              emissiveIntensity: .18,
+            }),
+          );
+          bead.position.copy(beadPoint);
+          bead.name = `pirateBead${index}`;
+          pivot.add(bead);
+        }
+        group.add(pivot);
+      });
+
       break;
     }
     case 'propeller_cap': {
@@ -494,13 +740,174 @@ export function createHatMesh(type: string, sphereSize: number): HatResult | nul
       break;
     }
     case 'arcane_witch': {
-      add(new THREE.TorusGeometry(s * 1.0, s * .12, 10, 40), physical(0x241342, { roughness: .72, clearcoat: .3 }), [0, s * .05, 0], [Math.PI / 2, 0, 0]);
-      const cone = add(new THREE.ConeGeometry(s * .68, s * 2.15, 28, 8), physical(0x44207a, { roughness: .68, emissive: 0x22094c, emissiveIntensity: .35 }), [0, s * 1.05, 0], [0, 0, -.16], [1, 1, 1], 'witchCone');
-      cone.geometry.translate(0, s * .08, 0);
-      add(new THREE.TorusGeometry(s * .7, s * .075, 8, 32), physical(0xffa928, { metalness: .72, emissiveIntensity: .7 }), [0, s * .28, 0], [Math.PI / 2, 0, 0]);
+      const velvet = physical(0x2d174f, {
+        metalness: .06,
+        roughness: .72,
+        clearcoat: .2,
+        clearcoatRoughness: .7,
+        emissive: 0x110526,
+        emissiveIntensity: .22,
+        side: THREE.DoubleSide,
+      });
+      const velvetShadow = mat(0x130d29, {
+        roughness: .86,
+        emissive: 0x05020d,
+        emissiveIntensity: .08,
+        side: THREE.DoubleSide,
+      });
+      const moonGold = physical(0xd7a943, {
+        metalness: .82,
+        roughness: .25,
+        emissive: 0x5a3007,
+        emissiveIntensity: .32,
+      });
+
+      // A softly warped cloth surface replaces the rigid torus brim.
+      const witchBrimPositions: number[] = [];
+      const witchBrimIndices: number[] = [];
+      const witchAngularSteps = 48;
+      const witchRadialSteps = 6;
+      const witchOuterRadius = (angle: number) =>
+        s * (1.02 + .12 * Math.sin(angle * 2 + .4) + .05 * Math.cos(angle * 3));
+      const witchEdgeY = (angle: number) =>
+        s * (.06 + .12 * Math.sin(angle - .65) + .055 * Math.sin(angle * 3));
+      for (let angleIndex = 0; angleIndex <= witchAngularSteps; angleIndex += 1) {
+        const angle = angleIndex / witchAngularSteps * Math.PI * 2;
+        const outerRadius = witchOuterRadius(angle);
+        for (let radialIndex = 0; radialIndex <= witchRadialSteps; radialIndex += 1) {
+          const t = radialIndex / witchRadialSteps;
+          const radius = THREE.MathUtils.lerp(s * .43, outerRadius, t);
+          witchBrimPositions.push(
+            Math.cos(angle) * radius,
+            s * .035 + Math.pow(t, 1.8) * witchEdgeY(angle),
+            Math.sin(angle) * radius,
+          );
+        }
+      }
+      const witchBrimRow = witchRadialSteps + 1;
+      for (let angleIndex = 0; angleIndex < witchAngularSteps; angleIndex += 1) {
+        for (let radialIndex = 0; radialIndex < witchRadialSteps; radialIndex += 1) {
+          const a = angleIndex * witchBrimRow + radialIndex;
+          const b = a + witchBrimRow;
+          witchBrimIndices.push(a, b, a + 1, b, b + 1, a + 1);
+        }
+      }
+      const witchBrimGeometry = new THREE.BufferGeometry();
+      witchBrimGeometry.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(witchBrimPositions, 3),
+      );
+      witchBrimGeometry.setIndex(witchBrimIndices);
+      witchBrimGeometry.computeVertexNormals();
+      add(witchBrimGeometry, velvet, [0, 0, 0], [0, 0, 0], [1, 1, 1], 'witchBrim');
+
+      const witchEdgePoints = Array.from({ length: witchAngularSteps }, (_, index) => {
+        const angle = index / witchAngularSteps * Math.PI * 2;
+        const radius = witchOuterRadius(angle);
+        return new THREE.Vector3(
+          Math.cos(angle) * radius,
+          s * .035 + witchEdgeY(angle),
+          Math.sin(angle) * radius,
+        );
+      });
+      add(
+        new THREE.TubeGeometry(
+          new THREE.CatmullRomCurve3(witchEdgePoints, true, 'centripetal'),
+          64,
+          s * .024,
+          6,
+          true,
+        ),
+        velvetShadow,
+        [0, 0, 0],
+        [0, 0, 0],
+        [1, 1, 1],
+        'witchBrimEdge',
+      );
+
+      // Four tapered, chained sections give the crown an intentional fabric
+      // bend instead of a single plastic cone.
+      const witchSegments: Array<[number, number, number, number, number]> = [
+        [.65, .48, .62, -.03, .015],
+        [.48, .32, .55, -.15, -.035],
+        [.32, .16, .48, -.26, .045],
+        [.16, .025, .4, -.38, -.025],
+      ];
+      let witchParent: THREE.Object3D = group;
+      witchSegments.forEach(([bottomRadius, topRadius, height, tiltZ, tiltX], index) => {
+        const pivot = new THREE.Group();
+        pivot.name = `witchCrown${index}`;
+        pivot.position.y = index === 0 ? s * .045 : s * witchSegments[index - 1]![2];
+        pivot.rotation.set(tiltX, 0, tiltZ);
+        const overlap = .12;
+        const geometry = new THREE.CylinderGeometry(
+          s * topRadius,
+          s * bottomRadius,
+          s * (height + overlap),
+          24,
+          2,
+          false,
+        );
+        geometry.translate(0, s * height / 2, 0);
+        const segment = new THREE.Mesh(geometry, velvet);
+        segment.castShadow = true;
+        pivot.add(segment);
+        witchParent.add(pivot);
+        witchParent = pivot;
+      });
+
+      add(
+        new THREE.TorusGeometry(s * .66, s * .085, 10, 36),
+        moonGold,
+        [0, s * .18, 0],
+        [Math.PI / 2, 0, 0],
+        [1, 1, .94],
+        'witchBand',
+      );
+      add(
+        new THREE.BoxGeometry(s * .28, s * .25, s * .055),
+        moonGold,
+        [0, s * .2, s * .63],
+        [0, 0, 0],
+        [1, 1, 1],
+        'witchBuckle',
+      );
+      add(
+        new THREE.OctahedronGeometry(s * .09, 0),
+        physical(0x69e8ff, {
+          metalness: .25,
+          roughness: .12,
+          emissive: 0x28c8ff,
+          emissiveIntensity: 1.25,
+        }),
+        [0, s * .2, s * .675],
+        [0, 0, Math.PI / 4],
+        [1, 1.3, .42],
+        'witchGem',
+      );
       for (let i = 0; i < 5; i += 1) {
-        const angle = (i / 5) * Math.PI * 2;
-        add(new THREE.OctahedronGeometry(s * .07, 0), mat(0xaaf8ff, { emissive: 0x5eeaff, emissiveIntensity: 2 }), [Math.cos(angle) * s * .62, s * (1.0 + i * .16), Math.sin(angle) * s * .62], [0, angle, 0], [1, 1, 1], `witchStar${i}`);
+        const angle = .35 + i * .58;
+        const runeRadius = .82;
+        const outerRadius = witchOuterRadius(angle) / s;
+        const radialT = THREE.MathUtils.clamp(
+          (runeRadius - .43) / (outerRadius - .43),
+          0,
+          1,
+        );
+        const runeY = .07 + Math.pow(radialT, 1.8) * witchEdgeY(angle) / s;
+        const rune = add(
+          new THREE.OctahedronGeometry(s * (.038 + (i % 2) * .012), 0),
+          physical(i % 2 ? 0xffca63 : 0x77e9ff, {
+            metalness: .45,
+            roughness: .18,
+            emissiveIntensity: .85,
+          }),
+          [Math.cos(angle) * s * runeRadius, s * runeY, Math.sin(angle) * s * runeRadius],
+          [0, angle, Math.PI / 4],
+          [1, 1, .55],
+          `witchRune${i}`,
+        );
+        rune.renderOrder = 2;
       }
       break;
     }
@@ -534,13 +941,122 @@ export function createHatMesh(type: string, sphereSize: number): HatResult | nul
       break;
     }
     case 'galaxy_chef': {
-      const cloth = mat(0xf4f3ff, { roughness: .92, emissive: 0x5a5b78, emissiveIntensity: .12 });
-      add(new THREE.CylinderGeometry(s * .58, s * .72, s * .62, 24), cloth, [0, s * .24, 0]);
-      const chefPuffs: Array<[number, number, number, number]> = [[-.46, .78, 0, .48], [0, .9, 0, .56], [.46, .78, 0, .48]];
-      chefPuffs.forEach(([x, y, z, r]) => add(new THREE.SphereGeometry(s * r, 18, 14), cloth, [s * x, s * y, s * z]));
-      add(new THREE.TorusGeometry(s * .68, s * .055, 8, 32), physical(0x755cff, { emissiveIntensity: .75 }), [0, s * .09, 0], [Math.PI / 2, 0, 0]);
-      const star = add(new THREE.OctahedronGeometry(s * .13, 0), physical(0xffc83f, { emissiveIntensity: 1.6 }), [0, s * .36, s * .64], [0, 0, 0], [1, 1, .35], 'chefStar');
-      star.rotation.z = Math.PI / 4;
+      const chefCloth = physical(0xf4f0fa, {
+        metalness: 0,
+        roughness: .8,
+        clearcoat: .12,
+        clearcoatRoughness: .72,
+        emissive: 0x4c4565,
+        emissiveIntensity: .1,
+      });
+      const chefClothShadow = mat(0xd2cce2, {
+        roughness: .88,
+        emissive: 0x39334d,
+        emissiveIntensity: .08,
+      });
+      const galaxyBand = physical(0x292052, {
+        metalness: .28,
+        roughness: .4,
+        emissive: 0x120b35,
+        emissiveIntensity: .38,
+      });
+      const chefGold = physical(0xe6b94a, {
+        metalness: .85,
+        roughness: .2,
+        emissive: 0x5b3205,
+        emissiveIntensity: .28,
+      });
+
+      add(
+        new THREE.CylinderGeometry(s * .57, s * .69, s * .68, 32, 2),
+        chefCloth,
+        [0, s * .39, 0],
+        [0, 0, 0],
+        [1, 1, .96],
+        'chefToqueBody',
+      );
+      for (let i = 0; i < 12; i += 1) {
+        const angle = i / 12 * Math.PI * 2;
+        add(
+          new THREE.CylinderGeometry(s * .032, s * .045, s * .54, 8),
+          i % 3 === 0 ? chefClothShadow : chefCloth,
+          [Math.cos(angle) * s * .6, s * .42, Math.sin(angle) * s * .58],
+          [0, 0, 0],
+          [1, 1, .58],
+          `chefPleat${i}`,
+        );
+      }
+
+      // A full ring of overlapping fabric lobes reads as a sculpted toque
+      // from every camera angle, including the small gallery cards.
+      add(
+        new THREE.SphereGeometry(s * .66, 28, 18),
+        chefClothShadow,
+        [0, s * .77, 0],
+        [0, 0, 0],
+        [1, .58, 1],
+        'chefCrownCore',
+      );
+      for (let i = 0; i < 8; i += 1) {
+        const angle = i / 8 * Math.PI * 2;
+        add(
+          new THREE.SphereGeometry(s * (.32 + (i % 2) * .035), 18, 14),
+          i % 2 ? chefClothShadow : chefCloth,
+          [Math.cos(angle) * s * .43, s * (.91 + (i % 3) * .035), Math.sin(angle) * s * .4],
+          [0, angle, 0],
+          [1.08, .92, 1],
+          `chefPuff${i}`,
+        );
+      }
+      add(
+        new THREE.SphereGeometry(s * .39, 20, 16),
+        chefCloth,
+        [0, s * 1.08, 0],
+        [0, 0, 0],
+        [1.08, .82, 1.04],
+        'chefTopPuff',
+      );
+
+      add(
+        new THREE.CylinderGeometry(s * .7, s * .72, s * .25, 32),
+        galaxyBand,
+        [0, s * .13, 0],
+        [0, 0, 0],
+        [1, 1, .96],
+        'chefGalaxyBand',
+      );
+      add(
+        new THREE.TorusGeometry(s * .705, s * .035, 8, 36),
+        chefGold,
+        [0, s * .245, 0],
+        [Math.PI / 2, 0, 0],
+        [1, 1, .96],
+      );
+
+      const star = add(
+        new THREE.OctahedronGeometry(s * .13, 0),
+        chefGold,
+        [0, s * .14, s * .7],
+        [0, 0, Math.PI / 4],
+        [1, 1.25, .38],
+        'chefStar',
+      );
+      star.renderOrder = 2;
+      const sparkColors = [0x69e8ff, 0xe8a9ff, 0xffdf78];
+      for (let i = 0; i < 5; i += 1) {
+        const angle = .48 + i * .55;
+        add(
+          new THREE.SphereGeometry(s * (.025 + (i % 2) * .012), 8, 6),
+          mat(sparkColors[i % sparkColors.length]!, {
+            emissive: sparkColors[i % sparkColors.length]!,
+            emissiveIntensity: 1.5,
+          }),
+          [Math.cos(angle) * s * .704, s * (.1 + (i % 2) * .07), Math.sin(angle) * s * .68],
+          [0, 0, 0],
+          [1, 1, 1],
+          `chefSpark${i}`,
+        );
+      }
       break;
     }
     case 'shark_fin': {
@@ -641,6 +1157,16 @@ export function animateHatMesh(group: THREE.Group, time: number, speed = 0): voi
     }
   } else if (type === 'clockwork_topper') {
     spin('gear0', 1.8, 'z'); spin('gear1', -1.35, 'z'); spin('gear2', 1.65, 'z');
+  } else if (type === 'pirate_captain') {
+    const movement = .009 + Math.min(speed, 28) * .00045;
+    for (let i = 0; i < 8; i += 1) {
+      const dread = group.getObjectByName(`pirateDread${i}`);
+      if (!dread) continue;
+      dread.rotation.y = Math.sin(time * 1.75 + i * .82) * movement;
+    }
+  } else if (type === 'arcane_witch') {
+    const tip = group.getObjectByName('witchCrown3');
+    if (tip) tip.rotation.y = Math.sin(time * 1.2) * .025;
   } else if (type === 'sonic_headphones') {
     for (const name of ['earGlow-1', 'earGlow1']) {
       const glow = group.getObjectByName(name); if (glow) glow.scale.setScalar(pulse);
@@ -651,6 +1177,13 @@ export function animateHatMesh(group: THREE.Group, time: number, speed = 0): voi
     }
   } else if (type === 'cyber_cat') {
     const visor = group.getObjectByName('catVisor'); if (visor) visor.scale.x = .92 + Math.sin(time * 4.5) * .08;
+  } else if (type === 'galaxy_chef') {
+    const star = group.getObjectByName('chefStar');
+    if (star) star.scale.set(1, 1.25 + Math.sin(time * 2.6) * .1, .38);
+    for (let i = 0; i < 5; i += 1) {
+      const spark = group.getObjectByName(`chefSpark${i}`);
+      if (spark) spark.scale.setScalar(.82 + Math.sin(time * 3.1 + i * .9) * .18);
+    }
   } else if (type === 'prism_jester') {
     for (let i = 0; i < 4; i += 1) {
       const bell = group.getObjectByName(`jesterBell${i}`); if (bell) bell.rotation.z = Math.sin(time * 5 + i) * .25;

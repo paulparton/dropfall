@@ -17,6 +17,7 @@ dist
 dist-ssr
 *.local
 server/public/assets/
+server/data/
 
 # Editor directories and files
 .vscode/*

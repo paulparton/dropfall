@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { animateHatMesh, SantaSegment } from './hatFactory.js';
+import { animateHatMesh, getHatFitTransform, SantaSegment } from './hatFactory.js';
 
 export interface HatPhysicsState {
   hatTiltX: number;
@@ -98,10 +98,10 @@ export function updateHatPhysics(
   const wobbleX = Math.sin(time * 12) * wobbleIntensity;
   const wobbleZ = Math.cos(time * 15) * wobbleIntensity;
 
-  const sizeScale = 1.0;
+  const fit = getHatFitTransform(hatGroup, sphereSize);
   hatGroup.position.set(
     ballPosition.x,
-    ballPosition.y + sphereSize * sizeScale + state.hatBobOffset,
+    ballPosition.y + fit.attachmentHeight + state.hatBobOffset,
     ballPosition.z,
   );
 
@@ -110,9 +110,9 @@ export function updateHatPhysics(
 
   const invSquash = 1.0 / Math.sqrt(state.hatSquash);
   hatGroup.scale.set(
-    sizeScale * invSquash,
-    sizeScale * state.hatSquash,
-    sizeScale * invSquash,
+    fit.scale * invSquash,
+    fit.scale * state.hatSquash,
+    fit.scale * invSquash,
   );
 
   if (state.santaSegments && state.santaSegments.length > 0) {

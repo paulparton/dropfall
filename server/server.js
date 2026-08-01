@@ -4,14 +4,52 @@ import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSy
 import { join, dirname, extname, resolve, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
-import { networkInterfaces } from 'os';
+import { hostname as getSystemHostname, networkInterfaces } from 'os';
 import { GameRoom } from './game/GameRoom.js';
+import { ScoreboardService } from './services/ScoreboardService.js';
 import { isLevelActive, validateLevelForLaunch } from '../shared/levelValidation.js';
+import { parseLevelPayload } from '../shared/levelSchema.js';
+import { formatProtocolIssues, parseClientMessage } from '../shared/protocolSchemas.js';
+import { DROPFALL_PROTOCOL_VERSION } from '../shared/protocolVersion.js';
+import {
+    applyBaseSecurityHeaders,
+    consumeFixedWindow,
+    createOriginAllowlist,
+    createReconnectToken,
+    isLoopbackAddress,
+    isOriginAllowed,
+    readBearerToken,
+    secureTokenEqual,
+} from './security.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 3000;
+const REQUESTED_PORT = Number.parseInt(process.env.PORT || '3000', 10);
+const PORT = Number.isInteger(REQUESTED_PORT) && REQUESTED_PORT > 0 && REQUESTED_PORT <= 65535
+    ? REQUESTED_PORT
+    : 3000;
+const BIND_ADDRESS = process.env.DROPFALL_HOST || '0.0.0.0';
+const SYSTEM_HOSTNAME = getSystemHostname().trim().replace(/\.$/, '');
+const SYSTEM_MDNS_HOSTNAME = (
+    SYSTEM_HOSTNAME.toLowerCase().endsWith('.local')
+        ? SYSTEM_HOSTNAME
+        : `${SYSTEM_HOSTNAME.split('.')[0]}.local`
+);
+const MDNS_HOSTNAME = (process.env.DROPFALL_LOCAL_HOSTNAME || 'skippy.local').toLowerCase();
+const LAN_HOSTNAMES = [...new Set([MDNS_HOSTNAME, SYSTEM_MDNS_HOSTNAME.toLowerCase()])];
 const PUBLIC_DIR = join(__dirname, 'public');
 const LEVELS_DIR = join(__dirname, 'levels');
+const MAX_HTTP_BODY_BYTES = 256 * 1024;
+const MAX_WS_MESSAGE_BYTES = 16 * 1024;
+const MAX_WS_MESSAGES_PER_SECOND = 120;
+const MAX_INVALID_MESSAGES = 5;
+const WS_HEARTBEAT_MS = 30_000;
+
+function isLegacyEditorLevel(level, levelId) {
+    return level?.active === undefined
+        && level?.isPublic === undefined
+        && typeof levelId === 'string'
+        && levelId.startsWith('level_');
+}
 
 mkdirSync(LEVELS_DIR, { recursive: true });
 
@@ -31,7 +69,7 @@ const MIME_TYPES = {
     '.ico': 'image/x-icon',
 };
 
-class GameServer {
+export class GameServer {
     constructor() {
         this.games = new Map();
         this.players = new Map();
@@ -44,12 +82,50 @@ class GameServer {
             gamesCompleted: 0,
         };
 
-        this.server = createServer((req, res) => this.handleHttp(req, res));
-        this.wss = new WebSocketServer({ server: this.server });
+        this.originAllowlist = createOriginAllowlist(
+            process.env.DROPFALL_ALLOWED_ORIGINS || process.env.CORS_ORIGIN || '',
+        );
+        this.editorToken = process.env.DROPFALL_EDITOR_TOKEN || '';
+        this.devToolsEnabled = process.env.DROPFALL_ENABLE_DEV_TOOLS === '1';
+        this.scoreboards = new ScoreboardService(
+            process.env.DROPFALL_SCOREBOARD_PATH || join(__dirname, 'data', 'scoreboards.json'),
+        );
 
-        this.wss.on('connection', (ws) => this.handleConnection(ws));
+        this.server = createServer((req, res) => this.handleHttp(req, res));
+        this.server.requestTimeout = 15_000;
+        this.server.headersTimeout = 10_000;
+        this.server.keepAliveTimeout = 5_000;
+        this.server.on('clientError', (_error, socket) => {
+            if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n');
+        });
+
+        this.wss = new WebSocketServer({
+            server: this.server,
+            maxPayload: MAX_WS_MESSAGE_BYTES,
+            perMessageDeflate: false,
+            verifyClient: ({ req }, done) => {
+                if (this.isRequestOriginAllowed(req)) {
+                    done(true);
+                    return;
+                }
+                done(false, 403, 'Origin not allowed');
+            },
+        });
+
+        this.wss.on('connection', (ws, req) => this.handleConnection(ws, req));
+        this.wss.on('error', error => console.error('[WebSocketServer]', error.message));
 
         this.broadcastInterval = setInterval(() => this.broadcastStats(), 1000);
+        this.heartbeatInterval = setInterval(() => {
+            for (const ws of this.wss.clients) {
+                if (ws.isAlive === false) {
+                    ws.terminate();
+                    continue;
+                }
+                ws.isAlive = false;
+                ws.ping();
+            }
+        }, WS_HEARTBEAT_MS);
 
         this.createServerLobby();
     }
@@ -69,6 +145,9 @@ class GameServer {
                 this.games.delete(endedRoom.id);
             }
             this.broadcastStats();
+        };
+        room.onMatchCompleted = snapshot => {
+            if (this.scoreboards.recordMatch(snapshot)) this.stats.gamesCompleted++;
         };
 
         this.games.set(gameId, room);
@@ -108,19 +187,63 @@ class GameServer {
         });
     }
 
+    isRequestOriginAllowed(req) {
+        return isOriginAllowed(
+            req.headers.origin,
+            req.headers.host,
+            this.originAllowlist,
+        );
+    }
+
+    applyCors(req, res, methods) {
+        const origin = req.headers.origin;
+        if (origin && !this.isRequestOriginAllowed(req)) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Origin not allowed' }));
+            return false;
+        }
+        if (origin) {
+            res.setHeader('Access-Control-Allow-Origin', origin);
+            res.setHeader('Vary', 'Origin');
+        }
+        res.setHeader('Access-Control-Allow-Methods', methods);
+        res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-Dropfall-Editor-Token');
+        return true;
+    }
+
+    canAccessDevTools(req) {
+        return this.devToolsEnabled || isLoopbackAddress(req.socket.remoteAddress);
+    }
+
+    authorizeLevelDeletion(req, res, sendJson) {
+        if (!this.editorToken) {
+            sendJson(503, {
+                error: 'Level deletion is disabled. Configure DROPFALL_EDITOR_TOKEN for deletion access.',
+            });
+            return false;
+        }
+        if (!secureTokenEqual(readBearerToken(req), this.editorToken)) {
+            res.setHeader('WWW-Authenticate', 'Bearer realm="Dropfall editor"');
+            sendJson(401, { error: 'Editor authentication required' });
+            return false;
+        }
+        return true;
+    }
+
     handleHttp(req, res) {
         const parsedUrl = new URL(req.url || '/', 'http://localhost');
         const requestPath = parsedUrl.pathname || '/';
         const normalizedPath = requestPath.length > 1 ? requestPath.replace(/\/+$/, '') || '/' : requestPath;
         const isLevelApiPath = normalizedPath === '/api/levels' || normalizedPath.startsWith('/api/levels/');
+        const isScoreboardApiPath = normalizedPath === '/api/leaderboards/online';
+        const isDevToolPage = normalizedPath === '/admin' || normalizedPath === '/editor';
+        applyBaseSecurityHeaders(res, { editorPage: isDevToolPage });
 
         // 1) CORS preflight for level API
-        if (req.method === 'OPTIONS' && isLevelApiPath) {
-            res.writeHead(200, {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type',
-            });
+        if (req.method === 'OPTIONS' && (isLevelApiPath || isScoreboardApiPath)) {
+            const methods = isLevelApiPath ? 'GET, POST, PUT, DELETE, OPTIONS' : 'GET, OPTIONS';
+            if (!this.applyCors(req, res, methods)) return;
+            res.writeHead(204);
             res.end();
             return;
         }
@@ -149,15 +272,34 @@ class GameServer {
             return;
         }
 
-        if (req.method === 'GET' && normalizedPath === '/api/network-info') {
+        if (req.method === 'GET' && isScoreboardApiPath) {
+            if (!this.applyCors(req, res, 'GET, OPTIONS')) return;
+            const requestedLimit = Number.parseInt(parsedUrl.searchParams.get('limit') || '50', 10);
             res.writeHead(200, {
                 'Content-Type': 'application/json',
-                'Access-Control-Allow-Origin': '*',
+                'Cache-Control': 'public, max-age=15',
+            });
+            res.end(JSON.stringify({
+                board: 'online-preseason',
+                trust: 'server-authoritative-unranked',
+                entries: this.scoreboards.getLeaderboard(requestedLimit),
+                updatedAt: new Date().toISOString(),
+            }));
+            return;
+        }
+
+        if (req.method === 'GET' && normalizedPath === '/api/network-info') {
+            if (!this.applyCors(req, res, 'GET, OPTIONS')) return;
+            res.writeHead(200, {
+                'Content-Type': 'application/json',
                 'Cache-Control': 'no-store',
             });
             res.end(JSON.stringify({
                 lanAddresses: this.getLanAddresses(),
                 port: PORT,
+                hostname: MDNS_HOSTNAME,
+                hostnames: LAN_HOSTNAMES,
+                gameUrls: this.getLanGameUrls(PORT),
             }));
             return;
         }
@@ -169,6 +311,11 @@ class GameServer {
 
         // 3) Clean URL routes (can be wrapped with auth middleware later)
         if (req.method === 'GET' && normalizedPath === '/admin') {
+            if (!this.canAccessDevTools(req)) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Not Found');
+                return;
+            }
             const adminPath = join(PUBLIC_DIR, 'admin.html');
             if (existsSync(adminPath)) {
                 res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
@@ -181,6 +328,11 @@ class GameServer {
         }
 
         if (req.method === 'GET' && normalizedPath === '/editor') {
+            if (!this.canAccessDevTools(req)) {
+                res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+                res.end('Not Found');
+                return;
+            }
             const editorPath = join(PUBLIC_DIR, 'editor-3d.html');
             if (existsSync(editorPath)) {
                 res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
@@ -246,27 +398,49 @@ class GameServer {
     }
 
     sanitizeLevelId(id) {
-        if (typeof id !== 'string' || id.length === 0) {
+        if (typeof id !== 'string' || id.length === 0 || id.length > 80) {
             return null;
         }
-        if (id.includes('/') || id.includes('\\') || id.includes('..')) {
+        if (!/^[a-zA-Z0-9_-]+$/.test(id)) {
             return null;
         }
         return id;
     }
 
     handleLevelAPI(req, res, parsedUrl) {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        if (!this.applyCors(req, res, 'GET, POST, PUT, DELETE, OPTIONS')) return;
         res.setHeader('Cache-Control', 'no-store');
 
         const pathname = parsedUrl.pathname;
-        const MAX_BODY_BYTES = 1024 * 1024;
 
         const sendJson = (statusCode, payload) => {
             res.writeHead(statusCode, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify(payload));
+        };
+
+        const parseLevelBody = (body) => {
+            let rawLevel;
+            try {
+                rawLevel = JSON.parse(body);
+            } catch {
+                return { error: 'Request body must be valid JSON' };
+            }
+            const parsed = parseLevelPayload(rawLevel);
+            if (!parsed.success) {
+                return {
+                    error: 'Level payload is invalid',
+                    details: parsed.error.issues.slice(0, 8).map(issue => ({
+                        path: issue.path.join('.'),
+                        message: issue.message,
+                    })),
+                };
+            }
+            return { level: parsed.data };
+        };
+
+        const validatePublication = (level) => {
+            const validation = validateLevelForLaunch(level);
+            return { validation };
         };
 
         const getPathLevelId = () => {
@@ -289,9 +463,9 @@ class GameServer {
             req.on('data', (chunk) => {
                 if (rejected) return;
                 bodySize += chunk.length;
-                if (bodySize > MAX_BODY_BYTES) {
+                if (bodySize > MAX_HTTP_BODY_BYTES) {
                     rejected = true;
-                    sendJson(413, { error: 'Request body too large (max 1MB)' });
+                    sendJson(413, { error: 'Request body too large (max 256KB)' });
                     req.destroy();
                     return;
                 }
@@ -312,10 +486,14 @@ class GameServer {
                     .map((f) => {
                         const fullPath = join(LEVELS_DIR, f);
                         const data = JSON.parse(readFileSync(fullPath, 'utf-8'));
+                        const id = f.replace('.json', '');
                         const validation = validateLevelForLaunch(data);
-                        const active = isLevelActive(data);
+                        // Older editor builds saved custom arenas before a publication
+                        // flag existed. Preserve their catalogue visibility, and label
+                        // arenas with launch warnings as experimental in the client.
+                        const active = isLevelActive(data) || isLegacyEditorLevel(data, id);
                         return {
-                            id: f.replace('.json', ''),
+                            id,
                             name: data.name,
                             description: data.description,
                             difficulty: data.difficulty,
@@ -347,9 +525,12 @@ class GameServer {
             }
 
             try {
-                const data = readFileSync(join(LEVELS_DIR, `${levelId}.json`), 'utf-8');
+                const rawData = JSON.parse(readFileSync(join(LEVELS_DIR, `${levelId}.json`), 'utf-8'));
+                const data = isLegacyEditorLevel(rawData, levelId)
+                    ? { ...rawData, active: true }
+                    : rawData;
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(data);
+                res.end(JSON.stringify(data));
             } catch {
                 sendJson(404, { error: 'Level not found' });
             }
@@ -358,24 +539,24 @@ class GameServer {
 
         if (req.method === 'POST' && pathname === '/api/levels') {
             readBodyWithLimit((body) => {
-                try {
-                    const level = JSON.parse(body);
-                    const providedId = typeof level.id === 'string' ? level.id : null;
-                    const safeProvidedId = providedId ? this.sanitizeLevelId(providedId) : null;
-
-                    if (providedId && !safeProvidedId) {
-                        sendJson(400, { error: 'Invalid level id' });
-                        return;
-                    }
-
-                    const id = safeProvidedId || `level_${Date.now()}_${randomBytes(4).toString('hex')}`;
-                    level.active = level.active === true;
-                    writeFileSync(join(LEVELS_DIR, `${id}.json`), JSON.stringify(level, null, 2));
-                    const validation = validateLevelForLaunch(level);
-                    sendJson(200, { id, success: true, active: level.active, launchReady: validation.launchReady, validationIssues: validation.issues, validationWarnings: validation.warnings });
-                } catch (err) {
-                    sendJson(400, { error: err.message });
+                const parsed = parseLevelBody(body);
+                if (!parsed.level) {
+                    sendJson(400, parsed);
+                    return;
                 }
+                const level = parsed.level;
+                const providedId = typeof level.id === 'string' ? level.id : null;
+                const id = providedId || `level_${Date.now()}_${randomBytes(4).toString('hex')}`;
+                const publication = validatePublication(level);
+                writeFileSync(join(LEVELS_DIR, `${id}.json`), JSON.stringify({ ...level, id }, null, 2));
+                sendJson(201, {
+                    id,
+                    success: true,
+                    active: level.active,
+                    launchReady: publication.validation.launchReady,
+                    validationIssues: publication.validation.issues,
+                    validationWarnings: publication.validation.warnings,
+                });
             });
             return;
         }
@@ -388,21 +569,28 @@ class GameServer {
             }
 
             readBodyWithLimit((body) => {
-                try {
-                    const level = JSON.parse(body);
-                    level.id = levelId;
-                    level.active = level.active === true;
-                    writeFileSync(join(LEVELS_DIR, `${levelId}.json`), JSON.stringify(level, null, 2));
-                    const validation = validateLevelForLaunch(level);
-                    sendJson(200, { id: levelId, success: true, active: level.active, launchReady: validation.launchReady, validationIssues: validation.issues, validationWarnings: validation.warnings });
-                } catch (err) {
-                    sendJson(400, { error: err.message });
+                const parsed = parseLevelBody(body);
+                if (!parsed.level) {
+                    sendJson(400, parsed);
+                    return;
                 }
+                const level = { ...parsed.level, id: levelId };
+                const publication = validatePublication(level);
+                writeFileSync(join(LEVELS_DIR, `${levelId}.json`), JSON.stringify(level, null, 2));
+                sendJson(200, {
+                    id: levelId,
+                    success: true,
+                    active: level.active,
+                    launchReady: publication.validation.launchReady,
+                    validationIssues: publication.validation.issues,
+                    validationWarnings: publication.validation.warnings,
+                });
             });
             return;
         }
 
         if (req.method === 'DELETE' && pathname.match(/^\/api\/levels\/[^/]+$/)) {
+            if (!this.authorizeLevelDeletion(req, res, sendJson)) return;
             const levelId = this.sanitizeLevelId(getPathLevelId());
             if (!levelId) {
                 sendJson(400, { error: 'Invalid level id' });
@@ -421,9 +609,13 @@ class GameServer {
         sendJson(404, { error: 'Not Found' });
     }
 
-    handleConnection(ws) {
+    handleConnection(ws, req) {
         const playerId = `player_${this.playerIdCounter++}`;
         this.stats.totalConnections++;
+        ws.isAlive = true;
+        ws.on('pong', () => {
+            ws.isAlive = true;
+        });
 
         const player = {
             id: playerId,
@@ -432,11 +624,20 @@ class GameServer {
             currentGame: null,
             playerSlot: null,
             isHost: false,
-            isAdmin: false,
+            remoteAddress: req?.socket?.remoteAddress || null,
+            invalidMessages: 0,
+            messageRate: {
+                windowStartedAt: Date.now(),
+                events: 0,
+            },
         };
 
         this.players.set(playerId, player);
-        this.sendToPlayer(player, { type: 'connected', playerId });
+        this.sendToPlayer(player, {
+            type: 'connected',
+            playerId,
+            protocolVersion: DROPFALL_PROTOCOL_VERSION,
+        });
 
         this.bindSocketToPlayer(ws, player);
 
@@ -444,12 +645,54 @@ class GameServer {
     }
 
     bindSocketToPlayer(ws, player) {
-        ws.on('message', (data) => {
+        ws.on('message', (data, isBinary) => {
+            if (!consumeFixedWindow(
+                player.messageRate,
+                Date.now(),
+                MAX_WS_MESSAGES_PER_SECOND,
+                1000,
+            )) {
+                ws.close(1008, 'Message rate exceeded');
+                return;
+            }
+            if (isBinary) {
+                player.invalidMessages += 1;
+                this.sendToPlayer(player, {
+                    type: 'error',
+                    code: 'INVALID_MESSAGE',
+                    message: 'Binary client messages are not supported',
+                });
+                if (player.invalidMessages >= MAX_INVALID_MESSAGES) {
+                    ws.close(1008, 'Too many invalid messages');
+                }
+                return;
+            }
             try {
-                const msg = JSON.parse(data);
-                this.handleMessage(player, msg);
-            } catch (e) {
-                console.error('Invalid message:', e);
+                const value = JSON.parse(data.toString('utf8'));
+                const parsed = parseClientMessage(value);
+                if (!parsed.success) {
+                    player.invalidMessages += 1;
+                    this.sendToPlayer(player, {
+                        type: 'error',
+                        code: 'INVALID_MESSAGE',
+                        message: formatProtocolIssues(parsed.error.issues),
+                    });
+                    if (player.invalidMessages >= MAX_INVALID_MESSAGES) {
+                        ws.close(1008, 'Too many invalid messages');
+                    }
+                    return;
+                }
+                this.handleMessage(player, parsed.data);
+            } catch {
+                player.invalidMessages += 1;
+                this.sendToPlayer(player, {
+                    type: 'error',
+                    code: 'INVALID_JSON',
+                    message: 'Message must be valid JSON',
+                });
+                if (player.invalidMessages >= MAX_INVALID_MESSAGES) {
+                    ws.close(1008, 'Too many invalid messages');
+                }
             }
         });
 
@@ -460,10 +703,19 @@ class GameServer {
     handleMessage(player, msg) {
         switch (msg.type) {
             case 'set_name':
-                player.name = (typeof msg.name === 'string' ? msg.name : 'Player').trim().slice(0, 20) || 'Player';
-                if (msg.isAdmin) {
-                    player.isAdmin = true;
+                if (
+                    msg.protocolVersion !== undefined &&
+                    msg.protocolVersion !== DROPFALL_PROTOCOL_VERSION
+                ) {
+                    this.sendToPlayer(player, {
+                        type: 'error',
+                        code: 'PROTOCOL_MISMATCH',
+                        message: 'Client protocol is not compatible with this server',
+                    });
+                    player.ws?.close(1002, 'Protocol mismatch');
+                    return;
                 }
+                player.name = msg.name;
                 this.sendToPlayer(player, { type: 'name_set', name: player.name });
                 this.broadcastStats();
                 break;
@@ -504,12 +756,16 @@ class GameServer {
                 this.setPlayerReady(player, msg);
                 break;
 
+            case 'hurry_up_request':
+                this.requestHurryUp(player);
+                break;
+
             case 'rematch_request':
                 this.requestRematch(player);
                 break;
 
             case 'rejoin_game':
-                this.rejoinGame(player, msg.gameId);
+                this.rejoinGame(player, msg.gameId, msg.reconnectToken);
                 break;
 
             case 'game_state':
@@ -527,6 +783,13 @@ class GameServer {
             case 'sync_state':
                 this.requestSync(player);
                 break;
+
+            default:
+                this.sendToPlayer(player, {
+                    type: 'error',
+                    code: 'UNSUPPORTED_MESSAGE',
+                    message: 'Unsupported message type',
+                });
         }
     }
 
@@ -545,6 +808,9 @@ class GameServer {
             this.games.delete(endedRoom.id);
             this.broadcastStats();
         };
+        room.onMatchCompleted = snapshot => {
+            if (this.scoreboards.recordMatch(snapshot)) this.stats.gamesCompleted++;
+        };
 
         this.games.set(gameId, room);
         this.stats.gamesCreated++;
@@ -552,9 +818,15 @@ class GameServer {
         player.currentGame = gameId;
         player.playerSlot = 1;
         player.isHost = true;
-        room.addPlayer(player.id, player.name, player.ws);
+        const playerInfo = room.addPlayer(player.id, player.name, player.ws);
+        const reconnectToken = createReconnectToken();
+        playerInfo.reconnectToken = reconnectToken;
 
-        this.sendToPlayer(player, { type: 'game_created', game: room.getPublicGame() });
+        this.sendToPlayer(player, {
+            type: 'game_created',
+            game: room.getPublicGame(),
+            reconnectToken,
+        });
         this.broadcastStats();
     }
 
@@ -588,8 +860,14 @@ class GameServer {
         player.currentGame = gameId;
         player.playerSlot = playerInfo.slot;
         player.isHost = false;
+        const reconnectToken = createReconnectToken();
+        playerInfo.reconnectToken = reconnectToken;
 
-        this.sendToPlayer(player, { type: 'game_joined', game: room.getPublicGame() });
+        this.sendToPlayer(player, {
+            type: 'game_joined',
+            game: room.getPublicGame(),
+            reconnectToken,
+        });
 
         for (const existing of room.players) {
             if (existing.id === player.id) continue;
@@ -640,7 +918,7 @@ class GameServer {
             return;
         }
 
-        const result = room.removePlayer(player.id);
+        const result = room.removePlayer(player.id, { allowReconnect: false });
 
         this.broadcastToGame(room.id, {
             type: 'player_left',
@@ -810,6 +1088,18 @@ class GameServer {
         }
     }
 
+    requestHurryUp(player) {
+        const room = this.games.get(player.currentGame);
+        if (!room || room.state !== 'LOBBY' || room.isServerLobby) {
+            this.sendToPlayer(player, { type: 'error', message: 'Hurry up is only available during private match setup' });
+            return;
+        }
+
+        if (!room.startHurryUp(player.id)) {
+            this.sendToPlayer(player, { type: 'error', message: 'Hurry up is not available right now' });
+        }
+    }
+
     requestRematch(player) {
         const room = this.games.get(player.currentGame);
         if (!room) return;
@@ -817,16 +1107,22 @@ class GameServer {
         room.requestRematch(player.id);
     }
 
-    rejoinGame(player, gameId) {
+    rejoinGame(player, gameId, reconnectToken) {
         const room = this.games.get(gameId);
         if (!room) {
             this.sendToPlayer(player, { type: 'error', message: 'Game not found' });
             return;
         }
 
-        const disconnectedPlayer = room.players.find(p => p.disconnected);
+        const disconnectedPlayer = room.players.find(p =>
+            p.disconnected && secureTokenEqual(reconnectToken, p.reconnectToken),
+        );
         if (!disconnectedPlayer) {
-            this.sendToPlayer(player, { type: 'error', message: 'No disconnected slot available' });
+            this.sendToPlayer(player, {
+                type: 'error',
+                code: 'REJOIN_DENIED',
+                message: 'Rejoin credentials are invalid or expired',
+            });
             return;
         }
 
@@ -847,17 +1143,23 @@ class GameServer {
         player.playerSlot = reconnected.slot;
         player.isHost = room.hostId === player.id;
         player.name = reconnected.name;
+        const rotatedReconnectToken = createReconnectToken();
+        reconnected.reconnectToken = rotatedReconnectToken;
 
         this.sendToPlayer(player, {
             type: 'rejoin_success',
             game: room.getPublicGame(),
             slot: this.normalizeSlot(reconnected.slot),
+            reconnectToken: rotatedReconnectToken,
         });
 
         this.broadcastToGame(room.id, {
             type: 'player_reconnected',
             slot: this.normalizeSlot(reconnected.slot),
         }, player.id);
+
+        room.resumeAfterReconnect();
+        room.requestFullState(player.id);
 
         this.broadcastStats();
     }
@@ -941,21 +1243,18 @@ class GameServer {
 
     getStats() {
         const connectedPlayers = Array.from(this.players.values())
-            .filter(p => p.ws.readyState === 1 && !p.isAdmin)
-            .length;
-
-        const connectedAdmins = Array.from(this.players.values())
-            .filter(p => p.ws.readyState === 1 && p.isAdmin)
+            .filter(p => p.ws?.readyState === 1)
             .length;
 
         return {
             connectedPlayers,
-            connectedAdmins,
+            connectedAdmins: 0,
             activeGames: this.games.size,
             lobbiesWaiting: Array.from(this.games.values()).filter(g => g.state === 'LOBBY').length,
             gamesInProgress: Array.from(this.games.values()).filter(g => g.state === 'PLAYING').length,
             totalConnections: this.stats.totalConnections,
             gamesCreated: this.stats.gamesCreated,
+            gamesCompleted: this.stats.gamesCompleted,
             uptime: process.uptime(),
             supportedGames: ['Dropfall'],
         };
@@ -995,28 +1294,85 @@ class GameServer {
         }
     }
 
-    start(port = PORT) {
-        this.server.listen(port, () => {
-            const lanAddrs = this.getLanAddresses();
-            console.log(`
+    getLanGameUrls(port = PORT) {
+        const urls = LAN_HOSTNAMES.map(hostname => `http://${hostname}:${port}`);
+        for (const { address } of this.getLanAddresses()) {
+            urls.push(`http://${address}:${port}`);
+        }
+        return [...new Set(urls)];
+    }
+
+    start(port = PORT, host = BIND_ADDRESS) {
+        return new Promise((resolveStart, rejectStart) => {
+            const onError = error => {
+                this.server.off('listening', onListening);
+                rejectStart(error);
+            };
+            const onListening = () => {
+                this.server.off('error', onError);
+                const lanAddrs = this.getLanAddresses();
+                const address = this.server.address();
+                const boundPort = typeof address === 'object' && address ? address.port : port;
+                console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║                     DROPFALL GAME SERVER                       ║
 ╠═══════════════════════════════════════════════════════════════╣
-║  Server running at:                                            ║
-║    Game:          http://localhost:${port}                        ║
-║    Admin:         http://localhost:${port}/admin                  ║
-║    Level Editor:  http://localhost:${port}/editor                 ║
+║  Server is ready for local and LAN play                        ║
 ║                                                               ║
-║  Supported Games: Dropfall                                     ║
+║  This computer:                                                ║
+║    Game:          http://localhost:${boundPort}                        ║
+║    Admin:         http://localhost:${boundPort}/admin                  ║
+║    Level Editor:  http://localhost:${boundPort}/editor                 ║
 ╚═══════════════════════════════════════════════════════════════╝
             `);
-            if (lanAddrs.length > 0) {
-                console.log('  LAN addresses:');
-                lanAddrs.forEach(a => console.log(`    ${a.interface}: ${a.address}:${port}`));
-            }
+                console.log(`  Preferred hostname: http://${MDNS_HOSTNAME}:${boundPort}`);
+                if (SYSTEM_MDNS_HOSTNAME.toLowerCase() !== MDNS_HOSTNAME) {
+                    console.log(`  Detected hostname: http://${SYSTEM_MDNS_HOSTNAME.toLowerCase()}:${boundPort}`);
+                }
+                lanAddrs.forEach(({ interface: interfaceName, address: lanAddress }) => {
+                    console.log(`  ${interfaceName}: http://${lanAddress}:${boundPort}`);
+                });
+                console.log(`\n  Listening on ${host}:${boundPort}`);
+                console.log('  Open one of the LAN URLs on a phone or tablet connected to this network.\n');
+                resolveStart({ host, port: boundPort });
+            };
+
+            this.server.once('error', onError);
+            this.server.once('listening', onListening);
+            this.server.listen(port, host);
         });
+    }
+
+    async stop() {
+        clearInterval(this.broadcastInterval);
+        clearInterval(this.heartbeatInterval);
+        for (const room of this.games.values()) room.destroy();
+        for (const client of this.wss.clients) client.terminate();
+
+        await new Promise(resolveStop => {
+            this.wss.close(() => resolveStop());
+        });
+        if (this.server.listening) {
+            await new Promise(resolveStop => this.server.close(() => resolveStop()));
+        }
     }
 }
 
-const server = new GameServer();
-server.start();
+const isEntrypoint = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (isEntrypoint) {
+    const server = new GameServer();
+    server.start().catch(error => {
+        console.error('[Dropfall] Failed to start server:', error.message);
+        process.exitCode = 1;
+    });
+
+    let stopping = false;
+    const shutdown = async signal => {
+        if (stopping) return;
+        stopping = true;
+        console.log(`[Dropfall] ${signal} received, shutting down`);
+        await server.stop();
+    };
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT', () => shutdown('SIGINT'));
+}

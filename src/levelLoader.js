@@ -19,6 +19,35 @@ export function getLevelApiBase() {
 }
 
 const LEVEL_API_BASE = getLevelApiBase();
+const PUBLISHED_LEVELS_KEY = 'dropfall_published_levels_v1';
+const MAX_CACHED_PUBLISHED_LEVELS = 40;
+
+export function getLocallyPublishedLevels() {
+    try {
+        const stored = JSON.parse(globalThis.localStorage?.getItem(PUBLISHED_LEVELS_KEY) || '[]');
+        return Array.isArray(stored)
+            ? stored.filter(level => level && typeof level === 'object' && typeof level.id === 'string')
+            : [];
+    } catch {
+        return [];
+    }
+}
+
+function cachePublishedLevel(level) {
+    try {
+        const levels = getLocallyPublishedLevels().filter(candidate => candidate.id !== level.id);
+        levels.unshift(level);
+        globalThis.localStorage?.setItem(
+            PUBLISHED_LEVELS_KEY,
+            JSON.stringify(levels.slice(0, MAX_CACHED_PUBLISHED_LEVELS)),
+        );
+        globalThis.dispatchEvent?.(new CustomEvent('dropfall:levels-changed', {
+            detail: { levelId: level.id },
+        }));
+    } catch {
+        // Server publishing succeeded; local catalogue acceleration is optional.
+    }
+}
 
 export async function loadLevels() {
     try {
@@ -50,4 +79,28 @@ export async function getLevel(levelId) {
         console.error('[LevelLoader] Error loading level:', err);
         return null;
     }
+}
+
+export async function publishLevel(level, { existingId = null } = {}) {
+    const response = await fetch(existingId
+        ? `${LEVEL_API_BASE}/levels/${encodeURIComponent(existingId)}`
+        : `${LEVEL_API_BASE}/levels`, {
+        method: existingId ? 'PUT' : 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(level),
+    });
+
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        const error = new Error(result.error || `Publish failed (${response.status})`);
+        error.status = response.status;
+        error.details = result;
+        throw error;
+    }
+    if (typeof result.id === 'string') {
+        cachePublishedLevel({ ...level, id: result.id, active: true });
+    }
+    return result;
 }

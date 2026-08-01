@@ -1,9 +1,9 @@
 import { generateHexGrid, hexToPixel, hexDistance } from '../../src/utils/math.js';
 import { createHexTile, RAPIER } from './PhysicsWorld.js';
 import { selectRandomDestructionTiles } from '../../src/utils/arenaDestruction.js';
+import { POWER_UP_TYPES } from '../../shared/powerUps.js';
 
 const TILE_STATES = ['NORMAL', 'WARNING', 'ICE', 'BONUS', 'FALLING', 'FALLEN'];
-const POWER_UP_TYPES = ['ACCELERATION_BOOST', 'SIZE_REDUCTION', 'WEIGHT_INCREASE', 'SPEED_BURST', 'LIGHT_TOUCH', 'SIZE_INCREASE', 'GRIP_BOOST', 'INVULNERABILITY'];
 
 export class ServerArena {
     constructor(world, settings) {

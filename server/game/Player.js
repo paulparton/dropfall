@@ -1,4 +1,5 @@
 import { createSphere, RAPIER } from './PhysicsWorld.js';
+import { getPowerUpDefinition } from '../../shared/powerUps.js';
 
 const START_OFFSET = 12;
 
@@ -36,8 +37,8 @@ export class ServerPlayer {
             mass: this.sphereWeight,
             restitution: this.collisionBounce,
             friction: 0.5,
-            linearDamping: 0.5,
-            angularDamping: 0.5,
+            linearDamping: 0.0,
+            angularDamping: 0.0,
         });
 
         this.body = body;
@@ -127,42 +128,44 @@ export class ServerPlayer {
         const forceX = this.input.right * speed * boostMultiplier;
         const forceZ = -this.input.forward * speed * boostMultiplier;
 
-        if (this.frozenTimer > 0) {
-            this.body.setLinearDamping(0.0);
-            this.body.setAngularDamping(0.0);
-        } else {
-            this.body.setLinearDamping(0.5);
-            this.body.setAngularDamping(0.5);
-        }
+        // Keep prediction and authority on the same movement model. The
+        // browser intentionally allows momentum to continue without damping.
+        this.body.setLinearDamping(0.0);
+        this.body.setAngularDamping(0.0);
 
         this.body.applyImpulse({ x: forceX, y: 0, z: forceZ }, true);
     }
 
     _applyPowerUp(type) {
-        if (!type) return;
+        const definition = getPowerUpDefinition(type);
+        if (!definition) return;
         const duration = Number(this.settings.bonusDuration || 4);
+        if (definition.durationKind === 'instant') {
+            const velocity = this.body.linvel();
+            const length = Math.hypot(velocity.x, velocity.z) || 1;
+            this.body.applyImpulse({
+                x: velocity.x / length * definition.modifiers.impulse,
+                y: 0,
+                z: velocity.z / length * definition.modifiers.impulse,
+            }, true);
+            return;
+        }
         const existing = this.activePowerUps.find(effect => effect.type === type);
         if (existing) existing.remaining = duration;
         else this.activePowerUps.push({ type, remaining: duration });
 
-        if (type === 'ACCELERATION_BOOST') this.accelMultiplier = 2;
+        if (type === 'ACCELERATION_BOOST') this.accelMultiplier = definition.modifiers.acceleration;
         if (type === 'SIZE_REDUCTION') {
-            this.accelMultiplier = Math.max(this.accelMultiplier, 1.35);
-            this.collider.setMass(this.sphereWeight * 0.7);
+            this.collider.setMass(this.sphereWeight * definition.modifiers.mass);
         }
-        if (type === 'WEIGHT_INCREASE') this.collider.setMass(this.sphereWeight * 2);
-        if (type === 'SPEED_BURST') {
-            const velocity = this.body.linvel();
-            const length = Math.hypot(velocity.x, velocity.z) || 1;
-            this.body.applyImpulse({ x: velocity.x / length * 50, y: 0, z: velocity.z / length * 50 }, true);
-        }
+        if (type === 'WEIGHT_INCREASE') this.collider.setMass(this.sphereWeight * definition.modifiers.mass);
         if (type === 'LIGHT_TOUCH') {
-            this.gravityMultiplier = 0.5;
-            this.body.setGravityScale(0.5, true);
+            this.gravityMultiplier = definition.modifiers.gravity;
+            this.body.setGravityScale(definition.modifiers.gravity, true);
         }
-        if (type === 'SIZE_INCREASE') this.collider.setMass(this.sphereWeight * 1.6);
-        if (type === 'GRIP_BOOST') this.collider.setFriction(1.5);
-        if (type === 'INVULNERABILITY') this.collider.setMass(this.sphereWeight * 4);
+        if (type === 'SIZE_INCREASE') this.collider.setMass(this.sphereWeight * definition.modifiers.mass);
+        if (type === 'GRIP_BOOST') this.collider.setFriction(0.5 * definition.modifiers.friction);
+        if (type === 'INVULNERABILITY') this.collider.setMass(this.sphereWeight * definition.modifiers.mass);
     }
 
     _updatePowerUps(delta) {
@@ -174,11 +177,26 @@ export class ServerPlayer {
         if (!expired.length) return;
         this.activePowerUps = this.activePowerUps.filter(effect => effect.remaining > 0);
         const has = type => this.activePowerUps.some(effect => effect.type === type);
-        this.accelMultiplier = has('ACCELERATION_BOOST') ? 2 : has('SIZE_REDUCTION') ? 1.35 : 1;
-        this.gravityMultiplier = has('LIGHT_TOUCH') ? 0.5 : 1;
+        this.accelMultiplier = has('ACCELERATION_BOOST')
+            ? getPowerUpDefinition('ACCELERATION_BOOST').modifiers.acceleration
+            : 1;
+        this.gravityMultiplier = has('LIGHT_TOUCH')
+            ? getPowerUpDefinition('LIGHT_TOUCH').modifiers.gravity
+            : 1;
         this.body.setGravityScale(this.gravityMultiplier, true);
-        this.collider.setFriction(has('GRIP_BOOST') ? 1.5 : 0.5);
-        const massMultiplier = has('INVULNERABILITY') ? 4 : has('WEIGHT_INCREASE') ? 2 : has('SIZE_INCREASE') ? 1.6 : has('SIZE_REDUCTION') ? 0.7 : 1;
+        this.collider.setFriction(has('GRIP_BOOST')
+            ? 0.5 * getPowerUpDefinition('GRIP_BOOST').modifiers.friction
+            : 0.5);
+        const massType = has('INVULNERABILITY')
+            ? 'INVULNERABILITY'
+            : has('WEIGHT_INCREASE')
+                ? 'WEIGHT_INCREASE'
+                : has('SIZE_INCREASE')
+                    ? 'SIZE_INCREASE'
+                    : has('SIZE_REDUCTION')
+                        ? 'SIZE_REDUCTION'
+                        : null;
+        const massMultiplier = massType ? getPowerUpDefinition(massType).modifiers.mass : 1;
         this.collider.setMass(this.sphereWeight * massMultiplier);
     }
 

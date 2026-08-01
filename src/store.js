@@ -1,5 +1,7 @@
 import { createStore } from 'zustand/vanilla';
 import { MATCH_DEFAULTS } from '../shared/matchSettings.js';
+import { BATTLE_RULES } from '../shared/gameRules.js';
+import { normalizeHatId } from '../shared/cosmetics.js';
 
 function readStorage(key) {
     try {
@@ -127,8 +129,8 @@ export const useGameStore = createStore((set, get) => ({
     activeTileEffects: [],
     p1Name: readStorage('dropfall_p1name') || 'Player 1',
     p2Name: readStorage('dropfall_p2name') || 'Player 2',
-    p1Hat: readStorage('dropfall_p1hat') || 'none',
-    p2Hat: readStorage('dropfall_p2hat') || 'none',
+    p1Hat: normalizeHatId(readStorage('dropfall_p1hat')),
+    p2Hat: normalizeHatId(readStorage('dropfall_p2hat')),
     p1Color: parseInt(readStorage('dropfall_p1color')?.replace(/^0x/, '') || 'ff0000', 16),
     p2Color: parseInt(readStorage('dropfall_p2color')?.replace(/^0x/, '') || '0000ff', 16),
     p1UseStageSkin: readStorage('dropfall_p1stagekin') === null ? true : readStorage('dropfall_p1stagekin') === 'true',
@@ -180,9 +182,11 @@ export const useGameStore = createStore((set, get) => ({
     }),
 
     setPlayerHats: (p1Hat, p2Hat) => set(() => {
-        writeStorage('dropfall_p1hat', p1Hat);
-        writeStorage('dropfall_p2hat', p2Hat);
-        return { p1Hat, p2Hat };
+        const normalizedP1Hat = normalizeHatId(p1Hat);
+        const normalizedP2Hat = normalizeHatId(p2Hat);
+        writeStorage('dropfall_p1hat', normalizedP1Hat);
+        writeStorage('dropfall_p2hat', normalizedP2Hat);
+        return { p1Hat: normalizedP1Hat, p2Hat: normalizedP2Hat };
     }),
 
     setPlayerColors: (p1Color, p2Color) => set(() => {
@@ -296,14 +300,14 @@ export const useGameStore = createStore((set, get) => ({
         if (winner === 'Player 1') newP1Score++;
         if (winner === 'Player 2') newP2Score++;
 
-        if (newP1Score >= 3 || newP2Score >= 3) {
+        if (newP1Score >= BATTLE_RULES.winsToWinMatch || newP2Score >= BATTLE_RULES.winsToWinMatch) {
             return {
                 gameState: 'GAME_OVER',
-                winner: newP1Score >= 3 ? 'Player 1' : 'Player 2',
+                winner: newP1Score >= BATTLE_RULES.winsToWinMatch ? 'Player 1' : 'Player 2',
                 p1Score: newP1Score,
                 p2Score: newP2Score,
-                p1SessionWins: newP1Score >= 3 ? state.p1SessionWins + 1 : state.p1SessionWins,
-                p2SessionWins: newP2Score >= 3 ? state.p2SessionWins + 1 : state.p2SessionWins
+                p1SessionWins: newP1Score >= BATTLE_RULES.winsToWinMatch ? state.p1SessionWins + 1 : state.p1SessionWins,
+                p2SessionWins: newP2Score >= BATTLE_RULES.winsToWinMatch ? state.p2SessionWins + 1 : state.p2SessionWins
             };
         }
 

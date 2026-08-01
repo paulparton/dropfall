@@ -11,6 +11,8 @@ import { replayRecorder, resetReplayRecorder } from './systems/ReplayRecorder.js
 import { createReplayModal } from './components/ReplayModal.js';
 import { createCharacterPreviewPanel, destroyPreviewPanel, getSelectedPreviewLevelId } from './components/CharacterPreviewPanel';
 import { createOnlineSetupPanel } from './components/OnlineSetupPanel';
+import { createLevelEditor } from './components/LevelEditor.js';
+import { createHatGallery } from './components/HatGallery.js';
 import { getLevelById } from './levels/levelProvider.js';
 import { hexToPixel } from './utils/math.js';
 import { getHatDefinition, HAT_VALUES } from './utils/hatCatalog.js';
@@ -51,6 +53,17 @@ import { initVR, isInVR, onVRSessionStart, onVRSessionEnd, initAR, isInAR, getXR
 import { initControllers, updateControllers } from './vr/VRControllers.js';
 import { applyVRScale, createVRCameraRig, getVRContainer, reparentToScene, reparentToVRContainer, updateVRCameraRig } from './vr/VRCamera.js';
 import { createVRUI, updateVRUI } from './vr/VRUI.js';
+import {
+    addLocalProfile,
+    getLocalLeaderboard,
+    getSelectedLocalProfile,
+    loadLocalProfiles,
+    recordLocalMatch,
+    saveLocalProfiles,
+    selectLocalProfile,
+    updateLocalProfile,
+} from './services/localProfiles.js';
+import { getProductModel } from './services/monetization.js';
 
 // ============================================
 // RANDOM BALL WITH HAT GENERATOR
@@ -109,12 +122,15 @@ function createBallWithHatCanvas(color, hat) {
     ctx.arc(ballX - 10, ballY - 10, ballRadius * 0.35, 0, Math.PI * 2);
     ctx.fill();
     
-    // Draw hat icons above the ball
+    // Legacy canvas preview fallback. Live setup screens render the shared 3D
+    // cosmetic and authored portrait instead of emoji.
     if (hat !== 'none') {
-        ctx.font = 'bold 40px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'bottom';
-        ctx.fillText(getHatDefinition(hat)?.icon || '🎩', ballX, ballY - ballRadius - 5);
+        const hatDefinition = getHatDefinition(hat);
+        ctx.strokeStyle = hatDefinition?.artStatus === 'vertical-slice' ? '#37f7ff' : '#ff2ca8';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.arc(ballX, ballY - ballRadius - 12, 24, Math.PI, Math.PI * 2);
+        ctx.stroke();
     }
     
     return canvas.toDataURL();
@@ -125,6 +141,9 @@ function createBallWithHatCanvas(color, hat) {
 // ============================================
 const screens = {
     menu: document.getElementById('menu'),
+    profileHub: document.getElementById('profile-hub'),
+    hatGallery: document.getElementById('hat-gallery-screen'),
+    levelEditor: document.getElementById('level-editor-screen'),
     gameModeSelect: document.getElementById('game-mode-select'),
     difficultySelect: document.getElementById('difficulty-select'),
     nameEntry: document.getElementById('name-entry'),
@@ -138,10 +157,270 @@ const screens = {
     countdown: document.getElementById('countdown-display'),
 };
 
+let localProfilesState = loadLocalProfiles(useGameStore.getState().p1Name);
+let trackedLocalMatch = null;
+let activeHatGallery = null;
+let editorTestInProgress = false;
+
+function updateEditorTestNavigation(isTesting) {
+    const hudMenuButton = document.getElementById('hud-menu-btn');
+    const hudMenuLabel = hudMenuButton?.querySelector('span');
+    if (hudMenuLabel) hudMenuLabel.textContent = isTesting ? 'EDITOR' : 'MENU';
+    if (hudMenuButton) hudMenuButton.setAttribute('aria-label', isTesting ? 'Return to level editor' : 'Return to menu');
+
+    const pauseMenuButton = document.getElementById('pause-menu-btn');
+    if (pauseMenuButton) pauseMenuButton.textContent = isTesting ? 'Return to Level Editor' : 'Return to Play Plaza';
+
+    const resultMenuButton = document.getElementById('menu-btn');
+    if (resultMenuButton) resultMenuButton.textContent = isTesting ? 'Level Editor' : 'Play Plaza';
+}
+
+function syncSelectedProfileToGame() {
+    const profile = getSelectedLocalProfile(localProfilesState);
+    if (!profile) return;
+    const state = useGameStore.getState();
+    state.setPlayerNames(profile.displayName, state.p2Name);
+    state.setPlayerHats(profile.cosmetics.hat, state.p2Hat);
+    state.setPlayerColors(profile.cosmetics.ballColor, state.p2Color);
+    const onlineNameInput = document.getElementById('online-name-input');
+    if (onlineNameInput && !onlineNameInput.value.trim()) onlineNameInput.value = profile.displayName;
+}
+
+function formatPercent(value) {
+    return `${Math.round(value * 100)}%`;
+}
+
+function formatDuration(milliseconds) {
+    if (!Number.isFinite(milliseconds)) return '—';
+    const totalSeconds = Math.round(milliseconds / 1000);
+    return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+
+function appendScoreboardRow(body, entry, index) {
+    const row = document.createElement('tr');
+    const values = [
+        String(index + 1),
+        entry.displayName,
+        String(entry.matches),
+        String(entry.wins),
+        String(entry.losses),
+        formatPercent(entry.winRate),
+        String(entry.bestStreak),
+    ];
+    values.forEach(value => {
+        const cell = document.createElement('td');
+        cell.textContent = value;
+        row.appendChild(cell);
+    });
+    body.appendChild(row);
+}
+
+function renderProfileHub() {
+    const profile = getSelectedLocalProfile(localProfilesState);
+    if (!profile) return;
+
+    const menuName = document.getElementById('menu-profile-name');
+    if (menuName) menuName.textContent = profile.displayName;
+
+    const select = document.getElementById('local-profile-select');
+    if (select) {
+        const options = localProfilesState.profiles.map(item => {
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = item.displayName;
+            option.selected = item.id === profile.id;
+            return option;
+        });
+        select.replaceChildren(...options);
+    }
+
+    const nameInput = document.getElementById('local-profile-name');
+    if (nameInput) nameInput.value = profile.displayName;
+
+    const accountLabel = document.getElementById('profile-account-label');
+    if (accountLabel) {
+        accountLabel.textContent = profile.account.status === 'linked'
+            ? `Linked via ${profile.account.provider}`
+            : 'Guest pilot';
+    }
+
+    const statGrid = document.getElementById('profile-stat-grid');
+    if (statGrid) {
+        const stats = [
+            ['Matches', profile.stats.matches],
+            ['Wins', profile.stats.wins],
+            ['Best streak', profile.stats.bestStreak],
+            ['Fastest win', formatDuration(profile.stats.fastestWinMs)],
+        ];
+        statGrid.replaceChildren(...stats.map(([label, value]) => {
+            const card = document.createElement('div');
+            card.className = 'profile-stat';
+            const labelElement = document.createElement('span');
+            labelElement.textContent = String(label);
+            const valueElement = document.createElement('strong');
+            valueElement.textContent = String(value);
+            card.append(labelElement, valueElement);
+            return card;
+        }));
+    }
+
+    const localBody = document.getElementById('local-scoreboard-body');
+    if (localBody) {
+        localBody.replaceChildren();
+        getLocalLeaderboard(localProfilesState)
+            .forEach((entry, index) => appendScoreboardRow(localBody, entry, index));
+    }
+
+    const product = getProductModel(import.meta.env.VITE_DROPFALL_PLATFORM || 'web');
+    const productLabel = document.getElementById('access-product-label');
+    const productCopy = document.getElementById('access-product-copy');
+    const removeAdsButton = document.getElementById('remove-ads-btn');
+    const restoreButton = document.getElementById('restore-purchases-btn');
+    if (productLabel) {
+        productLabel.textContent = product.adFreeIncluded
+            ? 'Premium ad-free edition'
+            : 'Ad-supported edition';
+    }
+    if (productCopy && product.adFreeIncluded) {
+        productCopy.textContent = 'This platform edition includes the permanent ad-free entitlement.';
+    }
+    if (removeAdsButton) removeAdsButton.hidden = product.adFreeIncluded;
+    if (restoreButton) restoreButton.hidden = product.platform === 'web' || product.platform === 'steam';
+}
+
+function beginLocalMatchTracking() {
+    const state = useGameStore.getState();
+    if (state.gameMode === 'ONLINE') return;
+    const profile = getSelectedLocalProfile(localProfilesState);
+    if (!profile) return;
+    localProfilesState = updateLocalProfile(localProfilesState, profile.id, {
+        displayName: state.p1Name,
+        ballColor: state.p1Color,
+        hat: state.p1Hat,
+    });
+    saveLocalProfiles(localProfilesState);
+    trackedLocalMatch = {
+        matchId: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+        startedAt: Date.now(),
+        profileId: profile.id,
+    };
+    renderProfileHub();
+}
+
+function recordTrackedLocalMatch(state) {
+    if (!trackedLocalMatch || state.gameMode === 'ONLINE') return;
+    const won = state.winner === 'Player 1';
+    localProfilesState = recordLocalMatch(localProfilesState, {
+        ...trackedLocalMatch,
+        occurredAt: new Date().toISOString(),
+        durationMs: Date.now() - trackedLocalMatch.startedAt,
+        mode: state.gameMode,
+        opponentName: state.p2Name,
+        won,
+        scoreFor: state.p1Score,
+        scoreAgainst: state.p2Score,
+    });
+    saveLocalProfiles(localProfilesState);
+    trackedLocalMatch = null;
+    renderProfileHub();
+}
+
+function openLevelEditor() {
+    const mount = document.getElementById('level-editor-mount');
+    if (!mount) return;
+    const profile = getSelectedLocalProfile(localProfilesState);
+    const editor = createLevelEditor({
+        authorName: profile?.displayName || useGameStore.getState().p1Name,
+        onClose: () => {
+            editorTestInProgress = false;
+            updateEditorTestNavigation(false);
+            showScreen('menu');
+        },
+        onTest: draft => {
+            const state = useGameStore.getState();
+            editorTestInProgress = true;
+            updateEditorTestNavigation(true);
+            state.setGameMode('1P');
+            state.setSelectedLevel(draft.id || 'local-draft', draft);
+            selectedLevelData = draft;
+            startGame(true);
+        },
+    });
+    mount.replaceChildren(editor);
+    showScreen('levelEditor');
+    editor.focus({ preventScroll: true });
+}
+
+async function loadOnlineScoreboard() {
+    const status = document.getElementById('online-scoreboard-status');
+    const body = document.getElementById('online-scoreboard-body');
+    if (!status || !body) return;
+    status.textContent = 'Loading server-verified results…';
+    body.replaceChildren();
+
+    const connectedServer = useGameStore.getState().online.serverUrl;
+    let endpoint = '/api/leaderboards/online';
+    if (connectedServer) {
+        try {
+            const url = new URL(OnlineManager.normalizeServerUrl(connectedServer));
+            url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:';
+            url.pathname = '/api/leaderboards/online';
+            url.search = '';
+            endpoint = url.toString();
+        } catch {
+            // The same-origin endpoint remains the safest fallback.
+        }
+    }
+
+    try {
+        const response = await fetch(endpoint, { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error(`Server returned ${response.status}`);
+        const payload = await response.json();
+        const entries = Array.isArray(payload.entries) ? payload.entries : [];
+        entries.forEach((entry, index) => appendScoreboardRow(body, entry, index));
+        if (entries.length === 0) {
+            const row = document.createElement('tr');
+            const cell = document.createElement('td');
+            cell.className = 'scoreboard-empty';
+            cell.colSpan = 7;
+            cell.textContent = 'No completed online matches yet.';
+            row.appendChild(cell);
+            body.appendChild(row);
+        }
+        status.textContent = 'Outcomes are recorded by the authoritative room server. This preseason board is unranked.';
+    } catch (error) {
+        status.textContent = `Online board unavailable: ${error.message}`;
+    }
+}
+
 function showScreen(screenName) {
+    if (screenName !== 'hatGallery' && activeHatGallery) {
+        activeHatGallery.destroy();
+        activeHatGallery = null;
+        document.getElementById('hat-gallery-mount')?.replaceChildren();
+    }
     Object.values(screens).forEach(s => s?.classList.add('hidden'));
     const screen = screens[screenName];
     if (screen) screen.classList.remove('hidden');
+}
+
+function openHatGallery() {
+    const mount = document.getElementById('hat-gallery-mount');
+    if (!mount) return;
+
+    activeHatGallery?.destroy();
+    mount.replaceChildren();
+    const state = useGameStore.getState();
+    activeHatGallery = createHatGallery({
+        initialColor: state.p1Color,
+        onColorChange: color => {
+            const current = useGameStore.getState();
+            current.setPlayerColors(color, current.p2Color);
+        },
+        onClose: () => showScreen('menu'),
+    });
+    mount.appendChild(activeHatGallery.element);
+    showScreen('hatGallery');
 }
 
 function hideAllScreens() {
@@ -175,7 +454,7 @@ function populatePowerupsGuide() {
     const grid = document.getElementById('powerups-grid');
     if (!grid) return;
     
-    grid.innerHTML = '';
+    grid.replaceChildren();
     
     const weights = useGameStore.getState().settings.powerUpWeights;
     
@@ -186,23 +465,47 @@ function populatePowerupsGuide() {
         card.style.color = `#${powerup.color.toString(16).padStart(6, '0')}`;
         
         const currentWeight = weights[powerup.type] ?? 50;
+
+        const icon = document.createElement('img');
+        icon.className = 'powerup-card-icon';
+        icon.src = powerup.iconPath;
+        icon.alt = '';
+
+        const title = document.createElement('h3');
+        title.className = 'powerup-card-name';
+        title.textContent = powerup.name;
+
+        const description = document.createElement('p');
+        description.className = 'powerup-card-description';
+        description.textContent = powerup.description;
+
+        const controls = document.createElement('div');
+        controls.className = 'powerup-weight-control';
+
+        const label = document.createElement('label');
+        label.className = 'powerup-weight-label';
+        label.textContent = 'Spawn Weight';
+
+        const slider = document.createElement('input');
+        slider.type = 'range';
+        slider.min = '0';
+        slider.max = '100';
+        slider.step = '1';
+        slider.value = String(currentWeight);
+        slider.dataset.puType = powerup.type;
+        slider.setAttribute('aria-label', `${powerup.name} spawn weight`);
+
+        const valSpan = document.createElement('span');
+        valSpan.className = 'pu-weight-val';
+        valSpan.dataset.puType = powerup.type;
+        valSpan.textContent = String(currentWeight);
+
+        controls.append(label, slider, valSpan);
+        card.append(icon, title, description, controls);
         
-        card.innerHTML = `
-            <div class="powerup-card-icon">${powerup.icon}</div>
-            <h3 style="margin: 0.5rem 0; font-size: 1.2rem;">${powerup.name}</h3>
-            <p style="margin: 0; font-size: 0.9rem; opacity: 0.8;">${powerup.description}</p>
-            <div style="margin-top: 0.75rem; display: flex; align-items: center; gap: 0.5rem;">
-                <label style="font-size: 0.8rem; opacity: 0.7; white-space: nowrap;">Spawn Weight</label>
-                <input type="range" min="0" max="100" step="1" value="${currentWeight}" style="flex: 1; height: 4px;" data-pu-type="${powerup.type}">
-                <span class="pu-weight-val" style="font-size: 0.85rem; min-width: 2rem; text-align: right;" data-pu-type="${powerup.type}">${currentWeight}</span>
-            </div>
-        `;
-        
-        const slider = card.querySelector('input[type="range"]');
-        const valSpan = card.querySelector('.pu-weight-val');
         slider.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
-            valSpan.textContent = val;
+            valSpan.textContent = String(val);
             const newWeights = { ...useGameStore.getState().settings.powerUpWeights };
             newWeights[powerup.type] = val;
             useGameStore.getState().updateSetting('powerUpWeights', newWeights);
@@ -239,11 +542,8 @@ let roundOverTimeoutSet = false;
 let roundOverLogFrames = 0;
 let onlineSetupPanelTeardown = null;
 let opponentDisconnectOverlayEl = null;
-let remotePlayerTargetPosition = null;
-let lastSentTileStates = new Map();
 let isGamePaused = false;
-
-const REMOTE_PLAYER_LERP_FACTOR = 0.25;
+let lastOnlineReconciliationAt = 0;
 
 const HEX_GRID_SPACING = 8.0;
 const TILE_HEIGHT = 4.0;
@@ -622,23 +922,40 @@ function reconcileLocalPlayer(player, serverPos, serverVel, delta) {
     const errorY = serverPos.y - current.y;
     const errorZ = serverPos.z - current.z;
     const errorDist = Math.sqrt(errorX * errorX + errorY * errorY + errorZ * errorZ);
+    const velocityError = Math.hypot(
+        serverVel.x - currentVel.x,
+        serverVel.y - currentVel.y,
+        serverVel.z - currentVel.z,
+    );
 
     // Large error: snap to server position (e.g., after respawn or reconnect).
-    if (errorDist > 8.0) {
+    if (errorDist > 12.0) {
         player.rigidBody.setTranslation(serverPos, true);
         player.rigidBody.setLinvel(serverVel, true);
         return;
     }
 
-    // Smooth correction: blend current velocity toward server velocity + position error correction.
-    const correctionSpeed = 4.0;
+    // Authoritative collisions can reverse velocity between snapshots. Apply
+    // that change immediately without teleporting position.
+    if (velocityError > 18) {
+        player.rigidBody.setLinvel(serverVel, true);
+        return;
+    }
+
+    // Small prediction errors are visually harmless. Correct them through
+    // velocity over several snapshots instead of moving the rendered ball.
+    const correctionSpeed = errorDist < 0.08 ? 0 : 2.25;
+    const maxCorrectionSpeed = 5;
+    const correctionScale = errorDist > 0
+        ? Math.min(correctionSpeed, maxCorrectionSpeed / errorDist)
+        : 0;
     const targetVel = {
-        x: serverVel.x + errorX * correctionSpeed,
-        y: serverVel.y + errorY * correctionSpeed,
-        z: serverVel.z + errorZ * correctionSpeed,
+        x: serverVel.x + errorX * correctionScale,
+        y: serverVel.y + errorY * correctionScale,
+        z: serverVel.z + errorZ * correctionScale,
     };
 
-    const blend = Math.min(delta * 8.0, 1.0);
+    const blend = 1 - Math.exp(-Math.max(0, delta) * 7);
     const nextVel = {
         x: currentVel.x + (targetVel.x - currentVel.x) * blend,
         y: currentVel.y + (targetVel.y - currentVel.y) * blend,
@@ -650,15 +967,15 @@ function reconcileLocalPlayer(player, serverPos, serverVel, delta) {
 
 function applyOnlineClientRemoteInterpolation(state) {
     const remotePlayer = getRemotePlayer(state);
-    if (!remotePlayer?.rigidBody || !remotePlayerTargetPosition) return;
-
-    const current = remotePlayer.rigidBody.translation();
-    const currentVec = new THREE.Vector3(current.x, current.y, current.z);
-    currentVec.lerp(remotePlayerTargetPosition, REMOTE_PLAYER_LERP_FACTOR);
-
-    remotePlayer.rigidBody.setNextKinematicTranslation(
-        { x: currentVec.x, y: currentVec.y, z: currentVec.z }
-    );
+    if (!remotePlayer?.rigidBody) return;
+    const sample = online.sampleServerState();
+    const sampledState = sample?.state;
+    if (!sampledState) return;
+    const remotePosition = state.online?.playerSlot === 1
+        ? sampledState.p2Pos
+        : sampledState.p1Pos;
+    if (!remotePosition) return;
+    remotePlayer.rigidBody.setNextKinematicTranslation(remotePosition);
 }
 
 function enterOnlineSetupState({ resetSetup = true } = {}) {
@@ -791,17 +1108,26 @@ let previewLastFrameTime = Date.now();
 // ============================================
 // POWER-UP NOTIFICATIONS
 // ============================================
-function showPowerUpNotification(playerName, powerUpName, icon, color) {
+function showPowerUpNotification(playerName, powerUp) {
     if (isInVR()) return;
 
     const container = document.getElementById('powerup-notifications');
     if (!container) return;
     
     const notification = document.createElement('div');
-    notification.className = `powerup-notification ${powerUpName.toLowerCase().replace(/\s+/g, '-')}`;
-    notification.textContent = `${icon} ${playerName} GOT ${powerUpName} ${icon}`;
+    notification.className = `powerup-notification ${powerUp.id}`;
+    notification.setAttribute('role', 'status');
+
+    const icon = document.createElement('img');
+    icon.className = 'powerup-notification-icon';
+    icon.src = powerUp.iconPath;
+    icon.alt = '';
+
+    const message = document.createElement('span');
+    message.textContent = `${playerName} got ${powerUp.name}`;
+    notification.append(icon, message);
     
-    const hexColor = '#' + color.toString(16).padStart(6, '0');
+    const hexColor = '#' + powerUp.color.toString(16).padStart(6, '0');
     notification.style.cssText = `
         color: ${hexColor};
         text-shadow: 0 0 20px ${hexColor}, 0 0 40px ${hexColor};
@@ -815,6 +1141,36 @@ function showPowerUpNotification(playerName, powerUpName, icon, color) {
 
 window.showPowerUpNotification = showPowerUpNotification;
 window.POWER_UP_EFFECTS = POWER_UP_EFFECTS;
+
+const renderedPowerUpSignatures = new Map();
+
+function renderPowerUpStatus(containerId, activePowerUps = []) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+
+    const signature = activePowerUps.map(powerUp => powerUp.type).join('|');
+    if (renderedPowerUpSignatures.get(containerId) === signature) return;
+    renderedPowerUpSignatures.set(containerId, signature);
+
+    const icons = activePowerUps.map(active => {
+        const powerUp = active.effect || POWER_UP_EFFECTS.find(effect => effect.type === active.type);
+        if (!powerUp) return null;
+        const hexColor = `#${powerUp.color.toString(16).padStart(6, '0')}`;
+        const badge = document.createElement('span');
+        badge.className = 'powerup-icon';
+        badge.style.color = hexColor;
+        badge.style.borderColor = hexColor;
+        badge.title = powerUp.name;
+
+        const icon = document.createElement('img');
+        icon.src = powerUp.iconPath;
+        icon.alt = powerUp.name;
+        badge.appendChild(icon);
+        return badge;
+    }).filter(Boolean);
+
+    container.replaceChildren(...icons);
+}
 
 // ============================================
 // GAME FUNCTIONS
@@ -844,6 +1200,7 @@ function doStartGame() {
         applyLevelSettingsOverrides(state.selectedLevelData || null);
     }
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
+    beginLocalMatchTracking();
     useGameStore.getState().startGame();
     resetEntities();
     updateHUDNames();
@@ -892,6 +1249,7 @@ async function proceedFromNameEntry() {
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
     
     // Start the game
+    beginLocalMatchTracking();
     useGameStore.getState().startGame();
     resetEntities();
     updateHUDNames();
@@ -988,8 +1346,7 @@ function resetOnlineEntities() {
     // Stage-specific sphere skins are an offline opt-in and must not replace
     // those colors after the match starts.
     useGameStore.setState({ p1UseStageSkin: false, p2UseStageSkin: false });
-    remotePlayerTargetPosition = null;
-    lastSentTileStates = new Map();
+    lastOnlineReconciliationAt = 0;
     const mySlot = state.online?.playerSlot;
 
     // Read customization from the latest store snapshot right before creating entities.
@@ -1052,7 +1409,12 @@ function resetOnlineEntities() {
     // Set remote player to kinematic - only interpolation should move it
     const remotePlayer = mySlot === 2 ? player1 : player2;
     if (remotePlayer?.rigidBody) {
+        remotePlayer.isLocal = false;
         remotePlayer.rigidBody.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
+        // The server resolves ball-to-ball collisions. A sensor prevents the
+        // local predicted ball from bouncing off an infinite-mass kinematic
+        // proxy and then being corrected back a packet later.
+        remotePlayer.collider?.setSensor(true);
     }
 
     camera.position.set(0, 32, 32);
@@ -1064,11 +1426,13 @@ function resetOnlineEntities() {
 }
 
 function returnToMenu() {
+    const returnToEditor = editorTestInProgress;
     setGamePaused(false, { focusResume: false });
     clearReplayCountdown();
     const replayModal = document.getElementById('replay-modal');
     if (replayModal) replayModal.remove();
     restorePreOverrideSettings();
+    trackedLocalMatch = null;
     useGameStore.getState().returnToMenu();
     setMusicSpeed(0.5);
     
@@ -1081,7 +1445,7 @@ function returnToMenu() {
     
     player1 = null;
     player2 = null;
-    remotePlayerTargetPosition = null;
+    online.resetSimulationState();
     arena = new Arena();
     particles = new ParticleSystem();
     lightning = new LightningSystem();
@@ -1092,6 +1456,13 @@ function returnToMenu() {
 
     if (isInVR()) {
         reparentToVRContainer(scene);
+    }
+
+    if (returnToEditor) {
+        editorTestInProgress = false;
+        updateEditorTestNavigation(false);
+        showScreen('levelEditor');
+        document.querySelector('#level-editor-mount .creator-shell')?.focus({ preventScroll: true });
     }
 }
 
@@ -1107,11 +1478,8 @@ function startOnlineGame(matchStart = true) {
     updateHUDNames();
 
     if (matchStart) {
-        online.localTick = 0;
-        online.serverTick = 0;
-        online.inputHistory = [];
-        online.stateBuffer = [];
-        remotePlayerTargetPosition = null;
+        online.resetSimulationState();
+        lastOnlineReconciliationAt = 0;
     }
 }
 
@@ -1188,6 +1556,72 @@ function checkWinConditions(delta) {
 // BUTTON HANDLERS
 // ============================================
 function setupButtonHandlers() {
+    document.getElementById('profile-hub-btn')?.addEventListener('click', () => {
+        renderProfileHub();
+        showScreen('profileHub');
+    });
+    document.getElementById('profile-hub-close-btn')?.addEventListener('click', () => {
+        showScreen('menu');
+    });
+    document.querySelectorAll('.profile-hub-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const paneName = tab.dataset.profilePane;
+            document.querySelectorAll('.profile-hub-tab').forEach(candidate => {
+                candidate.classList.toggle('active', candidate === tab);
+            });
+            document.querySelectorAll('.profile-hub-pane').forEach(pane => {
+                pane.classList.toggle('active', pane.dataset.profilePane === paneName);
+            });
+            if (paneName === 'online') loadOnlineScoreboard();
+        });
+    });
+    document.getElementById('local-profile-select')?.addEventListener('change', event => {
+        localProfilesState = selectLocalProfile(localProfilesState, event.target.value);
+        saveLocalProfiles(localProfilesState);
+        syncSelectedProfileToGame();
+        renderProfileHub();
+    });
+    document.getElementById('local-profile-save-btn')?.addEventListener('click', () => {
+        const profile = getSelectedLocalProfile(localProfilesState);
+        const nameInput = document.getElementById('local-profile-name');
+        if (!profile || !nameInput) return;
+        const gameState = useGameStore.getState();
+        localProfilesState = updateLocalProfile(localProfilesState, profile.id, {
+            displayName: nameInput.value,
+            ballColor: gameState.p1Color,
+            hat: gameState.p1Hat,
+        });
+        saveLocalProfiles(localProfilesState);
+        syncSelectedProfileToGame();
+        renderProfileHub();
+    });
+    document.getElementById('local-profile-add-btn')?.addEventListener('click', () => {
+        localProfilesState = addLocalProfile(localProfilesState, `Pilot ${localProfilesState.profiles.length + 1}`);
+        saveLocalProfiles(localProfilesState);
+        syncSelectedProfileToGame();
+        renderProfileHub();
+        const nameInput = document.getElementById('local-profile-name');
+        nameInput?.focus();
+        nameInput?.select();
+    });
+    document.getElementById('profile-signup-btn')?.addEventListener('click', () => {
+        const status = document.getElementById('profile-signup-status');
+        if (status) {
+            status.textContent = 'Signup is safely gated until an email, Apple, Google, or Steam identity provider and deletion workflow are configured.';
+        }
+    });
+    ['remove-ads-btn', 'restore-purchases-btn'].forEach(buttonId => {
+        document.getElementById(buttonId)?.addEventListener('click', () => {
+            const status = document.getElementById('purchase-status');
+            if (status) {
+                status.textContent = 'Purchases stay disabled until the platform store adapter and server receipt verification are configured.';
+            }
+        });
+    });
+    document.getElementById('online-scoreboard-refresh-btn')?.addEventListener('click', loadOnlineScoreboard);
+    document.getElementById('create-level-btn')?.addEventListener('click', openLevelEditor);
+    document.getElementById('hat-gallery-btn')?.addEventListener('click', openHatGallery);
+
     // Game Mode Selection - Now on main menu
     document.getElementById('mode-single-btn')?.addEventListener('click', () => {
         console.log('[Button] Single Player clicked!');
@@ -1997,19 +2431,21 @@ function setupOnlineHandlers() {
             // Determine local and remote server positions.
             const localServerPos = mySlot === 1 ? data.state.p1Pos : data.state.p2Pos;
             const localServerVel = mySlot === 1 ? data.state.p1Vel : data.state.p2Vel;
-            const remoteServerPos = mySlot === 1 ? data.state.p2Pos : data.state.p1Pos;
-
             const localPlayer = getLocalPlayer(state);
-            const remotePlayer = getRemotePlayer(state);
 
             // Reconcile local predicted player against authoritative state.
             if (localPlayer?.rigidBody && localServerPos) {
-                reconcileLocalPlayer(localPlayer, localServerPos, localServerVel || { x: 0, y: 0, z: 0 }, 0.016);
-            }
-
-            // Update remote player interpolation target.
-            if (remotePlayer?.rigidBody && remoteServerPos) {
-                remotePlayerTargetPosition = new THREE.Vector3(remoteServerPos.x, remoteServerPos.y, remoteServerPos.z);
+                const now = performance.now();
+                const reconciliationDelta = lastOnlineReconciliationAt > 0
+                    ? Math.min(0.1, (now - lastOnlineReconciliationAt) / 1000)
+                    : 0.05;
+                lastOnlineReconciliationAt = now;
+                reconcileLocalPlayer(
+                    localPlayer,
+                    localServerPos,
+                    localServerVel || { x: 0, y: 0, z: 0 },
+                    reconciliationDelta,
+                );
             }
 
             // Sync tile states from authoritative server.
@@ -2073,10 +2509,6 @@ function animate(_timestamp, _frame) {
         return;
     }
 
-    if (state.gameMode === 'ONLINE' && (state.gameState === 'PLAYING' || state.gameState === 'COUNTDOWN')) {
-        online.localTick += 1;
-    }
-
     // Menu background animation
     if (state.gameState === 'MENU') {
         arena?.update(delta);
@@ -2096,8 +2528,6 @@ function animate(_timestamp, _frame) {
     if (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING') {
         collisionCooldown = Math.max(0, collisionCooldown - delta);
         const isOnlineMatch = state.gameMode === 'ONLINE';
-        const isOnlineClient = isOnlineMatch && !state.online.isHost;
-
         if (isOnlineMatch) {
             applyOnlineClientRemoteInterpolation(state);
         }
@@ -2131,16 +2561,13 @@ function animate(_timestamp, _frame) {
 
         if (!isInVR()) {
             // Power-up displays
-            document.getElementById('p1-powerups').innerHTML = player1?.activePowerUps.map(pu => 
-                `<div class="powerup-icon" style="color: #${pu.effect.color.toString(16).padStart(6,'0')}; border-color: #${pu.effect.color.toString(16).padStart(6,'0')};">${pu.effect.icon}</div>`
-            ).join('') || '';
-            document.getElementById('p2-powerups').innerHTML = player2?.activePowerUps.map(pu => 
-                `<div class="powerup-icon" style="color: #${pu.effect.color.toString(16).padStart(6,'0')}; border-color: #${pu.effect.color.toString(16).padStart(6,'0')};">${pu.effect.icon}</div>`
-            ).join('') || '';
+            renderPowerUpStatus('p1-powerups', player1?.activePowerUps);
+            renderPowerUpStatus('p2-powerups', player2?.activePowerUps);
         }
 
-        // Collision detection (only on host and local games, not for online clients)
-        if (player1 && player2 && !player1.isDead && !player2.isDead && !isOnlineClient) {
+        // The server owns online collision impulses. Every client still plays
+        // the collision presentation locally from the smoothed positions.
+        if (player1 && player2 && !player1.isDead && !player2.isDead) {
             const p1Pos = player1.mesh.position;
             const p2Pos = player2.mesh.position;
             const distance = p1Pos.distanceTo(p2Pos);
@@ -2153,10 +2580,12 @@ function animate(_timestamp, _frame) {
                 const relVel = new THREE.Vector3(v1.x - v2.x, v1.y - v2.y, v1.z - v2.z).length();
                 const intensity = Math.min(Math.max(relVel / 20, 1), 5);
 
-                const dir1 = new THREE.Vector3().subVectors(p1Pos, p2Pos).normalize();
-                const bounce = (1500 + relVel * 10) * (player1.isBoosting || player2.isBoosting ? 1.5 : 1.0);
-                if (!player1.isInvulnerable) player1.rigidBody.applyImpulse({ x: dir1.x * bounce, y: 0, z: dir1.z * bounce }, true);
-                if (!player2.isInvulnerable) player2.rigidBody.applyImpulse({ x: -dir1.x * bounce, y: 0, z: -dir1.z * bounce }, true);
+                if (!isOnlineMatch) {
+                    const dir1 = new THREE.Vector3().subVectors(p1Pos, p2Pos).normalize();
+                    const bounce = (1500 + relVel * 10) * (player1.isBoosting || player2.isBoosting ? 1.5 : 1.0);
+                    if (!player1.isInvulnerable) player1.rigidBody.applyImpulse({ x: dir1.x * bounce, y: 0, z: dir1.z * bounce }, true);
+                    if (!player2.isInvulnerable) player2.rigidBody.applyImpulse({ x: -dir1.x * bounce, y: 0, z: -dir1.z * bounce }, true);
+                }
 
                 const impactPosition = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
                 const boostedImpact = player1.isBoosting || player2.isBoosting;
@@ -2205,23 +2634,6 @@ function animate(_timestamp, _frame) {
             }
         }
 
-        if (player1 && player2 && !player1.isDead && !player2.isDead && isOnlineClient) {
-            const p1Pos = player1.mesh.position;
-            const p2Pos = player2.mesh.position;
-            const centerPos = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
-            const distance = p1Pos.distanceTo(p2Pos);
-
-            // Match host camera behavior while ensuring the online client tracks active gameplay.
-            const camOffset = Math.max(26, Number(state.settings.arenaSize || 4) * 5.4, distance * 0.96);
-            const targetCamPos = new THREE.Vector3(centerPos.x, camOffset, centerPos.z + camOffset);
-            const camSpeed = 0.08;
-            camera.position.lerp(targetCamPos, camSpeed);
-
-            if (!camera.userData.lookAtTarget) camera.userData.lookAtTarget = centerPos.clone();
-            camera.userData.lookAtTarget.lerp(centerPos, camSpeed);
-            camera.lookAt(camera.userData.lookAtTarget);
-        }
-
         // Countdown
         if (state.gameState === 'COUNTDOWN') {
             countdownTimer -= delta;
@@ -2235,7 +2647,7 @@ function animate(_timestamp, _frame) {
 
         // Win check
         if (state.gameState === 'PLAYING') {
-            if (!isOnlineClient) {
+            if (!isOnlineMatch) {
                 checkWinConditions(delta);
             }
             
@@ -2274,38 +2686,7 @@ function animate(_timestamp, _frame) {
             // Online sync
             if (state.gameMode === 'ONLINE' && state.online.connected) {
                 const input = getPlayer1InputUnified();
-                online.sendInput({ ...input });
-                if (state.online.isHost && player1 && player2) {
-                    if (online.shouldSendStateUpdate()) {
-                        const p1Pos = player1.rigidBody.translation();
-                        const p1Vel = player1.rigidBody.linvel();
-                        const p2Pos = player2.rigidBody.translation();
-                        const p2Vel = player2.rigidBody.linvel();
-                        const tileStates = [];
-                        if (arena?.tiles?.length) {
-                            for (const t of arena.tiles) {
-                                const key = `${t.q},${t.r}`;
-                                const prev = lastSentTileStates.get(key);
-                                const next = { state: t.state, timer: t.timer };
-                                if (!prev || prev.state !== next.state || Math.abs(prev.timer - next.timer) > 0.1) {
-                                    tileStates.push({ q: t.q, r: t.r, state: next.state, timer: next.timer });
-                                    lastSentTileStates.set(key, next);
-                                }
-                            }
-                        }
-
-                        online.sendGameState({
-                            p1Score: state.p1Score,
-                            p2Score: state.p2Score,
-                            p1Pos: { x: p1Pos.x, y: p1Pos.y, z: p1Pos.z },
-                            p1Vel: { x: p1Vel.x, y: p1Vel.y, z: p1Vel.z },
-                            p2Pos: { x: p2Pos.x, y: p2Pos.y, z: p2Pos.z },
-                            p2Vel: { x: p2Vel.x, y: p2Vel.y, z: p2Vel.z },
-                            tileStates: tileStates
-                        });
-                        online.markStateSent();
-                    }
-                }
+                if (online.shouldSendInput(input)) online.sendInput(input);
             }
         }
     }
@@ -2421,23 +2802,11 @@ function startNextRound() {
     if (st.gameMode === 'ONLINE') {
         countdownTimer = 3.0;
 
-        // Both peers enter round state, but host remains the authoritative simulator.
+        // Both peers enter round state and then sample the authoritative server.
         useGameStore.getState().startRound();
         resetOnlineEntities();
         updateHUDNames();
-
-        if (st.online.isHost) {
-            setTimeout(() => {
-                if (online.isConnected) {
-                    online.sendGameState({
-                        p1Score: useGameStore.getState().p1Score,
-                        p2Score: useGameStore.getState().p2Score
-                    });
-                }
-            }, 50);
-        } else {
-            setTimeout(() => online.requestSync(), 120);
-        }
+        setTimeout(() => online.requestSync(), 120);
         return;
     }
 
@@ -2473,6 +2842,9 @@ function setupStoreSubscription() {
         // Screen transitions
         if (state.gameState !== prevState.gameState) {
             console.log('[Store Sub] gameState changed:', prevState.gameState, '->', state.gameState);
+            if (state.gameState === 'GAME_OVER' && prevState.gameState !== 'GAME_OVER') {
+                recordTrackedLocalMatch(state);
+            }
             if (state.gameState !== 'COUNTDOWN' && state.gameState !== 'PLAYING') {
                 setGamePaused(false, { focusResume: false });
             }
@@ -2757,22 +3129,18 @@ async function init() {
         physicsSystem = getPhysicsSystem();
         await physicsSystem.initialize(physicsWorld);
         
-        // Subscribe to collision events from PhysicsSystem
+        const debugPhysics = import.meta.env.DEV
+            && globalThis.localStorage?.getItem('dropfall_debug_physics') === '1';
+
+        // Physics event tracing is opt-in; several events can fire every frame.
         physicsSystem.on('collision', (event) => {
-            console.log('[PhysicsSystem] Collision:', event.entityA, '<->', event.entityB);
-            // Handled by direct physics queries in main.js for now
-            // This subscription is for future event-driven architecture
+            if (debugPhysics) console.debug('[PhysicsSystem] Collision:', event.entityA, '<->', event.entityB);
         });
-        
-        // Subscribe to knockback events
         physicsSystem.on('knockback', (event) => {
-            console.log('[PhysicsSystem] Knockback applied to:', event.targetEntity);
+            if (debugPhysics) console.debug('[PhysicsSystem] Knockback applied to:', event.targetEntity);
         });
-        
-        // Subscribe to out-of-bounds events
         physicsSystem.on('out-of-bounds', (event) => {
-            console.log('[PhysicsSystem] Out of bounds:', event.entity, event.direction);
-            // Could trigger death handling here in event-driven architecture
+            if (debugPhysics) console.debug('[PhysicsSystem] Out of bounds:', event.entity, event.direction);
         });
         
         arena = new Arena();
@@ -2788,6 +3156,8 @@ async function init() {
             applyVRScale();
         }
 
+        syncSelectedProfileToGame();
+        renderProfileHub();
         setupButtonHandlers();
         setupOnlineHandlers();
         setupStoreSubscription();

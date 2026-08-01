@@ -6,7 +6,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <!-- Suggest portrait as primary orientation for mobile (hint, not enforced) -->
     <meta name="screen-orientation" content="portrait-primary" />
+    <meta name="theme-color" content="#0b0324" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Dropfall V2 — Star Circuit</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="manifest" href="/manifest.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Orbitron:wght@500;600;700;800;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
@@ -203,6 +208,9 @@
           </div>
 
           <div class="menu-utilities">
+            <button id="profile-hub-btn" class="utility-button"><span aria-hidden="true">◉</span> <b id="menu-profile-name">Pilot</b></button>
+            <button id="hat-gallery-btn" class="utility-button"><span aria-hidden="true">◇</span> Hat Gallery</button>
+            <button id="create-level-btn" class="utility-button"><span aria-hidden="true">✦</span> Create</button>
             <button id="settings-btn" class="utility-button"><span aria-hidden="true">◇</span> Settings</button>
             <label class="switch-control" for="autorestart-menu">
               <input type="checkbox" id="autorestart-menu">
@@ -232,6 +240,96 @@
         <span>BUILD 2.0 // STAR CIRCUIT EDITION</span>
         <span>KEYBOARD · CONTROLLER · TOUCH · XR</span>
       </footer>
+    </div>
+
+    <div id="hat-gallery-screen" class="screen hidden hat-gallery-screen">
+      <div id="hat-gallery-mount"></div>
+    </div>
+
+    <div id="profile-hub" class="screen hidden profile-hub-screen">
+      <main class="profile-hub-shell">
+        <header class="profile-hub-header">
+          <div>
+            <p class="menu-kicker"><span></span> Pilot network</p>
+            <h1>Profile &amp; Scoreboards</h1>
+            <p>Local records stay on this device. Online results are confirmed by the game server.</p>
+          </div>
+          <button id="profile-hub-close-btn" class="result-secondary">Back to Play Plaza</button>
+        </header>
+
+        <nav class="profile-hub-tabs" aria-label="Profile sections">
+          <button class="profile-hub-tab active" data-profile-pane="profile">Pilot Profile</button>
+          <button class="profile-hub-tab" data-profile-pane="local">Local Board</button>
+          <button class="profile-hub-tab" data-profile-pane="online">Online Board</button>
+        </nav>
+
+        <section class="profile-hub-pane active" data-profile-pane="profile">
+          <div class="profile-editor-card">
+            <div class="profile-emblem" aria-hidden="true">DF</div>
+            <div class="profile-editor-fields">
+              <label for="local-profile-select">Local pilot</label>
+              <select id="local-profile-select"></select>
+              <label for="local-profile-name">Display name</label>
+              <input id="local-profile-name" type="text" maxlength="20" autocomplete="nickname">
+              <div class="profile-editor-actions">
+                <button id="local-profile-save-btn" class="result-primary">Save Profile</button>
+                <button id="local-profile-add-btn" class="result-secondary">New Local Pilot</button>
+              </div>
+            </div>
+            <div class="profile-account-status">
+              <span>ACCOUNT STATUS</span>
+              <strong id="profile-account-label">Guest pilot</strong>
+              <p>Offline play, local records, and local level drafts are available without signup.</p>
+              <button id="profile-signup-btn" class="result-secondary">Create Dropfall Account</button>
+              <small id="profile-signup-status" role="status">Account linking needs the production identity service.</small>
+            </div>
+          </div>
+          <div id="profile-stat-grid" class="profile-stat-grid"></div>
+          <div class="access-card">
+            <div>
+              <span>EDITION &amp; ADS</span>
+              <strong id="access-product-label">Ad-supported edition</strong>
+              <p id="access-product-copy">Ads are limited to eligible offline post-match breaks and never interrupt play or an online rematch.</p>
+            </div>
+            <div class="access-card-actions">
+              <button id="remove-ads-btn" class="result-primary">Remove Ads</button>
+              <button id="restore-purchases-btn" class="result-secondary">Restore Purchases</button>
+              <small id="purchase-status" role="status">Store connection is not configured in this development build.</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="profile-hub-pane" data-profile-pane="local">
+          <div class="scoreboard-heading">
+            <div><span>DEVICE ONLY</span><h2>Local Rivals</h2></div>
+            <p>Ranked by match wins, then win rate and best streak.</p>
+          </div>
+          <div class="scoreboard-table-wrap">
+            <table class="scoreboard-table">
+              <thead><tr><th>Rank</th><th>Pilot</th><th>Matches</th><th>W</th><th>L</th><th>Win rate</th><th>Best streak</th></tr></thead>
+              <tbody id="local-scoreboard-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="profile-hub-pane" data-profile-pane="online">
+          <div class="scoreboard-heading">
+            <div><span>SERVER VERIFIED · UNRANKED</span><h2>Online Circuit</h2></div>
+            <button id="online-scoreboard-refresh-btn" class="result-secondary">Refresh</button>
+          </div>
+          <p id="online-scoreboard-status" class="scoreboard-status" role="status">Connect to a Dropfall server to load results.</p>
+          <div class="scoreboard-table-wrap">
+            <table class="scoreboard-table">
+              <thead><tr><th>Rank</th><th>Pilot</th><th>Matches</th><th>W</th><th>L</th><th>Win rate</th><th>Best streak</th></tr></thead>
+              <tbody id="online-scoreboard-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div id="level-editor-screen" class="screen hidden level-editor-screen">
+      <div id="level-editor-mount"></div>
     </div>
 
     <div id="settings-panel" class="screen hidden" style="background: rgba(0,0,0,0.9); z-index: 100; pointer-events: auto; display: flex; flex-direction: column; align-items: center;">

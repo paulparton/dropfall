@@ -7,6 +7,7 @@ import { generateHexGrid, hexToPixel } from '../utils/math.js';
 import { useGameStore } from '../store.js';
 import { POWER_UP_EFFECTS } from './Player.js';
 import { selectRandomDestructionTiles } from '../utils/arenaDestruction.js';
+import { getThemeAwarePowerUpColor } from '../../shared/powerUps.js';
 
 // Tile state to shader uniform mapping
 const STATE_MAP = { NORMAL: 0, ICE: 1, WARNING: 2, FALLING: 3, BONUS: 5 };
@@ -414,7 +415,8 @@ export class Arena {
 
     _createStatue(powerUp, worldPos) {
         const group = new THREE.Group();
-        const color = powerUp.color;
+        const theme = useGameStore.getState().settings.theme || 'default';
+        const color = getThemeAwarePowerUpColor(powerUp.type, theme);
 
         const gemGeo = new THREE.OctahedronGeometry(1.2, 0);
         const gemMat = new THREE.MeshStandardMaterial({

@@ -7,7 +7,8 @@ import {
   MATCH_THEMES,
   formatMatchSettingValue,
 } from '../../shared/matchSettings.js';
-import { HAT_CATALOG } from '../utils/hatCatalog.js';
+import { getHatDefinition, HAT_CATALOG } from '../utils/hatCatalog.js';
+import { playHurryUpChirp } from '../audio.js';
 
 export interface OnlineManager {
   sendCustomization: (color: number | string, hat: string, name: string) => void;
@@ -15,6 +16,7 @@ export interface OnlineManager {
   startGame: () => void;
   leaveGame: () => void;
   updateGameSettings: (settings: Record<string, string | number>) => void;
+  requestHurryUp: () => void;
 }
 
 type RoomSettings = Record<string, string | number>;
@@ -41,7 +43,7 @@ interface SettingDefinition {
 
 const HATS: ReadonlyArray<readonly [string, string]> = [
   ['none', 'No hat'],
-  ...HAT_CATALOG.map((hat) => [hat.id, `${hat.icon} ${hat.label}`] as const),
+  ...HAT_CATALOG.map((hat) => [hat.id, hat.label] as const),
 ];
 
 
@@ -78,7 +80,15 @@ function makeBall(color: number | string, hat: string, waiting = false): HTMLDiv
       sphere.style.background = `radial-gradient(circle at 30% 24%, #fff 0 4%, transparent 18%), linear-gradient(135deg, ${colors.join(', ')})`;
     }
   }
-  if (hat !== 'none') sphere.dataset.hat = HATS.find(([id]) => id === hat)?.[1] || hat;
+  if (hat !== 'none') {
+    const definition = getHatDefinition(hat);
+    if (definition) {
+      const icon = element('img', 'online-room-ball__hat') as HTMLImageElement;
+      icon.src = definition.iconPath;
+      icon.alt = definition.label;
+      sphere.append(icon);
+    }
+  }
   wrap.append(sphere);
   return wrap;
 }
@@ -100,9 +110,17 @@ export function createOnlineSetupPanel(
     ...MATCH_DEFAULTS,
     ...((initialOnline.currentGame?.settings || {}) as RoomSettings),
   };
+  let settingsBaseline: RoomSettings = {
+    ...MATCH_DEFAULTS,
+    ...((initialOnline.currentGame?.settingsBaseline || initialOnline.currentGame?.settings || {}) as RoomSettings),
+  };
   let settingsTimer: number | null = null;
   let customizationTimer: number | null = null;
   let pendingSettingsJson: string | null = null;
+  let hurryTimer: number | null = null;
+  let hurryDeadline = 0;
+  let hurrySignature = '';
+  let lastHurrySecond = -1;
 
   const root = element('div', 'online-room');
   const header = element('header', 'online-room-header');
@@ -194,11 +212,13 @@ export function createOnlineSetupPanel(
   status.append(statusLight, statusText);
 
   const playerActions = element('div', 'online-room-player-actions');
+  const hurryButton = element('button', 'online-room-hurry', 'Hurry Up · 10');
+  hurryButton.type = 'button';
   const readyButton = element('button', 'multiplayer-primary', 'Ready Up');
   readyButton.type = 'button';
   const startButton = element('button', 'online-room-start', 'Start Match');
   startButton.type = 'button';
-  playerActions.append(readyButton, startButton);
+  playerActions.append(hurryButton, readyButton, startButton);
   playersPanel.append(playersHeading, playerCards, status, playerActions);
 
   const settingsPanel = element('aside', 'online-room-settings');
@@ -209,6 +229,12 @@ export function createOnlineSetupPanel(
   settingsHeaderCopy.append(settingsHeading, settingsDescription);
   const settingsLock = element('span', 'online-room-settings__lock', 'HOST CONTROL');
   settingsHeader.append(settingsHeaderCopy, settingsLock);
+
+  const hurryBanner = element('div', 'online-room-hurry-banner');
+  hurryBanner.hidden = true;
+  const hurryBannerLabel = element('strong', undefined, 'HURRY UP');
+  const hurryBannerTimer = element('span', undefined, '10');
+  hurryBanner.append(hurryBannerLabel, hurryBannerTimer);
 
   const presetRow = element('div', 'online-room-presets');
   const presetButtons: HTMLButtonElement[] = [];
@@ -230,10 +256,21 @@ export function createOnlineSetupPanel(
     option.value = theme.value;
     themeSelect.append(option);
   }
-  themeField.append(themeText, themeSelect);
+  const themeControl = element('span', 'online-room-setting__theme-control');
+  const themeChange = element('span', 'online-room-setting__theme-change');
+  themeChange.hidden = true;
+  themeControl.append(themeSelect, themeChange);
+  themeField.append(themeText, themeControl);
   settingsScroll.append(themeField);
 
-  const settingControls = new Map<string, { input: HTMLInputElement; output: HTMLOutputElement; definition: SettingDefinition }>();
+  const settingControls = new Map<string, {
+    input: HTMLInputElement;
+    output: HTMLOutputElement;
+    definition: SettingDefinition;
+    field: HTMLLabelElement;
+    change: HTMLSpanElement;
+    changeText: HTMLSpanElement;
+  }>();
   for (const group of MATCH_SETTING_GROUPS as Array<{ title: string; fields: SettingDefinition[] }>) {
     const groupNode = element('section', 'online-room-setting-group');
     groupNode.append(element('h3', undefined, group.title));
@@ -249,14 +286,19 @@ export function createOnlineSetupPanel(
       input.step = String(definition.step);
       input.dataset.setting = definition.key;
       const output = element('output') as HTMLOutputElement;
-      control.append(input, output);
+      const change = element('span', 'online-room-setting__change');
+      change.hidden = true;
+      const changeTrack = element('i', 'online-room-setting__change-track');
+      const changeText = element('span', 'online-room-setting__change-copy');
+      change.append(changeTrack, changeText);
+      control.append(input, output, change);
       field.append(copy, control);
       groupNode.append(field);
-      settingControls.set(definition.key, { input, output, definition });
+      settingControls.set(definition.key, { input, output, definition, field, change, changeText });
     }
     settingsScroll.append(groupNode);
   }
-  settingsPanel.append(settingsHeader, presetRow, settingsScroll);
+  settingsPanel.append(settingsHeader, hurryBanner, presetRow, settingsScroll);
   layout.append(playersPanel, settingsPanel);
   root.append(header, layout);
 
@@ -267,6 +309,88 @@ export function createOnlineSetupPanel(
       control.input.value = String(value);
       control.output.value = formatMatchSettingValue(control.definition, value);
       control.output.textContent = formatMatchSettingValue(control.definition, value);
+    }
+    updateSettingChangeIndicators();
+  }
+
+  function updateSettingChangeIndicators(): void {
+    const baselineTheme = String(settingsBaseline.theme || MATCH_DEFAULTS.theme);
+    const currentTheme = String(roomSettings.theme || MATCH_DEFAULTS.theme);
+    const themeChanged = baselineTheme !== currentTheme;
+    themeField.classList.toggle('has-changed', themeChanged);
+    themeChange.hidden = !themeChanged;
+    if (themeChanged) {
+      const before = MATCH_THEMES.find(theme => theme.value === baselineTheme)?.label || baselineTheme;
+      const after = MATCH_THEMES.find(theme => theme.value === currentTheme)?.label || currentTheme;
+      themeChange.textContent = `${before} → ${after}`;
+    }
+
+    for (const [key, control] of settingControls) {
+      const fallback = Number(MATCH_DEFAULTS[key as keyof typeof MATCH_DEFAULTS]);
+      const before = Number(settingsBaseline[key] ?? fallback);
+      const after = Number(roomSettings[key] ?? fallback);
+      const changed = Number.isFinite(before) && Number.isFinite(after) && Math.abs(after - before) > 0.0001;
+      control.field.classList.toggle('has-changed', changed);
+      control.change.hidden = !changed;
+      if (!changed) continue;
+
+      const range = Math.max(0.0001, control.definition.max - control.definition.min);
+      const beforePercent = Math.max(0, Math.min(100, ((before - control.definition.min) / range) * 100));
+      const afterPercent = Math.max(0, Math.min(100, ((after - control.definition.min) / range) * 100));
+      const direction = after > before ? 'right' : 'left';
+      control.field.dataset.changeDirection = direction;
+      control.change.style.setProperty('--change-start', `${Math.min(beforePercent, afterPercent)}%`);
+      control.change.style.setProperty('--change-width', `${Math.max(2, Math.abs(afterPercent - beforePercent))}%`);
+      control.change.style.setProperty('--change-end', `${afterPercent}%`);
+      const arrow = direction === 'right' ? '→' : '←';
+      control.changeText.textContent = `${arrow} ${formatMatchSettingValue(control.definition, after)} · was ${formatMatchSettingValue(control.definition, before)}`;
+    }
+  }
+
+  function stopHurryTimer(): void {
+    if (hurryTimer !== null) window.clearInterval(hurryTimer);
+    hurryTimer = null;
+    hurryDeadline = 0;
+    hurrySignature = '';
+    lastHurrySecond = -1;
+    hurryBanner.hidden = true;
+  }
+
+  function updateHurryDisplay(isSettingsPicker: boolean): void {
+    if (!hurryDeadline) return;
+    const seconds = Math.max(0, Math.ceil((hurryDeadline - Date.now()) / 1000));
+    hurryButton.textContent = `Hurry Up · ${seconds}`;
+    hurryBannerTimer.textContent = String(seconds);
+    hurryBannerLabel.textContent = isSettingsPicker ? 'LOCKING SETTINGS' : 'HURRY COUNTDOWN';
+
+    if (seconds > 0 && seconds !== lastHurrySecond) {
+      lastHurrySecond = seconds;
+      playHurryUpChirp(seconds);
+    }
+    if (seconds === 0 && hurryTimer !== null) {
+      window.clearInterval(hurryTimer);
+      hurryTimer = null;
+    }
+  }
+
+  function syncHurryTimer(hurryState: Record<string, unknown> | null, isSettingsPicker: boolean): void {
+    if (!hurryState) {
+      stopHurryTimer();
+      hurryButton.textContent = 'Hurry Up · 10';
+      return;
+    }
+
+    const signature = `${String(hurryState.requestedBySlot)}:${String(hurryState.targetSlot)}`;
+    if (signature !== hurrySignature || !hurryDeadline) {
+      hurrySignature = signature;
+      const remainingMs = Math.max(0, Number(hurryState.remainingMs || hurryState.durationMs || 10000));
+      hurryDeadline = Number(hurryState.clientEndsAt || 0) || Date.now() + remainingMs;
+      lastHurrySecond = -1;
+    }
+    hurryBanner.hidden = false;
+    updateHurryDisplay(isSettingsPicker);
+    if (hurryTimer === null) {
+      hurryTimer = window.setInterval(() => updateHurryDisplay(isSettingsPicker), 100);
     }
   }
 
@@ -321,6 +445,7 @@ export function createOnlineSetupPanel(
 
   themeSelect.addEventListener('change', () => {
     roomSettings.theme = themeSelect.value;
+    updateSettingChangeIndicators();
     queueSettingsUpdate(true);
   });
   for (const [key, control] of settingControls) {
@@ -329,6 +454,7 @@ export function createOnlineSetupPanel(
       roomSettings[key] = value;
       control.output.value = formatMatchSettingValue(control.definition, value);
       control.output.textContent = formatMatchSettingValue(control.definition, value);
+      updateSettingChangeIndicators();
       queueSettingsUpdate();
     });
   }
@@ -343,6 +469,12 @@ export function createOnlineSetupPanel(
       queueSettingsUpdate(true);
     });
   }
+
+  hurryButton.addEventListener('click', () => {
+    hurryButton.disabled = true;
+    hurryButton.textContent = 'Hurry Up · 10';
+    online.requestHurryUp();
+  });
 
   readyButton.addEventListener('click', () => {
     const state = useGameStore.getState();
@@ -374,6 +506,10 @@ export function createOnlineSetupPanel(
     const onlineState = state.online || {};
     const game = (onlineState.currentGame || {}) as Record<string, unknown>;
     const serverSettings = { ...MATCH_DEFAULTS, ...((game.settings || {}) as RoomSettings) };
+    settingsBaseline = {
+      ...MATCH_DEFAULTS,
+      ...((game.settingsBaseline || settingsBaseline) as RoomSettings),
+    };
     const serverSettingsJson = JSON.stringify(serverSettings);
     if (pendingSettingsJson) {
       if (serverSettingsJson === pendingSettingsJson) pendingSettingsJson = null;
@@ -399,6 +535,9 @@ export function createOnlineSetupPanel(
     const opponentNameValue = String(onlineState.opponentName || opponent?.name || 'Opponent').slice(0, 20);
     const opponentColor = onlineState.opponentColor ?? opponent?.color ?? (opponentSlot === 1 ? state.p1Color : state.p2Color);
     const opponentHat = String(onlineState.opponentHat || opponent?.hat || 'none');
+    const hurryState = game.hurryUp && typeof game.hurryUp === 'object'
+      ? game.hurryUp as Record<string, unknown>
+      : null;
 
     title.textContent = `Match ${Math.max(1, Number(game.matchNumber || 1))} Setup`;
     const themeName = MATCH_THEMES.find((theme) => theme.value === String(roomSettings.theme || 'tron'))?.label || 'Star Circuit';
@@ -443,6 +582,12 @@ export function createOnlineSetupPanel(
     for (const button of presetButtons) button.disabled = !settingsEditable;
     settingsPanel.classList.toggle('is-locked', !settingsEditable);
 
+    syncHurryTimer(hurryState, isSettingsPicker);
+    const pickerReady = isSettingsPicker ? localReady : opponentReady;
+    const canRequestHurry = !serverLobby && opponentConnected && !isSettingsPicker && Boolean(settingsPickerId) && !pickerReady;
+    hurryButton.hidden = isSettingsPicker || (!canRequestHurry && !hurryState);
+    hurryButton.disabled = !canRequestHurry || Boolean(hurryState);
+
     readyButton.textContent = localReady ? 'Cancel Ready' : 'Ready Up';
     readyButton.disabled = !opponentConnected;
     const canStart = isHost && opponentConnected && localReady && opponentReady && !serverLobby;
@@ -469,6 +614,7 @@ export function createOnlineSetupPanel(
     cleanup: () => {
       if (settingsTimer !== null) window.clearTimeout(settingsTimer);
       if (customizationTimer !== null) window.clearTimeout(customizationTimer);
+      stopHurryTimer();
       unsubscribe();
       root.remove();
     },

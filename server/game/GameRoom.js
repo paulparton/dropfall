@@ -2,13 +2,15 @@ import { initPhysics, createWorld } from './PhysicsWorld.js';
 import { ServerArena } from './Arena.js';
 import { ServerPlayer } from './Player.js';
 import { MATCH_DEFAULTS, validateMatchSettings } from '../../shared/matchSettings.js';
+import { BATTLE_RULES } from '../../shared/gameRules.js';
 
 const TICK_RATE = 60;
 const BROADCAST_RATE = 20;
-const RECONNECT_GRACE_MS = 15000;
-const ROUND_OVER_DELAY_MS = 2000;
-const COUNTDOWN_MS = 3000;
-const WINS_TO_WIN_MATCH = 3;
+const RECONNECT_GRACE_MS = BATTLE_RULES.reconnectGraceMs;
+const ROUND_OVER_DELAY_MS = BATTLE_RULES.roundOverDelayMs;
+const COUNTDOWN_MS = BATTLE_RULES.countdownSeconds * 1000;
+const HURRY_UP_MS = 10000;
+const WINS_TO_WIN_MATCH = BATTLE_RULES.winsToWinMatch;
 
 export class GameRoom {
     constructor(id, hostId, hostName, settings = {}, options = {}) {
@@ -16,6 +18,7 @@ export class GameRoom {
         this.hostId = hostId;
         this.hostName = hostName || 'Host';
         this.settings = this._validateSettings({ ...MATCH_DEFAULTS, ...settings });
+        this.settingsBaseline = { ...this.settings };
         this.isServerLobby = !!(options && options.isServerLobby);
         this.random = typeof options?.random === 'function' ? options.random : Math.random;
 
@@ -29,6 +32,8 @@ export class GameRoom {
         this.matchWinner = null;
         this.roundWinner = null;
         this.roundOverAt = null;
+        this.hasStartedMatch = false;
+        this.hurryUp = null;
 
         this.physicsReady = false;
         this.world = null;
@@ -36,10 +41,16 @@ export class GameRoom {
 
         this.tickInterval = null;
         this.broadcastInterval = null;
+        this.countdownTimeout = null;
+        this.roundTransitionTimeout = null;
+        this.hurryUpTimeout = null;
         this.reconnectTimers = new Map(); // slot -> timeoutId
 
         this.onBroadcast = null; // (playerId, msg) => void
         this.onGameEnded = null; // (room) => void
+        this.onMatchCompleted = null; // (authoritative match snapshot) => void
+        this.matchStartedAt = null;
+        this.lastRecordedMatchNumber = 0;
     }
 
     _validateSettings(settings) {
@@ -48,10 +59,13 @@ export class GameRoom {
 
     updateSettings(id, settings) {
         if (this.state !== 'LOBBY' || this.settingsPickerId !== id || this.isServerLobby) return null;
+        const picker = this.players.find(playerInfo => playerInfo.id === id);
+        if (!picker || picker.forcedReady || picker.disconnected) return null;
 
         this.settings = this._validateSettings({ ...this.settings, ...(settings || {}) });
         for (const playerInfo of this.players) {
             playerInfo.ready = false;
+            playerInfo.forcedReady = false;
             playerInfo.rematchRequested = false;
         }
         this._invalidatePhysics();
@@ -60,11 +74,27 @@ export class GameRoom {
 
     _invalidatePhysics() {
         this._stopLoops();
+        this._clearTransitionTimers();
         for (const playerInfo of this.players) playerInfo.player = null;
         this.arena = null;
         if (this.world && typeof this.world.free === 'function') this.world.free();
         this.world = null;
         this.physicsReady = false;
+    }
+
+    _clearTransitionTimers() {
+        if (this.countdownTimeout) {
+            clearTimeout(this.countdownTimeout);
+            this.countdownTimeout = null;
+        }
+        if (this.roundTransitionTimeout) {
+            clearTimeout(this.roundTransitionTimeout);
+            this.roundTransitionTimeout = null;
+        }
+    }
+
+    _hasDisconnectedPlayers() {
+        return this.players.some(playerInfo => playerInfo.disconnected);
     }
 
     _selectInitialSettingsPicker() {
@@ -93,9 +123,11 @@ export class GameRoom {
             name: name || `Player ${slot}`,
             slot,
             ready: false,
+            forcedReady: false,
             rematchRequested: false,
             disconnected: false,
             reconnectDeadline: null,
+            reconnectToken: null,
             ws,
             player: null,
             color: slot - 1,
@@ -107,16 +139,23 @@ export class GameRoom {
         return playerInfo;
     }
 
-    removePlayer(id) {
+    removePlayer(id, { allowReconnect = true } = {}) {
         const index = this.players.findIndex(p => p.id === id);
         if (index === -1) return null;
 
         const playerInfo = this.players[index];
 
-        if (this.state === 'PLAYING' || this.state === 'COUNTDOWN') {
+        const reconnectableState = this.state === 'PLAYING' ||
+            this.state === 'COUNTDOWN' ||
+            this.state === 'ROUND_OVER' ||
+            (this.state === 'LOBBY' && this.hasStartedMatch);
+        if (allowReconnect && reconnectableState) {
             playerInfo.disconnected = true;
             playerInfo.reconnectDeadline = Date.now() + RECONNECT_GRACE_MS;
             playerInfo.ws = null;
+            this._stopLoops();
+            this._clearTransitionTimers();
+            this.cancelHurryUp('player_disconnected');
             this._scheduleReconnectCleanup(playerInfo.slot);
             return { disconnected: true, slot: playerInfo.slot };
         }
@@ -132,6 +171,9 @@ export class GameRoom {
             this.hostId = this.players[0].id;
             this.hostName = this.players[0].name;
             newHostId = this.hostId;
+        }
+        if (this.players.length === 1 && this.state !== 'LOBBY') {
+            this._abandonInterruptedMatch();
         }
         return { disconnected: false, newHostId };
     }
@@ -189,6 +231,10 @@ export class GameRoom {
             this.hostName = this.players[0].name;
             this._broadcast({ type: 'new_host', hostId: this.hostId });
         }
+
+        if (this.players.length === 1 && this.state !== 'LOBBY') {
+            this._abandonInterruptedMatch();
+        }
     }
 
     reconnect(reconnectingId, newId, ws) {
@@ -211,6 +257,52 @@ export class GameRoom {
         return playerInfo;
     }
 
+    resumeAfterReconnect() {
+        if (this._hasDisconnectedPlayers()) return;
+
+        if (this.state === 'PLAYING') {
+            this._startLoops();
+            this._broadcast({ type: 'game_resumed' });
+            return;
+        }
+
+        if (this.state === 'COUNTDOWN') {
+            this._broadcastGameStarting(false);
+            this._scheduleStartPlaying();
+            return;
+        }
+
+        if (this.state === 'ROUND_OVER') {
+            this.roundTransitionTimeout = setTimeout(() => {
+                this.roundTransitionTimeout = null;
+                if (this.matchWinner) this._endMatch();
+                else this._startNextRound();
+            }, 500);
+        }
+    }
+
+    _abandonInterruptedMatch() {
+        this._stopLoops();
+        this._clearTransitionTimers();
+        this.cancelHurryUp('opponent_left');
+        this.state = 'LOBBY';
+        this.scores = { p1: 0, p2: 0 };
+        this.matchWinner = null;
+        this.roundWinner = null;
+        this.roundOverAt = null;
+        this.settingsBaseline = { ...this.settings };
+        this._invalidatePhysics();
+        const remainingPlayer = this.players.find(playerInfo => !playerInfo.disconnected) || null;
+        this.settingsPickerId = remainingPlayer?.id || null;
+        this.settingsPickerReason = 'opponent_left';
+        if (remainingPlayer) {
+            remainingPlayer.ready = false;
+            remainingPlayer.forcedReady = false;
+            remainingPlayer.rematchRequested = false;
+        }
+        this._broadcast({ type: 'match_abandoned', game: this.getPublicGame() });
+    }
+
     isFull() {
         return this.players.length >= 2;
     }
@@ -223,6 +315,63 @@ export class GameRoom {
         const playerInfo = this.players.find(p => p.id === id);
         if (!playerInfo) return;
         playerInfo.ready = !!ready;
+        playerInfo.forcedReady = false;
+        if (playerInfo.ready && this.hurryUp?.targetId === id) {
+            this.cancelHurryUp('target_ready');
+        }
+    }
+
+    startHurryUp(requesterId, durationMs = HURRY_UP_MS) {
+        if (this.isServerLobby || this.state !== 'LOBBY' || this.hurryUp || this.players.length < 2) return null;
+        const requester = this.players.find(playerInfo => playerInfo.id === requesterId && !playerInfo.disconnected);
+        const target = this.players.find(playerInfo => playerInfo.id === this.settingsPickerId && !playerInfo.disconnected);
+        if (!requester || !target || requester.id === target.id || target.ready) return null;
+
+        const safeDuration = Math.max(1000, Number(durationMs) || HURRY_UP_MS);
+        this.hurryUp = {
+            requestedById: requester.id,
+            requestedBySlot: requester.slot,
+            targetId: target.id,
+            targetSlot: target.slot,
+            endsAt: Date.now() + safeDuration,
+            durationMs: safeDuration,
+        };
+        this._broadcast({
+            type: 'hurry_up_started',
+            requestedBySlot: requester.slot - 1,
+            targetSlot: target.slot - 1,
+            durationMs: safeDuration,
+        });
+        this.hurryUpTimeout = setTimeout(() => this._finishHurryUp(), safeDuration);
+        return { ...this.hurryUp };
+    }
+
+    _finishHurryUp() {
+        if (!this.hurryUp) return;
+        const hurryState = this.hurryUp;
+        this.hurryUp = null;
+        this.hurryUpTimeout = null;
+
+        if (this.state !== 'LOBBY' || this.settingsPickerId !== hurryState.targetId) return;
+        const target = this.players.find(playerInfo => playerInfo.id === hurryState.targetId && !playerInfo.disconnected);
+        if (!target) return;
+
+        target.ready = true;
+        target.forcedReady = true;
+        this._broadcast({
+            type: 'hurry_up_finished',
+            targetSlot: target.slot - 1,
+        });
+        this._broadcast({ type: 'ready_state', slot: target.slot - 1, ready: true, forced: true });
+        if (this.areBothReady()) this._broadcast({ type: 'all_ready' });
+    }
+
+    cancelHurryUp(reason = 'cancelled') {
+        if (!this.hurryUp && !this.hurryUpTimeout) return;
+        if (this.hurryUpTimeout) clearTimeout(this.hurryUpTimeout);
+        this.hurryUpTimeout = null;
+        this.hurryUp = null;
+        this._broadcast({ type: 'hurry_up_cancelled', reason });
     }
 
     async maybeAutoStart() {
@@ -245,14 +394,22 @@ export class GameRoom {
         if (this.players.length < 2) return;
         if (!this.areBothReady()) return;
 
+        this.cancelHurryUp('match_starting');
+        this.hasStartedMatch = true;
+        this.matchStartedAt = Date.now();
         await this.initPhysics();
         this._resetRound();
 
         this.state = 'COUNTDOWN';
+        this._broadcastGameStarting(true);
+        this._scheduleStartPlaying();
+    }
+
+    _broadcastGameStarting(matchStart) {
         this._broadcast({
             type: 'game_starting',
             countdown: 3,
-            matchStart: true,
+            matchStart,
             settings: this.settings,
             players: this.players.map(p => ({
                 slot: p.slot - 1,
@@ -262,11 +419,19 @@ export class GameRoom {
             })),
         });
 
-        setTimeout(() => this._startPlaying(), COUNTDOWN_MS);
+    }
+
+    _scheduleStartPlaying() {
+        if (this.countdownTimeout) clearTimeout(this.countdownTimeout);
+        this.countdownTimeout = setTimeout(() => {
+            this.countdownTimeout = null;
+            this._startPlaying();
+        }, COUNTDOWN_MS);
     }
 
     _startPlaying() {
         if (this.state !== 'COUNTDOWN') return;
+        if (this._hasDisconnectedPlayers()) return;
         this.state = 'PLAYING';
         this._startLoops();
         this._broadcast({ type: 'game_started' });
@@ -314,6 +479,10 @@ export class GameRoom {
 
     _tick(delta) {
         if (this.state !== 'PLAYING') return;
+        if (this._hasDisconnectedPlayers()) {
+            this._stopLoops();
+            return;
+        }
 
         this.tick += 1;
 
@@ -367,7 +536,8 @@ export class GameRoom {
 
         this._stopLoops();
 
-        setTimeout(() => {
+        this.roundTransitionTimeout = setTimeout(() => {
+            this.roundTransitionTimeout = null;
             if (matchOver) {
                 this._endMatch();
             } else {
@@ -379,24 +549,13 @@ export class GameRoom {
     _startNextRound() {
         if (this.state !== 'ROUND_OVER') return;
         if (this.players.length < 2) return;
+        if (this._hasDisconnectedPlayers()) return;
 
         this._resetRound();
 
         this.state = 'COUNTDOWN';
-        this._broadcast({
-            type: 'game_starting',
-            countdown: 3,
-            matchStart: false,
-            settings: this.settings,
-            players: this.players.map(p => ({
-                slot: p.slot - 1,
-                name: p.name,
-                color: p.color,
-                hat: p.hat,
-            })),
-        });
-
-        setTimeout(() => this._startPlaying(), COUNTDOWN_MS);
+        this._broadcastGameStarting(false);
+        this._scheduleStartPlaying();
     }
 
     _endMatch() {
@@ -406,11 +565,31 @@ export class GameRoom {
 
         for (const playerInfo of this.players) {
             playerInfo.ready = false;
+            playerInfo.forcedReady = false;
         }
+
+        this.settingsBaseline = { ...this.settings };
 
         const loser = this.players.find(playerInfo => playerInfo.slot !== this.matchWinner && !playerInfo.disconnected);
         this.settingsPickerId = loser?.id || this.players.find(playerInfo => !playerInfo.disconnected)?.id || null;
         this.settingsPickerReason = 'previous_match_loser';
+
+        if (this.onMatchCompleted && this.lastRecordedMatchNumber !== this.matchNumber) {
+            this.lastRecordedMatchNumber = this.matchNumber;
+            this.onMatchCompleted({
+                matchId: `${this.id}:${this.matchNumber}:${this.matchStartedAt || Date.now()}`,
+                roomId: this.id,
+                matchNumber: this.matchNumber,
+                occurredAt: new Date().toISOString(),
+                durationMs: this.matchStartedAt ? Date.now() - this.matchStartedAt : 0,
+                winnerSlot: this.matchWinner,
+                scores: { ...this.scores },
+                players: this.players.map(player => ({
+                    slot: player.slot,
+                    name: player.name,
+                })),
+            });
+        }
 
         this._broadcast({
             type: 'match_over',
@@ -426,6 +605,7 @@ export class GameRoom {
     }
 
     _returnToLobby() {
+        this.cancelHurryUp('new_match_setup');
         this.state = 'LOBBY';
         this.roundWinner = null;
         this.roundOverAt = null;
@@ -435,6 +615,7 @@ export class GameRoom {
 
         for (const playerInfo of this.players) {
             playerInfo.ready = false;
+            playerInfo.forcedReady = false;
             playerInfo.rematchRequested = false;
         }
 
@@ -455,6 +636,7 @@ export class GameRoom {
         this._broadcast({
             type: 'game_state_update',
             tick: this.tick,
+            serverTime: Date.now(),
             state: {
                 p1Score: this.scores.p1,
                 p2Score: this.scores.p2,
@@ -477,6 +659,7 @@ export class GameRoom {
 
         this._sendTo(playerId, {
             type: 'full_state',
+            serverTime: Date.now(),
             gameState: this.state,
             settings: this.settings,
             state: {
@@ -560,13 +743,21 @@ export class GameRoom {
             settingsPickerId: this.settingsPickerId,
             settingsPickerReason: this.settingsPickerReason,
             matchNumber: this.matchNumber,
+            settingsBaseline: { ...this.settingsBaseline },
             settings: { ...this.settings },
+            hurryUp: this.hurryUp ? {
+                requestedBySlot: this.hurryUp.requestedBySlot,
+                targetSlot: this.hurryUp.targetSlot,
+                remainingMs: Math.max(0, this.hurryUp.endsAt - Date.now()),
+            } : null,
             players: this.getPlayers(),
         };
     }
 
     destroy() {
         this._stopLoops();
+        this._clearTransitionTimers();
+        this.cancelHurryUp('room_destroyed');
         for (const timeoutId of this.reconnectTimers.values()) {
             clearTimeout(timeoutId);
         }

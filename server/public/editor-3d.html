@@ -962,7 +962,9 @@
 
                     const res = await fetch(url, {
                         method,
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
                         body: JSON.stringify(level)
                     });
 
@@ -1183,9 +1185,13 @@
             updateStatus(msg, type = 'info') {
                 const status = document.getElementById('status');
                 const now = new Date().toLocaleTimeString();
-                const color = type === 'error' ? 'color: #ff0000' : type === 'success' ? 'color: #00ff00' : 'color: #00aa00';
-                status.innerHTML = `[${now}] <span style="${color}">${msg}</span><br>` + 
-                    status.innerHTML.split('<br>').slice(0, 4).join('<br>');
+                const entry = document.createElement('div');
+                entry.textContent = `[${now}] ${String(msg)}`;
+                entry.style.color = type === 'error' ? '#ff0000' : type === 'success' ? '#00ff00' : '#00aa00';
+                status.prepend(entry);
+                while (status.children.length > 5) {
+                    status.lastElementChild.remove();
+                }
             }
 
             updateLaunchStatus(active, launchReady, issues = []) {

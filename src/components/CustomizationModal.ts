@@ -136,16 +136,16 @@ export function createCustomizationModal(
           min-width: 80px;
         "
       >
-        ${hat === 'none' ? 'None' : `${getHatDefinition(hat)?.icon ?? ''} ${getHatDefinition(hat)?.label ?? hat}`}
+        ${hat === 'none'
+          ? 'None'
+          : `<img src="${getHatDefinition(hat)?.iconPath ?? '/assets/hats/prototype-placeholder.svg'}" alt="" width="38" height="38" style="display:block;margin:0 auto 4px;object-fit:contain;"> ${getHatDefinition(hat)?.label ?? hat}`}
       </button>
     `;
   });
   hatHTML += '</div>';
 
   modal.innerHTML = `
-    <h1 style="margin-top: 0; color: #00ffff; text-shadow: 0 0 15px rgba(0, 255, 255, 0.6); font-size: 32px;">
-      Customize ${playerName}
-    </h1>
+    <h1 id="customization-title" style="margin-top: 0; color: #00ffff; text-shadow: 0 0 15px rgba(0, 255, 255, 0.6); font-size: 32px;"></h1>
     
     <div id="preview-section" style="margin: 20px 0; padding: 20px; background: rgba(0, 0, 0, 0.4); border-radius: 10px; border: 2px dashed rgba(0, 255, 255, 0.3);">
       <p style="margin: 0 0 10px 0; opacity: 0.7; font-size: 14px;">Preview</p>
@@ -203,6 +203,10 @@ export function createCustomizationModal(
   `;
 
   document.body.appendChild(modal);
+  const title = modal.querySelector<HTMLElement>('#customization-title');
+  if (title) {
+    title.textContent = `Customize ${playerName}`;
+  }
 
   // Event listeners for color/pattern selection
   const appearanceSwatches = modal.querySelectorAll('.appearance-swatch');

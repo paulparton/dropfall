@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Rocket Boost">
+  <defs><linearGradient id="g" x1="12" y1="52" x2="52" y2="12"><stop stop-color="#ffcf5a"/><stop offset=".45" stop-color="#ff526c"/><stop offset="1" stop-color="#ee3dff"/></linearGradient></defs>
+  <path fill="#13071d" stroke="#ff5871" stroke-width="3" d="M32 3 57 17v30L32 61 7 47V17Z"/>
+  <path fill="url(#g)" d="M39 9c10 8 11 19 4 30L30 26C31 18 34 12 39 9Z"/>
+  <circle cx="39" cy="19" r="4" fill="#fff"/>
+  <path fill="#ffce55" d="m27 34-8 13 13-8 5 5-17 12-12-12 12-17Z"/>
+</svg>

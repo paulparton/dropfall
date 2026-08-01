@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Heavy Metal">
+  <defs><radialGradient id="g"><stop stop-color="#fff"/><stop offset=".25" stop-color="#d496ff"/><stop offset="1" stop-color="#6525bd"/></radialGradient></defs>
+  <path fill="#0d0922" stroke="#a96dff" stroke-width="3" d="M32 3 57 17v30L32 61 7 47V17Z"/>
+  <circle cx="32" cy="31" r="15" fill="url(#g)"/>
+  <path fill="none" stroke="#e6d6ff" stroke-width="3" d="M10 45h44M16 52h32"/>
+  <path fill="#fff" d="m32 50-8-10h16Z"/>
+</svg>

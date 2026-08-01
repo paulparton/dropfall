@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import type { FrameState } from './ReplayRecorder.js';
 import type { ReplayPlayer } from './ReplayPlayer.js';
+import { getHatFitTransform } from '../utils/hatFactory.js';
 
 export type CameraMode = 'gameplay' | 'close' | 'orbit' | 'topdown' | 'player1' | 'player2';
 
@@ -97,7 +98,9 @@ export class ReplayRenderer {
     if (player.hatGroup) {
       const sphereSize = player.sphereSize || 2;
       const sizeScale = player.sizeMultiplier || 1.0;
-      player.hatGroup.position.set(pos.x, pos.y + sphereSize * sizeScale, pos.z);
+      const fit = getHatFitTransform(player.hatGroup, sphereSize, sizeScale);
+      player.hatGroup.position.set(pos.x, pos.y + fit.attachmentHeight, pos.z);
+      player.hatGroup.scale.setScalar(fit.scale);
       player.hatGroup.rotation.set(0, player.hatGroup.rotation.y, 0);
     }
 

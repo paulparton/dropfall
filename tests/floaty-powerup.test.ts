@@ -14,7 +14,7 @@ describe('Floaty power-up gravity', () => {
     };
     const floaty = POWER_UP_EFFECTS.find((effect) => effect.type === 'LIGHT_TOUCH');
 
-    floaty?.apply(player as never, 4);
+    floaty?.apply(player as never);
     expect(setGravityScale).toHaveBeenCalledWith(0.5, true);
     expect(addForce).not.toHaveBeenCalled();
 

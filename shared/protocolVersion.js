@@ -1,0 +1,1 @@
+export const DROPFALL_PROTOCOL_VERSION = 1;

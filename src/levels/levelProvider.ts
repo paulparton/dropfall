@@ -1,4 +1,4 @@
-import { getLevel, loadLevels } from '../levelLoader.js';
+import { getLevel, getLocallyPublishedLevels, loadLevels } from '../levelLoader.js';
 import {
   demoLevels,
   type DemoLevel,
@@ -120,6 +120,27 @@ function toServerSummary(level: unknown): LevelSummary | null {
   };
 }
 
+function toLocalSummary(level: unknown): LevelSummary | null {
+  if (!level || typeof level !== 'object') return null;
+  const candidate = level as Record<string, unknown>;
+  if (candidate.active !== true || candidate.mode === 'race' || typeof candidate.id !== 'string') return null;
+  const tiles = Array.isArray(candidate.tiles) ? candidate.tiles as LevelTile[] : [];
+  const validation = validateLevelForLaunch(candidate);
+  return {
+    id: candidate.id,
+    name: typeof candidate.name === 'string' ? candidate.name : candidate.id,
+    description: typeof candidate.description === 'string' ? candidate.description : '',
+    difficulty: typeof candidate.difficulty === 'string' ? candidate.difficulty : 'normal',
+    mode: 'battle',
+    tileCount: tiles.length,
+    isDemo: false,
+    tiles,
+    launchReady: validation.launchReady,
+    validationIssues: validation.issues,
+    validationWarnings: validation.warnings,
+  };
+}
+
 export async function getAllLevels(): Promise<LevelSummary[]> {
   const allLevels: LevelSummary[] = [
     DEFAULT_LEVEL_SUMMARY,
@@ -128,8 +149,16 @@ export async function getAllLevels(): Promise<LevelSummary[]> {
 
   const seenIds = new Set(allLevels.map((level) => level.id));
 
+  const locallyPublishedLevels = getLocallyPublishedLevels() as unknown[];
+  for (const level of locallyPublishedLevels) {
+    const summary = toLocalSummary(level);
+    if (!summary || seenIds.has(summary.id)) continue;
+    seenIds.add(summary.id);
+    allLevels.push(summary);
+  }
+
   try {
-    const serverLevels = await loadLevels();
+    const serverLevels: unknown = await loadLevels();
     const levelList = Array.isArray(serverLevels) ? serverLevels : [];
 
     for (const level of levelList) {
@@ -158,7 +187,17 @@ export async function getLevelById(id: string): Promise<LevelData | null> {
     return validateLevelForLaunch(demoLevel).launchReady ? demoLevel : null;
   }
 
-  const serverLevel = await getLevel(id);
+  const locallyPublishedLevels = getLocallyPublishedLevels() as unknown[];
+  const localLevel = locallyPublishedLevels.find(level => (
+    level !== null
+    && typeof level === 'object'
+    && (level as Record<string, unknown>).id === id
+  ));
+  if (localLevel) {
+    return localLevel as LevelData;
+  }
+
+  const serverLevel: unknown = await getLevel(id);
   if (!serverLevel || typeof serverLevel !== 'object') {
     return serverLevel as LevelData | null;
   }

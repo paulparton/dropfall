@@ -1,10 +1,24 @@
 import { useGameStore } from './store.js';
+import { DROPFALL_PROTOCOL_VERSION } from '../shared/protocolVersion.js';
+import { NetworkStateBuffer } from './network/NetworkStateBuffer.js';
 
 function normalizeServerSlot(slot) {
     if (slot === 0 || slot === 1) {
         return slot + 1;
     }
     return slot;
+}
+
+function withClientHurryDeadline(game) {
+    if (!game || !game.hurryUp) return game;
+    const remainingMs = Math.max(0, Number(game.hurryUp.remainingMs || game.hurryUp.durationMs || 0));
+    return {
+        ...game,
+        hurryUp: {
+            ...game.hurryUp,
+            clientEndsAt: Date.now() + remainingMs,
+        },
+    };
 }
 
 class OnlineManager {
@@ -21,17 +35,18 @@ class OnlineManager {
         this.cleanDisconnect = false;
         this.isReconnecting = false;
         this.pendingRejoinGameId = null;
+        this.reconnectToken = null;
         this.lastServerUrl = '';
-        this.lastStateSentAt = 0;
+        this.lastInputSentAt = 0;
+        this.lastInputSignature = '';
         this.connectResolver = null;
 
         // Prediction / reconciliation state
         this.localTick = 0;
         this.serverTick = 0;
         this.inputHistory = [];
-        this.stateBuffer = [];
+        this.stateBuffer = new NetworkStateBuffer();
         this.maxInputHistory = 120;
-        this.maxStateBuffer = 30;
     }
 
     static getDefaultServerUrl() {
@@ -119,19 +134,14 @@ class OnlineManager {
             useGameStore.getState().setOnlineConnected(false);
 
             const state = useGameStore.getState();
-            const inActiveMatch = state.gameMode === 'ONLINE' && (state.gameState === 'PLAYING' || state.gameState === 'COUNTDOWN');
-            const canReconnect = !this.cleanDisconnect && inActiveMatch && !this.isReconnecting;
+            const hasRejoinableRoom = state.gameMode === 'ONLINE' && Boolean(state.online?.currentGame?.id);
+            const canReconnect = !this.cleanDisconnect &&
+                hasRejoinableRoom &&
+                Boolean(this.reconnectToken) &&
+                !this.isReconnecting;
 
             if (canReconnect) {
                 const currentGameId = state.online?.currentGame?.id || null;
-                if (currentGameId) {
-                    try {
-                        sessionStorage.setItem('dropfall_rejoin_game_id', currentGameId);
-                    } catch (storageError) {
-                        console.warn('[Online] Failed to persist rejoin game ID:', storageError);
-                    }
-                }
-
                 this.resolveConnectAttempt(false);
                 this.attemptReconnection(currentGameId);
                 return;
@@ -186,7 +196,12 @@ class OnlineManager {
     async attemptReconnection(gameId) {
         this.isReconnecting = true;
         this.emit('reconnecting');
-        const rejoinGameId = gameId || sessionStorage.getItem('dropfall_rejoin_game_id');
+        const rejoinGameId = gameId;
+        if (!rejoinGameId || !this.reconnectToken) {
+            this.isReconnecting = false;
+            this.emit('error', 'This match can no longer be rejoined.');
+            return;
+        }
 
         for (let attempt = 1; attempt <= this.maxReconnectAttempts; attempt += 1) {
             if (this.cleanDisconnect) {
@@ -218,6 +233,7 @@ class OnlineManager {
 
         this.isReconnecting = false;
         this.pendingRejoinGameId = null;
+        this.reconnectToken = null;
         const state = useGameStore.getState();
         state.resetOnlineState();
         state.enterOnlineLobby?.();
@@ -228,15 +244,11 @@ class OnlineManager {
         this.cleanDisconnect = true;
         this.isReconnecting = false;
         this.pendingRejoinGameId = null;
+        this.reconnectToken = null;
         this.stopPing();
         if (this.ws) {
             this.ws.close();
             this.ws = null;
-        }
-        try {
-            sessionStorage.removeItem('dropfall_rejoin_game_id');
-        } catch (storageError) {
-            console.warn('[Online] Failed to clear rejoin game ID:', storageError);
         }
         useGameStore.getState().resetOnlineState();
     }
@@ -255,6 +267,15 @@ class OnlineManager {
 
         switch (msg.type) {
             case 'connected':
+                if (msg.protocolVersion !== DROPFALL_PROTOCOL_VERSION) {
+                    this.cleanDisconnect = true;
+                    this.ws?.close(1002, 'Protocol mismatch');
+                    this.emit(
+                        'error',
+                        `Server protocol ${String(msg.protocolVersion)} is not compatible with this build.`,
+                    );
+                    break;
+                }
                 state.setOnlinePlayerId(msg.playerId);
                 console.log(`[Online] Assigned ID: ${msg.playerId}`);
                 break;
@@ -274,7 +295,8 @@ class OnlineManager {
                 break;
 
             case 'game_created':
-                state.setOnlineCurrentGame(msg.game);
+                this.reconnectToken = msg.reconnectToken || null;
+                state.setOnlineCurrentGame(withClientHurryDeadline(msg.game));
                 state.setOnlineHost(true);
                 state.setOnlinePlayerSlot(1);
                 state.enterOnlineLobby();
@@ -282,7 +304,8 @@ class OnlineManager {
                 break;
 
             case 'game_joined':
-                state.setOnlineCurrentGame(msg.game);
+                this.reconnectToken = msg.reconnectToken || null;
+                state.setOnlineCurrentGame(withClientHurryDeadline(msg.game));
                 state.setOnlineHost(false);
                 const joinedGame = msg.game || {};
                 const joinedSlot = joinedGame.players && joinedGame.players.length > 0
@@ -324,6 +347,7 @@ class OnlineManager {
                 break;
 
             case 'left_game':
+                this.reconnectToken = null;
                 state.clearOnlineRoom?.();
                 state.enterOnlineLobby();
                 this.emit('leftGame');
@@ -376,11 +400,11 @@ class OnlineManager {
                 break;
 
             case 'settings_picker_changed':
-                state.setOnlineCurrentGame(msg.game || {
+                state.setOnlineCurrentGame(withClientHurryDeadline(msg.game || {
                     ...(state.online.currentGame || {}),
                     settingsPickerId: msg.pickerId || null,
                     settingsPickerReason: msg.reason || 'initial_random',
-                });
+                }));
                 this.emit('settingsPickerChanged', {
                     pickerId: msg.pickerId || null,
                     reason: msg.reason || 'initial_random',
@@ -388,10 +412,10 @@ class OnlineManager {
                 break;
 
             case 'game_settings_updated':
-                state.setOnlineCurrentGame(msg.game || {
+                state.setOnlineCurrentGame(withClientHurryDeadline(msg.game || {
                     ...(state.online.currentGame || {}),
                     settings: msg.settings || {},
-                });
+                }));
                 state.setOnlineReady?.(false);
                 state.setOnlineOpponentReady?.(false);
                 state.setOnlineAllReady?.(false);
@@ -399,9 +423,10 @@ class OnlineManager {
                 break;
 
             case 'rejoin_success': {
+                this.reconnectToken = msg.reconnectToken || null;
                 const rejoinedGame = msg.game || {};
                 const slot = normalizeServerSlot(msg.slot);
-                state.setOnlineCurrentGame(rejoinedGame);
+                state.setOnlineCurrentGame(withClientHurryDeadline(rejoinedGame));
                 state.setOnlinePlayerSlot(slot);
                 state.setOnlineHost(rejoinedGame.hostId === state.online.playerId);
                 state.setOpponentDisconnected?.(false);
@@ -459,12 +484,10 @@ class OnlineManager {
                     this.serverTick = msg.tick;
                     this.stateBuffer.push({
                         tick: msg.tick,
-                        receivedAt: performance.now(),
+                        serverTime: msg.serverTime,
+                        receivedAt: Date.now(),
                         state: msg.state,
                     });
-                    if (this.stateBuffer.length > this.maxStateBuffer) {
-                        this.stateBuffer.shift();
-                    }
                 }
                 this.emit('gameUpdate', msg);
                 break;
@@ -559,6 +582,43 @@ class OnlineManager {
                 state.setOpponentDisconnected?.(false);
                 break;
 
+            case 'game_resumed':
+                state.setOpponentDisconnected?.(false);
+                this.emit('gameResumed');
+                break;
+
+            case 'match_abandoned':
+                if (msg.game) state.setOnlineCurrentGame(withClientHurryDeadline(msg.game));
+                state.setOnlineOpponentConnected?.(false);
+                state.setOnlineReady?.(false);
+                state.setOnlineOpponentReady?.(false);
+                state.setOnlineAllReady?.(false);
+                state.setOpponentDisconnected?.(false);
+                state.setGameState?.('ONLINE_SETUP');
+                this.emit('matchAbandoned', msg.game || null);
+                break;
+
+            case 'hurry_up_started':
+                state.setOnlineCurrentGame({
+                    ...(state.online.currentGame || {}),
+                    hurryUp: {
+                        requestedBySlot: normalizeServerSlot(msg.requestedBySlot),
+                        targetSlot: normalizeServerSlot(msg.targetSlot),
+                        durationMs: Number(msg.durationMs || 10000),
+                        clientEndsAt: Date.now() + Number(msg.durationMs || 10000),
+                    },
+                });
+                this.emit('hurryUpStarted', msg);
+                break;
+
+            case 'hurry_up_finished':
+            case 'hurry_up_cancelled':
+                if (state.online.currentGame) {
+                    state.setOnlineCurrentGame({ ...state.online.currentGame, hurryUp: null });
+                }
+                this.emit(msg.type === 'hurry_up_finished' ? 'hurryUpFinished' : 'hurryUpCancelled', msg);
+                break;
+
             case 'rematch_requested': {
                 const gameSlot = normalizeServerSlot(msg.slot);
                 const isOpponent = mySlot != null && gameSlot !== mySlot;
@@ -569,7 +629,7 @@ class OnlineManager {
             }
 
             case 'rematch_start':
-                if (msg.game) state.setOnlineCurrentGame(msg.game);
+                if (msg.game) state.setOnlineCurrentGame(withClientHurryDeadline(msg.game));
                 state.setOnlineReady?.(false);
                 state.setOnlineOpponentReady?.(false);
                 state.setOnlineAllReady?.(false);
@@ -598,7 +658,11 @@ class OnlineManager {
     }
 
     setName(name) {
-        this.send({ type: 'set_name', name });
+        this.send({
+            type: 'set_name',
+            name,
+            protocolVersion: DROPFALL_PROTOCOL_VERSION,
+        });
         useGameStore.getState().setOnlineName(name);
     }
 
@@ -682,10 +746,31 @@ class OnlineManager {
             this.inputHistory.shift();
         }
         this.send(normalizedInput);
+        this.localTick += 1;
+        this.lastInputSentAt = performance.now();
+        this.lastInputSignature = `${forward}:${right}:${normalizedInput.boost ? 1 : 0}`;
     }
 
-    sendGameState(state) {
-        this.send({ type: 'game_state', state });
+    shouldSendInput(input, now = performance.now()) {
+        const forward = input.forward ? 1 : (input.backward ? -1 : 0);
+        const right = input.right ? 1 : (input.left ? -1 : 0);
+        const signature = `${forward}:${right}:${input.boost ? 1 : 0}`;
+        const inputChanged = signature !== this.lastInputSignature;
+        const elapsed = now - this.lastInputSentAt;
+        return (inputChanged && elapsed >= 12) || elapsed >= 50;
+    }
+
+    sampleServerState(now = Date.now()) {
+        return this.stateBuffer.sample(now);
+    }
+
+    resetSimulationState() {
+        this.localTick = 0;
+        this.serverTick = 0;
+        this.inputHistory = [];
+        this.stateBuffer.clear();
+        this.lastInputSentAt = 0;
+        this.lastInputSignature = '';
     }
 
     sendCustomization(color, hat, name) {
@@ -697,14 +782,22 @@ class OnlineManager {
         this.send({ type: 'player_ready', ready });
     }
 
+    requestHurryUp() {
+        this.send({ type: 'hurry_up_request' });
+    }
+
     sendRematchRequest() {
         useGameStore.getState().setRematchRequested?.(true);
         this.send({ type: 'rematch_request' });
     }
 
     sendRejoinGame(gameId) {
-        if (!gameId) return;
-        this.send({ type: 'rejoin_game', gameId });
+        if (!gameId || !this.reconnectToken) return;
+        this.send({
+            type: 'rejoin_game',
+            gameId,
+            reconnectToken: this.reconnectToken,
+        });
     }
 
     sendRoundOver(winner, scores) {
@@ -713,14 +806,6 @@ class OnlineManager {
 
     requestSync() {
         this.send({ type: 'sync_state', requestFullState: true });
-    }
-
-    shouldSendStateUpdate() {
-        return Date.now() - this.lastStateSentAt >= 50;
-    }
-
-    markStateSent() {
-        this.lastStateSentAt = Date.now();
     }
 
     startPing() {
