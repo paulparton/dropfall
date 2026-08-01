@@ -15,6 +15,7 @@ import { createLevelEditor } from './components/LevelEditor.js';
 import { createHatGallery } from './components/HatGallery.js';
 import { getLevelById } from './levels/levelProvider.js';
 import { hexToPixel } from './utils/math.js';
+import { getOnlineSpawnPosition } from '../shared/spawnPositions.js';
 import { getHatDefinition, HAT_VALUES } from './utils/hatCatalog.js';
 import {
     MATCH_PRESETS,
@@ -543,7 +544,13 @@ let roundOverLogFrames = 0;
 let onlineSetupPanelTeardown = null;
 let opponentDisconnectOverlayEl = null;
 let isGamePaused = false;
-let lastOnlineReconciliationAt = 0;
+// Newest authoritative snapshot for the locally predicted player. Reconciliation
+// runs every frame from this, not on packet arrival, so corrections are spread
+// smoothly instead of arriving in 20-30Hz jolts.
+let onlineLocalCorrection = null;
+// Presentation state for the remote (kinematic) player: a smoothed position and
+// an accumulated roll so the opponent's ball rolls instead of sliding.
+let onlineRemoteRender = null;
 
 const HEX_GRID_SPACING = 8.0;
 const TILE_HEIGHT = 4.0;
@@ -913,6 +920,45 @@ function getRemotePlayer(state) {
     return null;
 }
 
+// Matches the gravity configured in PhysicsSystem and the server world.
+const ONLINE_GRAVITY_Y = -20;
+// Never project a snapshot further than this, however bad the connection is.
+const MAX_PREDICTION_LEAD_MS = 300;
+
+/**
+ * Projects an authoritative snapshot forward to "now" on the local clock.
+ *
+ * The local player is simulated ahead of the server by roughly one-way latency
+ * plus the age of the snapshot. Reconciling against the raw snapshot therefore
+ * drags the ball backwards every packet, which is what makes online play feel
+ * heavy and rubbery. Comparing against the projected state instead leaves the
+ * steady-state error near zero, so corrections only fire on real divergence.
+ */
+function projectServerState(serverPos, serverVel, leadMs) {
+    const t = Math.max(0, Math.min(MAX_PREDICTION_LEAD_MS, leadMs)) / 1000;
+    if (t <= 0) return { pos: { ...serverPos }, vel: { ...serverVel } };
+
+    // Horizontal motion is close to ballistic between snapshots. Vertical
+    // motion only gets the gravity term while genuinely falling: on the ground
+    // the server holds y steady and projecting it would push the ball into the
+    // floor, producing a phantom upward correction.
+    const falling = serverVel.y < -2;
+    return {
+        pos: {
+            x: serverPos.x + serverVel.x * t,
+            y: falling
+                ? serverPos.y + serverVel.y * t + 0.5 * ONLINE_GRAVITY_Y * t * t
+                : serverPos.y,
+            z: serverPos.z + serverVel.z * t,
+        },
+        vel: {
+            x: serverVel.x,
+            y: falling ? serverVel.y + ONLINE_GRAVITY_Y * t : serverVel.y,
+            z: serverVel.z,
+        },
+    };
+}
+
 function reconcileLocalPlayer(player, serverPos, serverVel, delta) {
     if (!player?.rigidBody) return;
     const current = player.rigidBody.translation();
@@ -943,7 +989,7 @@ function reconcileLocalPlayer(player, serverPos, serverVel, delta) {
     }
 
     // Small prediction errors are visually harmless. Correct them through
-    // velocity over several snapshots instead of moving the rendered ball.
+    // velocity over several frames instead of moving the rendered ball.
     const correctionSpeed = errorDist < 0.08 ? 0 : 2.25;
     const maxCorrectionSpeed = 5;
     const correctionScale = errorDist > 0
@@ -965,7 +1011,23 @@ function reconcileLocalPlayer(player, serverPos, serverVel, delta) {
     player.rigidBody.setLinvel(nextVel, true);
 }
 
-function applyOnlineClientRemoteInterpolation(state) {
+function updateOnlineLocalReconciliation(state, delta) {
+    const correction = onlineLocalCorrection;
+    if (!correction) return;
+    const localPlayer = getLocalPlayer(state);
+    if (!localPlayer?.rigidBody || localPlayer.isDead) return;
+
+    const ageMs = Date.now() - correction.receivedAt;
+    // Snapshots that stop arriving mean the server is paused or we are
+    // disconnected. Coasting on prediction beats correcting toward stale truth.
+    if (ageMs > 1000) return;
+
+    const leadMs = ageMs + online.getLatencyMs();
+    const projected = projectServerState(correction.pos, correction.vel, leadMs);
+    reconcileLocalPlayer(localPlayer, projected.pos, projected.vel, delta);
+}
+
+function applyOnlineClientRemoteInterpolation(state, delta) {
     const remotePlayer = getRemotePlayer(state);
     if (!remotePlayer?.rigidBody) return;
     const sample = online.sampleServerState();
@@ -975,7 +1037,50 @@ function applyOnlineClientRemoteInterpolation(state) {
         ? sampledState.p2Pos
         : sampledState.p1Pos;
     if (!remotePosition) return;
-    remotePlayer.rigidBody.setNextKinematicTranslation(remotePosition);
+
+    if (!onlineRemoteRender) {
+        onlineRemoteRender = {
+            position: { ...remotePosition },
+            rotation: new THREE.Quaternion(),
+        };
+    }
+
+    const render = onlineRemoteRender;
+    const previousX = render.position.x;
+    const previousZ = render.position.z;
+    const dx = remotePosition.x - render.position.x;
+    const dy = remotePosition.y - render.position.y;
+    const dz = remotePosition.z - render.position.z;
+    const gap = Math.sqrt(dx * dx + dy * dy + dz * dz);
+
+    if (gap > 6) {
+        // Round reset, respawn or a recovered stall: following would smear the
+        // ball across the arena, so take the new position outright.
+        render.position = { ...remotePosition };
+    } else {
+        // Close the remaining gap on a time constant rather than snapping, so
+        // a late packet or a mode switch in the snapshot buffer never shows up
+        // as a visible step.
+        const blend = 1 - Math.exp(-Math.max(0, delta) * 18);
+        render.position.x += dx * blend;
+        render.position.y += dy * blend;
+        render.position.z += dz * blend;
+    }
+
+    // Kinematic bodies never spin on their own, so derive the roll a real ball
+    // would have from the distance travelled this frame.
+    const movedX = render.position.x - previousX;
+    const movedZ = render.position.z - previousZ;
+    const travelled = Math.hypot(movedX, movedZ);
+    const radius = Math.max(0.5, remotePlayer.sphereSize || 2);
+    if (travelled > 1e-4) {
+        const axis = new THREE.Vector3(movedZ, 0, -movedX).normalize();
+        const spin = new THREE.Quaternion().setFromAxisAngle(axis, travelled / radius);
+        render.rotation.premultiply(spin).normalize();
+    }
+
+    remotePlayer.rigidBody.setNextKinematicTranslation(render.position);
+    remotePlayer.rigidBody.setNextKinematicRotation(render.rotation);
 }
 
 function enterOnlineSetupState({ resetSetup = true } = {}) {
@@ -1346,7 +1451,10 @@ function resetOnlineEntities() {
     // Stage-specific sphere skins are an offline opt-in and must not replace
     // those colors after the match starts.
     useGameStore.setState({ p1UseStageSkin: false, p2UseStageSkin: false });
-    lastOnlineReconciliationAt = 0;
+    // Entities are rebuilt at spawn positions, so every piece of carried-over
+    // network presentation state now refers to a world that no longer exists.
+    onlineLocalCorrection = null;
+    onlineRemoteRender = null;
     const mySlot = state.online?.playerSlot;
 
     // Read customization from the latest store snapshot right before creating entities.
@@ -1386,9 +1494,12 @@ function resetOnlineEntities() {
     shockwaves = new ShockwaveSystem();
 
     const latestState = useGameStore.getState();
-    const sphereRadius = latestState.settings?.sphereSize ?? 2;
-    const [hostPos, clientPos] = getPlayerSpawnPositions(arena, sphereRadius);
-    
+    // Online spawns come from the shared rule, not from picking local tiles.
+    // The server places its bodies with the same formula, so the first snapshot
+    // of the round confirms the prediction instead of correcting it.
+    const hostPos = getOnlineSpawnPosition(1, latestState.settings);
+    const clientPos = getOnlineSpawnPosition(2, latestState.settings);
+
     const defaultInput = { forward: false, backward: false, left: false, right: false, boost: false };
     
     // Player input mapping: local player uses their controls, opponent uses synced input
@@ -1479,7 +1590,11 @@ function startOnlineGame(matchStart = true) {
 
     if (matchStart) {
         online.resetSimulationState();
-        lastOnlineReconciliationAt = 0;
+    } else {
+        // Every round rebuilds the world. Snapshots from the previous round
+        // would otherwise keep playing back — the opponent replaying their own
+        // death for a moment before teleporting to the new spawn.
+        online.resetRoundState();
     }
 }
 
@@ -2370,16 +2485,24 @@ function setupOnlineHandlers() {
 
     online.on('fullState', (data) => {
         console.log('[fullState] Received full state sync:', data);
-        if (data.state && player1 && player2) {
-            if (data.state.p1Pos) {
-                player1.rigidBody.setTranslation(data.state.p1Pos, true);
-                player1.rigidBody.setLinvel(data.state.p1Vel, true);
-            }
-            if (data.state.p2Pos) {
-                player2.rigidBody.setTranslation(data.state.p2Pos, true);
-                player2.rigidBody.setLinvel(data.state.p2Vel, true);
-            }
+        if (!data.state || !player1 || !player2) return;
+
+        // A full sync is an explicit "you are out of date" signal, so the local
+        // predicted player is placed outright rather than nudged.
+        const state = useGameStore.getState();
+        const localPlayer = getLocalPlayer(state);
+        const localPos = state.online?.playerSlot === 2 ? data.state.p2Pos : data.state.p1Pos;
+        const localVel = state.online?.playerSlot === 2 ? data.state.p2Vel : data.state.p1Vel;
+        if (localPlayer?.rigidBody && localPos) {
+            localPlayer.rigidBody.setTranslation(localPos, true);
+            localPlayer.rigidBody.setLinvel(localVel || { x: 0, y: 0, z: 0 }, true);
         }
+        onlineLocalCorrection = null;
+
+        // The remote player is driven entirely by the snapshot buffer. Dropping
+        // its smoothing state makes the next sample seed cleanly instead of
+        // being chased from a stale position.
+        onlineRemoteRender = null;
     });
 
     online.on('roundOver', (data) => {
@@ -2431,21 +2554,27 @@ function setupOnlineHandlers() {
             // Determine local and remote server positions.
             const localServerPos = mySlot === 1 ? data.state.p1Pos : data.state.p2Pos;
             const localServerVel = mySlot === 1 ? data.state.p1Vel : data.state.p2Vel;
-            const localPlayer = getLocalPlayer(state);
 
-            // Reconcile local predicted player against authoritative state.
-            if (localPlayer?.rigidBody && localServerPos) {
-                const now = performance.now();
-                const reconciliationDelta = lastOnlineReconciliationAt > 0
-                    ? Math.min(0.1, (now - lastOnlineReconciliationAt) / 1000)
-                    : 0.05;
-                lastOnlineReconciliationAt = now;
-                reconcileLocalPlayer(
-                    localPlayer,
-                    localServerPos,
-                    localServerVel || { x: 0, y: 0, z: 0 },
-                    reconciliationDelta,
-                );
+            // Store the authoritative state; the game loop reconciles against a
+            // time-aligned projection of it every frame.
+            if (localServerPos) {
+                onlineLocalCorrection = {
+                    pos: localServerPos,
+                    vel: localServerVel || { x: 0, y: 0, z: 0 },
+                    serverTime: data.serverTime,
+                    receivedAt: Date.now(),
+                };
+            }
+
+            // The remote player never runs its own boost logic locally, so its
+            // meter would otherwise sit frozen for the whole match. The local
+            // meter stays predicted, to keep it responsive.
+            const remoteBoost = mySlot === 1 ? data.state.p2Boost : data.state.p1Boost;
+            if (Number.isFinite(remoteBoost)) {
+                const remoteBoostKey = mySlot === 1 ? 'player2Boost' : 'player1Boost';
+                useGameStore.setState({
+                    [remoteBoostKey]: Math.max(0, Math.min(100, remoteBoost)),
+                });
             }
 
             // Sync tile states from authoritative server.
@@ -2529,7 +2658,8 @@ function animate(_timestamp, _frame) {
         collisionCooldown = Math.max(0, collisionCooldown - delta);
         const isOnlineMatch = state.gameMode === 'ONLINE';
         if (isOnlineMatch) {
-            applyOnlineClientRemoteInterpolation(state);
+            applyOnlineClientRemoteInterpolation(state, delta);
+            updateOnlineLocalReconciliation(state, delta);
         }
 
         // Always update player visuals (mesh sync, tile interactions, power-ups)

@@ -5,7 +5,13 @@ import { MATCH_DEFAULTS, validateMatchSettings } from '../../shared/matchSetting
 import { BATTLE_RULES } from '../../shared/gameRules.js';
 
 const TICK_RATE = 60;
-const BROADCAST_RATE = 20;
+const TICK_DELTA = 1 / TICK_RATE;
+// Ticks are driven by real elapsed time, so a late timer is caught up rather
+// than lost. Capped so a stalled process cannot spiral into a huge catch-up.
+const MAX_CATCHUP_TICKS = 5;
+// Snapshots per second. Higher rate means the client can interpolate on a
+// shorter buffer, which is latency the player feels directly.
+const BROADCAST_RATE = 30;
 const RECONNECT_GRACE_MS = BATTLE_RULES.reconnectGraceMs;
 const ROUND_OVER_DELAY_MS = BATTLE_RULES.roundOverDelayMs;
 const COUNTDOWN_MS = BATTLE_RULES.countdownSeconds * 1000;
@@ -41,6 +47,8 @@ export class GameRoom {
 
         this.tickInterval = null;
         this.broadcastInterval = null;
+        this.simulationClock = 0;
+        this.tickAccumulator = 0;
         this.countdownTimeout = null;
         this.roundTransitionTimeout = null;
         this.hurryUpTimeout = null;
@@ -461,9 +469,32 @@ export class GameRoom {
     _startLoops() {
         this._stopLoops();
 
-        const tickDelta = 1 / TICK_RATE;
-        this.tickInterval = setInterval(() => this._tick(tickDelta), 1000 / TICK_RATE);
+        // Node timers fire late under load, and every room in the process
+        // shares one event loop. Stepping a fixed delta per timer callback
+        // would make simulated time run slower than wall-clock time, so client
+        // prediction would drift ahead of the server continuously and get
+        // yanked back on every snapshot. Accumulate real elapsed time instead.
+        this.simulationClock = Date.now();
+        this.tickAccumulator = 0;
+        this.tickInterval = setInterval(() => this._advanceSimulation(), 1000 / TICK_RATE);
         this.broadcastInterval = setInterval(() => this._broadcastState(), 1000 / BROADCAST_RATE);
+    }
+
+    _advanceSimulation(now = Date.now()) {
+        const elapsedMs = Math.max(0, now - this.simulationClock);
+        this.simulationClock = now;
+        this.tickAccumulator += elapsedMs / 1000;
+
+        const maxAccumulated = MAX_CATCHUP_TICKS * TICK_DELTA;
+        if (this.tickAccumulator > maxAccumulated) {
+            this.tickAccumulator = maxAccumulated;
+        }
+
+        while (this.tickAccumulator >= TICK_DELTA) {
+            this.tickAccumulator -= TICK_DELTA;
+            this._tick(TICK_DELTA);
+            if (this.state !== 'PLAYING') break;
+        }
     }
 
     _stopLoops() {
@@ -475,6 +506,7 @@ export class GameRoom {
             clearInterval(this.broadcastInterval);
             this.broadcastInterval = null;
         }
+        this.tickAccumulator = 0;
     }
 
     _tick(delta) {
@@ -633,6 +665,9 @@ export class GameRoom {
             .filter(p => p.player)
             .map(p => p.player.serialize());
 
+        const p1 = playerStates.find(p => p.slot === 1);
+        const p2 = playerStates.find(p => p.slot === 2);
+
         this._broadcast({
             type: 'game_state_update',
             tick: this.tick,
@@ -640,10 +675,12 @@ export class GameRoom {
             state: {
                 p1Score: this.scores.p1,
                 p2Score: this.scores.p2,
-                p1Pos: playerStates.find(p => p.slot === 1)?.position,
-                p1Vel: playerStates.find(p => p.slot === 1)?.velocity,
-                p2Pos: playerStates.find(p => p.slot === 2)?.position,
-                p2Vel: playerStates.find(p => p.slot === 2)?.velocity,
+                p1Pos: p1?.position,
+                p1Vel: p1?.velocity,
+                p1Boost: p1?.boost,
+                p2Pos: p2?.position,
+                p2Vel: p2?.velocity,
+                p2Boost: p2?.boost,
                 tileStates: this.arena ? this.arena.serializeTiles() : [],
             },
         });

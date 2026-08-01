@@ -1,7 +1,6 @@
 import { createSphere, RAPIER } from './PhysicsWorld.js';
 import { getPowerUpDefinition } from '../../shared/powerUps.js';
-
-const START_OFFSET = 12;
+import { getOnlineSpawnPosition } from '../../shared/spawnPositions.js';
 
 export class ServerPlayer {
     constructor(world, slot, settings) {
@@ -28,8 +27,7 @@ export class ServerPlayer {
     }
 
     _getStartPosition(slot) {
-        const x = slot === 1 ? -START_OFFSET : START_OFFSET;
-        return { x, y: 6, z: 0 };
+        return getOnlineSpawnPosition(slot, this.settings);
     }
 
     _createBody() {

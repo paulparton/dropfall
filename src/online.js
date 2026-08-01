@@ -47,6 +47,11 @@ class OnlineManager {
         this.inputHistory = [];
         this.stateBuffer = new NetworkStateBuffer();
         this.maxInputHistory = 120;
+
+        // Round-trip time estimate. The reconciler needs to know how far ahead
+        // of the newest snapshot the local simulation is allowed to be.
+        this.rttMs = null;
+        this.rttSamples = [];
     }
 
     static getDefaultServerUrl() {
@@ -282,6 +287,10 @@ class OnlineManager {
 
             case 'name_set':
                 console.log(`[Online] Name set to: ${msg.name}`);
+                break;
+
+            case 'pong':
+                this.recordPong(msg.timestamp);
                 break;
 
             case 'error':
@@ -764,13 +773,57 @@ class OnlineManager {
         return this.stateBuffer.sample(now);
     }
 
-    resetSimulationState() {
+    recordPong(timestamp, now = Date.now()) {
+        if (!Number.isFinite(timestamp)) return;
+        const rtt = now - timestamp;
+        if (rtt < 0 || rtt > 5000) return;
+
+        this.rttSamples.push({ at: now, rtt });
+        while (this.rttSamples.length > 1 && now - this.rttSamples[0].at > 10000) {
+            this.rttSamples.shift();
+        }
+
+        // The fastest recent round trip is the cleanest read on the link; the
+        // slow ones are queueing, which the snapshot buffer already absorbs.
+        let windowMin = Infinity;
+        for (const sample of this.rttSamples) {
+            if (sample.rtt < windowMin) windowMin = sample.rtt;
+        }
+        this.rttMs = this.rttMs == null ? windowMin : this.rttMs + (windowMin - this.rttMs) * 0.25;
+    }
+
+    /** Estimated one-way latency in ms, used to time-align reconciliation. */
+    getLatencyMs() {
+        if (this.rttMs == null) return 40;
+        return Math.max(0, Math.min(250, this.rttMs / 2));
+    }
+
+    getNetworkStats() {
+        return {
+            rttMs: this.rttMs,
+            latencyMs: this.getLatencyMs(),
+            ...this.stateBuffer.getStats(),
+        };
+    }
+
+    /**
+     * Clears buffered world state between rounds. The connection has not
+     * changed, so latency and clock estimates are kept.
+     */
+    resetRoundState() {
         this.localTick = 0;
         this.serverTick = 0;
         this.inputHistory = [];
-        this.stateBuffer.clear();
+        this.stateBuffer.clearSnapshots();
         this.lastInputSentAt = 0;
         this.lastInputSignature = '';
+    }
+
+    resetSimulationState() {
+        this.resetRoundState();
+        this.stateBuffer.clear();
+        this.rttMs = null;
+        this.rttSamples = [];
     }
 
     sendCustomization(color, hat, name) {
@@ -810,11 +863,14 @@ class OnlineManager {
 
     startPing() {
         this.stopPing();
+        // Sampled often enough that the latency estimate tracks the link during
+        // a match, not just often enough to keep the socket alive.
         this.pingInterval = setInterval(() => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.send({ type: 'ping', timestamp: Date.now() });
             }
-        }, 5000);
+        }, 1000);
+        this.send({ type: 'ping', timestamp: Date.now() });
     }
 
     stopPing() {

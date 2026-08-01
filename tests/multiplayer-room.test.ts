@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GameRoom } from '../server/game/GameRoom.js';
+import { getOnlineSpawnPosition } from '../shared/spawnPositions.js';
 
 function createRoom(randomValue = 0) {
   const room = new GameRoom('room-test', 'host-id', 'Host', {
@@ -196,5 +197,82 @@ describe('multiplayer room settings', () => {
     expect(room.hostId).toBe('guest-id');
     expect(room.hostName).toBe('Guest');
     expect(room.settingsPickerId).toBeNull();
+  });
+});
+
+describe('simulation pacing', () => {
+  function playingRoom() {
+    const room = createRoom();
+    room.state = 'PLAYING';
+    room.simulationClock = 10_000;
+    room.tickAccumulator = 0;
+    const ticks = vi.fn();
+    room._tick = ticks;
+    return { room, ticks };
+  }
+
+  it('catches up ticks lost to a late timer instead of dropping simulated time', () => {
+    const { room, ticks } = playingRoom();
+
+    // Timer fires 50ms late: three 60Hz steps of real time have elapsed.
+    room._advanceSimulation(10_050);
+
+    expect(ticks).toHaveBeenCalledTimes(3);
+    expect(ticks).toHaveBeenCalledWith(1 / 60);
+    room.destroy();
+  });
+
+  it('keeps simulated time aligned with wall-clock time across uneven timers', () => {
+    const { room, ticks } = playingRoom();
+
+    let now = 10_000;
+    for (const gap of [16, 21, 12, 18, 15, 19, 14, 17, 16, 18, 20, 14]) {
+      now += gap;
+      room._advanceSimulation(now);
+    }
+
+    const elapsedSeconds = (now - 10_000) / 1000;
+    const simulatedSeconds = ticks.mock.calls.length / 60;
+    expect(Math.abs(simulatedSeconds - elapsedSeconds)).toBeLessThan(1 / 60);
+    room.destroy();
+  });
+
+  it('does not try to replay a long stall in one frame', () => {
+    const { room, ticks } = playingRoom();
+
+    room._advanceSimulation(15_000);
+
+    expect(ticks).toHaveBeenCalledTimes(5);
+    room.destroy();
+  });
+});
+
+describe('spawn parity between client and server', () => {
+  it('places the authoritative bodies at the shared spawn positions', async () => {
+    const room = createRoom();
+    await room.initPhysics();
+    room._resetRound();
+
+    for (const playerInfo of room.players) {
+      const expected = getOnlineSpawnPosition(playerInfo.slot, room.settings);
+      const actual = playerInfo.player.body.translation();
+      expect(actual.x).toBeCloseTo(expected.x, 5);
+      expect(actual.y).toBeCloseTo(expected.y, 5);
+      expect(actual.z).toBeCloseTo(expected.z, 5);
+    }
+
+    room.destroy();
+  });
+
+  it('separates the two spawns and lifts them clear of the tile surface', () => {
+    const settings = { sphereSize: 3 };
+    const p1 = getOnlineSpawnPosition(1, settings);
+    const p2 = getOnlineSpawnPosition(2, settings);
+
+    expect(p1.x).toBeLessThan(0);
+    expect(p2.x).toBeGreaterThan(0);
+    expect(p1.y).toBe(p2.y);
+    // Tile surface (2) + radius (3) leaves the ball clear of the floor.
+    expect(p1.y).toBeGreaterThan(2 + settings.sphereSize);
   });
 });

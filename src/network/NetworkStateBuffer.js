@@ -1,6 +1,17 @@
 const POSITION_KEYS = ['p1Pos', 'p2Pos'];
 const VELOCITY_KEYS = ['p1Vel', 'p2Vel'];
 
+// Offset samples older than this stop constraining the render timeline, so a
+// single very fast packet cannot pin the estimate for the whole match.
+const OFFSET_WINDOW_MS = 5000;
+// Per-snapshot slew limit for the clock offset. At 30 snapshots/sec this
+// retimes ~24ms per second: fast enough to track real drift, slow enough that
+// the remote player never visibly jumps.
+const MAX_OFFSET_SLEW_MS = 0.8;
+// Beyond this the connection genuinely moved (route change, sleep/wake). One
+// deliberate resync beats several seconds of starved interpolation.
+const OFFSET_RESYNC_MS = 250;
+
 function isVector(value) {
     return value
         && Number.isFinite(value.x)
@@ -52,23 +63,113 @@ function extrapolateNetworkState(snapshot, milliseconds) {
 /**
  * Buffers authoritative snapshots on the server clock, then renders slightly
  * in the past. That turns irregular packet arrival into steady visual motion.
+ *
+ * The render timeline is `now - clockOffset - interpolationDelay`. Both terms
+ * move gradually: an offset that snaps shifts the whole timeline at once, which
+ * reads as the opponent teleporting.
  */
 export class NetworkStateBuffer {
+    /**
+     * @param {object} [options]
+     * @param {number} [options.interpolationDelayMs] Fixed render delay. Omit to
+     *   let the delay adapt to the measured snapshot interval and jitter.
+     * @param {number} [options.maxExtrapolationMs]
+     * @param {number} [options.maxSnapshots]
+     * @param {boolean} [options.adaptive]
+     * @param {number} [options.minDelayMs]
+     * @param {number} [options.maxDelayMs]
+     */
     constructor({
-        interpolationDelayMs = 110,
+        interpolationDelayMs,
         maxExtrapolationMs = 75,
         maxSnapshots = 60,
+        adaptive,
+        minDelayMs = 45,
+        maxDelayMs = 240,
     } = {}) {
-        this.interpolationDelayMs = interpolationDelayMs;
+        // An explicit delay is honoured verbatim; otherwise the delay tracks
+        // the measured snapshot interval and jitter of the live connection.
+        this.adaptive = adaptive ?? interpolationDelayMs === undefined;
+        this.baseDelayMs = interpolationDelayMs ?? 110;
+        this.interpolationDelayMs = this.baseDelayMs;
+        this.minDelayMs = minDelayMs;
+        this.maxDelayMs = maxDelayMs;
         this.maxExtrapolationMs = maxExtrapolationMs;
         this.maxSnapshots = maxSnapshots;
         this.snapshots = [];
         this.clockOffsetMs = null;
+        this.offsetSamples = [];
+        this.intervalMs = 50;
+        this.jitterMs = 0;
+        this.lastServerTime = null;
+        this.lastMode = null;
     }
 
     clear() {
         this.snapshots = [];
         this.clockOffsetMs = null;
+        this.offsetSamples = [];
+        this.intervalMs = 50;
+        this.jitterMs = 0;
+        this.lastServerTime = null;
+        this.lastMode = null;
+        this.interpolationDelayMs = this.baseDelayMs;
+    }
+
+    /**
+     * Drops buffered snapshots without discarding the clock/jitter estimate.
+     * Used between rounds, where the world resets but the connection does not.
+     */
+    clearSnapshots() {
+        this.snapshots = [];
+        this.lastServerTime = null;
+        this.lastMode = null;
+    }
+
+    _trackTiming(snapshot) {
+        const { serverTime, receivedAt } = snapshot;
+
+        if (this.lastServerTime != null) {
+            const serverDelta = serverTime - this.lastServerTime;
+            if (serverDelta > 0 && serverDelta < 1000) {
+                this.intervalMs += (serverDelta - this.intervalMs) * 0.1;
+            }
+        }
+        this.lastServerTime = serverTime;
+
+        const offsetSample = receivedAt - serverTime;
+        this.offsetSamples.push({ receivedAt, offset: offsetSample });
+        while (
+            this.offsetSamples.length > 1 &&
+            receivedAt - this.offsetSamples[0].receivedAt > OFFSET_WINDOW_MS
+        ) {
+            this.offsetSamples.shift();
+        }
+
+        let windowMin = Infinity;
+        for (const sample of this.offsetSamples) {
+            if (sample.offset < windowMin) windowMin = sample.offset;
+        }
+
+        // Transit-time spread above the fastest packet is the jitter we have to
+        // hide behind the interpolation delay.
+        this.jitterMs += ((offsetSample - windowMin) - this.jitterMs) * 0.1;
+
+        if (this.clockOffsetMs == null || Math.abs(windowMin - this.clockOffsetMs) > OFFSET_RESYNC_MS) {
+            this.clockOffsetMs = windowMin;
+        } else {
+            const delta = windowMin - this.clockOffsetMs;
+            this.clockOffsetMs += Math.max(-MAX_OFFSET_SLEW_MS, Math.min(MAX_OFFSET_SLEW_MS, delta));
+        }
+
+        if (!this.adaptive) return;
+
+        // Hold enough history to cover one dropped packet plus observed jitter.
+        const target = Math.max(
+            this.minDelayMs,
+            Math.min(this.maxDelayMs, this.intervalMs * 1.5 + this.jitterMs * 2.5),
+        );
+        this.interpolationDelayMs += (target - this.interpolationDelayMs) * 0.05;
     }
 
     push({ tick, serverTime, receivedAt = Date.now(), state }) {
@@ -81,19 +182,12 @@ export class NetworkStateBuffer {
             state,
         };
 
-        const offsetSample = receivedAt - normalizedServerTime;
-        if (this.clockOffsetMs == null || offsetSample < this.clockOffsetMs) {
-            this.clockOffsetMs = offsetSample;
-        } else {
-            // Follow real clock drift slowly without letting a single delayed
-            // packet move the render timeline forward.
-            this.clockOffsetMs += (offsetSample - this.clockOffsetMs) * 0.002;
-        }
+        this._trackTiming(snapshot);
 
-        const duplicateIndex = this.snapshots.findIndex(item => item.tick === tick);
+        const duplicateIndex = this.snapshots.findIndex(item => item.serverTime === normalizedServerTime);
         if (duplicateIndex >= 0) this.snapshots.splice(duplicateIndex, 1);
         this.snapshots.push(snapshot);
-        this.snapshots.sort((a, b) => a.serverTime - b.serverTime || a.tick - b.tick);
+        this.snapshots.sort((a, b) => a.serverTime - b.serverTime);
         if (this.snapshots.length > this.maxSnapshots) {
             this.snapshots.splice(0, this.snapshots.length - this.maxSnapshots);
         }
@@ -108,6 +202,7 @@ export class NetworkStateBuffer {
         const latest = this.snapshots[this.snapshots.length - 1];
 
         if (renderServerTime <= first.serverTime) {
+            this.lastMode = 'buffering';
             return { state: first.state, tick: first.tick, mode: 'buffering' };
         }
         if (this.snapshots.length === 1) {
@@ -115,6 +210,7 @@ export class NetworkStateBuffer {
                 this.maxExtrapolationMs,
                 renderServerTime - first.serverTime,
             );
+            this.lastMode = 'extrapolated';
             return {
                 state: extrapolateNetworkState(first, extrapolationMs),
                 tick: first.tick,
@@ -128,6 +224,7 @@ export class NetworkStateBuffer {
             const before = this.snapshots[index - 1];
             const duration = Math.max(1, after.serverTime - before.serverTime);
             const alpha = (renderServerTime - before.serverTime) / duration;
+            this.lastMode = 'interpolated';
             return {
                 state: interpolateNetworkState(before.state, after.state, alpha),
                 tick: before.tick + (after.tick - before.tick) * alpha,
@@ -139,10 +236,22 @@ export class NetworkStateBuffer {
             this.maxExtrapolationMs,
             Math.max(0, renderServerTime - latest.serverTime),
         );
+        this.lastMode = extrapolationMs > 0 ? 'extrapolated' : 'latest';
         return {
             state: extrapolateNetworkState(latest, extrapolationMs),
             tick: latest.tick,
-            mode: extrapolationMs > 0 ? 'extrapolated' : 'latest',
+            mode: this.lastMode,
+        };
+    }
+
+    getStats() {
+        return {
+            snapshots: this.snapshots.length,
+            interpolationDelayMs: this.interpolationDelayMs,
+            intervalMs: this.intervalMs,
+            jitterMs: this.jitterMs,
+            clockOffsetMs: this.clockOffsetMs,
+            mode: this.lastMode,
         };
     }
 }
