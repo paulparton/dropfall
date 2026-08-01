@@ -50,6 +50,11 @@ export class GameRoom {
         this.simulationClock = 0;
         this.tickAccumulator = 0;
         this.countdownTimeout = null;
+        // A countdown claims the room before physics initialization (which is
+        // asynchronous). Keeping the in-flight operation lets duplicate start
+        // requests join that transition instead of constructing two worlds.
+        this.countdownStartPromise = null;
+        this.countdownEndsAt = null;
         this.roundTransitionTimeout = null;
         this.hurryUpTimeout = null;
         this.reconnectTimers = new Map(); // slot -> timeoutId
@@ -95,6 +100,7 @@ export class GameRoom {
             clearTimeout(this.countdownTimeout);
             this.countdownTimeout = null;
         }
+        this.countdownEndsAt = null;
         if (this.roundTransitionTimeout) {
             clearTimeout(this.roundTransitionTimeout);
             this.roundTransitionTimeout = null;
@@ -125,7 +131,11 @@ export class GameRoom {
     addPlayer(id, name, ws) {
         if (this.players.length >= 2) return null;
 
-        const slot = this.players.length === 0 ? 1 : 2;
+        // A room can retain slot 2 after slot 1 leaves (or vice versa). The
+        // array length does not identify the free spawn/input slot.
+        const occupiedSlots = new Set(this.players.map(playerInfo => playerInfo.slot));
+        const slot = [1, 2].find(candidate => !occupiedSlots.has(candidate));
+        if (!slot) return null;
         const playerInfo = {
             id,
             name: name || `Player ${slot}`,
@@ -161,6 +171,10 @@ export class GameRoom {
             playerInfo.disconnected = true;
             playerInfo.reconnectDeadline = Date.now() + RECONNECT_GRACE_MS;
             playerInfo.ws = null;
+            const neutralInput = { forward: 0, right: 0, boost: false };
+            for (const currentPlayer of this.players) {
+                currentPlayer.player?.setInput(neutralInput);
+            }
             this._stopLoops();
             this._clearTransitionTimers();
             this.cancelHurryUp('player_disconnected');
@@ -246,7 +260,15 @@ export class GameRoom {
     }
 
     reconnect(reconnectingId, newId, ws) {
-        const playerInfo = this.players.find(p => p.disconnected && p.reconnectDeadline && p.reconnectDeadline > Date.now());
+        // `reconnectingId` has already been authenticated by the caller's
+        // reconnect token. Never substitute another disconnected player here:
+        // with two simultaneous reconnects that would hand out the wrong slot.
+        const playerInfo = this.players.find(p =>
+            p.id === reconnectingId &&
+            p.disconnected &&
+            p.reconnectDeadline &&
+            p.reconnectDeadline > Date.now(),
+        );
         if (!playerInfo) return null;
 
         playerInfo.disconnected = false;
@@ -268,7 +290,22 @@ export class GameRoom {
     resumeAfterReconnect() {
         if (this._hasDisconnectedPlayers()) return;
 
+        // Reconnecting while Rapier is still initializing must not create a
+        // second countdown schedule or send an empty snapshot. The original
+        // transition will include the newly restored socket; once it finishes,
+        // provide the complete baseline before that countdown can run.
+        if (this.countdownStartPromise) {
+            this.countdownStartPromise.then(started => {
+                if (started && !this._hasDisconnectedPlayers()) this._broadcastFullState();
+            });
+            return;
+        }
+
         if (this.state === 'PLAYING') {
+            // Both peers must install the same authoritative state before the
+            // simulation starts advancing again. WebSocket ordering guarantees
+            // each full state arrives before its following game_resumed event.
+            this._broadcastFullState();
             this._startLoops();
             this._broadcast({ type: 'game_resumed' });
             return;
@@ -276,16 +313,19 @@ export class GameRoom {
 
         if (this.state === 'COUNTDOWN') {
             this._broadcastGameStarting(false);
+            this._broadcastFullState();
             this._scheduleStartPlaying();
             return;
         }
 
         if (this.state === 'ROUND_OVER') {
+            this._broadcastFullState();
+            const remainingDelay = Math.max(0, (this.roundOverAt || Date.now()) + ROUND_OVER_DELAY_MS - Date.now());
             this.roundTransitionTimeout = setTimeout(() => {
                 this.roundTransitionTimeout = null;
                 if (this.matchWinner) this._endMatch();
                 else this._startNextRound();
-            }, 500);
+            }, remainingDelay);
         }
     }
 
@@ -397,20 +437,47 @@ export class GameRoom {
         playerInfo.player.setInput(input);
     }
 
-    async startCountdown() {
-        if (this.state !== 'LOBBY') return;
-        if (this.players.length < 2) return;
-        if (!this.areBothReady()) return;
+    startCountdown() {
+        if (this.countdownStartPromise) return this.countdownStartPromise;
+        if (this.state !== 'LOBBY' || this.players.length < 2 || !this.areBothReady()) {
+            return Promise.resolve(false);
+        }
 
+        // Claim COUNTDOWN synchronously, before awaiting Rapier initialization.
+        // This closes the re-entry window from duplicate start messages.
+        this.state = 'COUNTDOWN';
         this.cancelHurryUp('match_starting');
         this.hasStartedMatch = true;
         this.matchStartedAt = Date.now();
-        await this.initPhysics();
-        this._resetRound();
 
-        this.state = 'COUNTDOWN';
-        this._broadcastGameStarting(true);
-        this._scheduleStartPlaying();
+        this.countdownStartPromise = (async () => {
+            try {
+                await this.initPhysics();
+                if (this.state !== 'COUNTDOWN') return false;
+                this._resetRound();
+                this._broadcastGameStarting(true);
+                if (!this._hasDisconnectedPlayers()) this._scheduleStartPlaying();
+                return true;
+            } catch (error) {
+                // Never allow a rejected initialization promise to become an
+                // unhandled server error when a message handler does not await
+                // it. Returning to a clean lobby also leaves a retry possible.
+                this._invalidatePhysics();
+                this.state = 'LOBBY';
+                this.hasStartedMatch = false;
+                this.matchStartedAt = null;
+                this._broadcast({
+                    type: 'error',
+                    code: 'MATCH_START_FAILED',
+                    message: 'Unable to initialize the match. Please try again.',
+                });
+                return false;
+            } finally {
+                this.countdownStartPromise = null;
+            }
+        })();
+
+        return this.countdownStartPromise;
     }
 
     _broadcastGameStarting(matchStart) {
@@ -431,6 +498,7 @@ export class GameRoom {
 
     _scheduleStartPlaying() {
         if (this.countdownTimeout) clearTimeout(this.countdownTimeout);
+        this.countdownEndsAt = Date.now() + COUNTDOWN_MS;
         this.countdownTimeout = setTimeout(() => {
             this.countdownTimeout = null;
             this._startPlaying();
@@ -440,6 +508,7 @@ export class GameRoom {
     _startPlaying() {
         if (this.state !== 'COUNTDOWN') return;
         if (this._hasDisconnectedPlayers()) return;
+        this.countdownEndsAt = null;
         this.state = 'PLAYING';
         this._startLoops();
         this._broadcast({ type: 'game_started' });
@@ -661,28 +730,11 @@ export class GameRoom {
     _broadcastState() {
         if (this.state !== 'PLAYING') return;
 
-        const playerStates = this.players
-            .filter(p => p.player)
-            .map(p => p.player.serialize());
-
-        const p1 = playerStates.find(p => p.slot === 1);
-        const p2 = playerStates.find(p => p.slot === 2);
-
         this._broadcast({
             type: 'game_state_update',
             tick: this.tick,
             serverTime: Date.now(),
-            state: {
-                p1Score: this.scores.p1,
-                p2Score: this.scores.p2,
-                p1Pos: p1?.position,
-                p1Vel: p1?.velocity,
-                p1Boost: p1?.boost,
-                p2Pos: p2?.position,
-                p2Vel: p2?.velocity,
-                p2Boost: p2?.boost,
-                tileStates: this.arena ? this.arena.serializeTiles() : [],
-            },
+            state: this._buildAuthoritativeState(),
         });
     }
 
@@ -690,25 +742,62 @@ export class GameRoom {
         const playerInfo = this.players.find(p => p.id === playerId);
         if (!playerInfo) return;
 
-        const playerStates = this.players
-            .filter(p => p.player)
-            .map(p => p.player.serialize());
+        this._sendTo(playerId, this._buildFullState());
+    }
 
-        this._sendTo(playerId, {
+    _broadcastFullState() {
+        for (const playerInfo of this.players) {
+            if (!playerInfo.disconnected) this.requestFullState(playerInfo.id);
+        }
+    }
+
+    _buildAuthoritativeState() {
+        const playerStates = this.players
+            .filter(playerInfo => playerInfo.player)
+            .map(playerInfo => playerInfo.player.serialize());
+        const p1 = playerStates.find(player => player.slot === 1);
+        const p2 = playerStates.find(player => player.slot === 2);
+        const mapPlayer = (player, prefix) => ({
+            [`${prefix}Pos`]: player?.position,
+            [`${prefix}Vel`]: player?.velocity,
+            [`${prefix}Rotation`]: player?.rotation,
+            [`${prefix}Boost`]: player?.boost,
+            [`${prefix}Boosting`]: player?.isBoosting,
+            [`${prefix}Dead`]: player?.isDead,
+            [`${prefix}FrozenTimer`]: player?.frozenTimer,
+            [`${prefix}IceCooldown`]: player?.iceCooldown,
+            [`${prefix}PowerUps`]: player?.activePowerUps || [],
+        });
+
+        return {
+            p1Score: this.scores.p1,
+            p2Score: this.scores.p2,
+            ...mapPlayer(p1, 'p1'),
+            ...mapPlayer(p2, 'p2'),
+            players: playerStates,
+            tileStates: this.arena ? this.arena.serializeTiles() : [],
+        };
+    }
+
+    _buildFullState() {
+        return {
             type: 'full_state',
+            tick: this.tick,
             serverTime: Date.now(),
             gameState: this.state,
             settings: this.settings,
-            state: {
-                p1Score: this.scores.p1,
-                p2Score: this.scores.p2,
-                p1Pos: playerStates.find(p => p.slot === 1)?.position,
-                p1Vel: playerStates.find(p => p.slot === 1)?.velocity,
-                p2Pos: playerStates.find(p => p.slot === 2)?.position,
-                p2Vel: playerStates.find(p => p.slot === 2)?.velocity,
-                tileStates: this.arena ? this.arena.serializeTiles() : [],
+            settingsBaseline: this.settingsBaseline,
+            scores: { ...this.scores },
+            lifecycle: {
+                matchNumber: this.matchNumber,
+                hasStartedMatch: this.hasStartedMatch,
+                roundWinner: this.roundWinner,
+                matchWinner: this.matchWinner,
+                roundOverAt: this.roundOverAt,
+                countdownEndsAt: this.countdownEndsAt,
             },
-        });
+            state: this._buildAuthoritativeState(),
+        };
     }
 
     setCustomization(id, { color, hat, name }) {

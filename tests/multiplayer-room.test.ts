@@ -198,6 +198,154 @@ describe('multiplayer room settings', () => {
     expect(room.hostName).toBe('Guest');
     expect(room.settingsPickerId).toBeNull();
   });
+
+  it('fills the actual vacant slot when slot 1 leaves a lobby', () => {
+    const room = createRoom();
+    room.removePlayer('host-id', { allowReconnect: false });
+
+    const replacement = room.addPlayer('replacement-id', 'Replacement', null);
+
+    expect(room.players.map((player) => player.slot).sort()).toEqual([1, 2]);
+    expect(replacement?.slot).toBe(1);
+    room.destroy();
+  });
+
+  it('fills slot 1 after a reconnect grace expiry leaves slot 2 behind', () => {
+    const room = createRoom();
+    room.hasStartedMatch = true;
+    room.state = 'PLAYING';
+    room.removePlayer('host-id');
+    const disconnected = room.players.find((player) => player.slot === 1);
+    if (disconnected) disconnected.reconnectDeadline = Date.now() - 1;
+    room._cleanupDisconnectedSlot(1);
+
+    const replacement = room.addPlayer('replacement-id', 'Replacement', null);
+
+    expect(room.players.map((player) => player.slot).sort()).toEqual([1, 2]);
+    expect(replacement?.slot).toBe(1);
+    room.destroy();
+  });
+
+  it('reconnects the exact disconnected identity rather than the first slot', () => {
+    const room = createRoom();
+    room.hasStartedMatch = true;
+    room.state = 'PLAYING';
+    room.removePlayer('host-id');
+    room.removePlayer('guest-id');
+
+    const reconnected = room.reconnect('guest-id', 'guest-new-id', { readyState: 1 });
+
+    expect(reconnected).toMatchObject({ id: 'guest-new-id', slot: 2, disconnected: false });
+    expect(room.players.find((player) => player.slot === 1)).toMatchObject({
+      id: 'host-id',
+      disconnected: true,
+    });
+    room.destroy();
+  });
+});
+
+describe('authoritative lifecycle synchronization', () => {
+  it('claims countdown synchronously and shares one physics initialization', async () => {
+    vi.useFakeTimers();
+    const room = createRoom();
+    const messages: Array<Record<string, unknown>> = [];
+    for (const player of room.players) player.ws = { readyState: 1 };
+    room.onBroadcast = (_playerId: string, message: Record<string, unknown>) => messages.push(message);
+    room.setReady('host-id', true);
+    room.setReady('guest-id', true);
+
+    let finishInit: (() => void) | undefined;
+    const initPhysics = vi.fn(() => new Promise<void>((resolve) => { finishInit = resolve; }));
+    room.initPhysics = initPhysics;
+    room._resetRound = vi.fn();
+
+    try {
+      const first = room.startCountdown();
+      const duplicate = room.startCountdown();
+
+      expect(room.state).toBe('COUNTDOWN');
+      expect(duplicate).toBe(first);
+      expect(initPhysics).toHaveBeenCalledTimes(1);
+
+      finishInit?.();
+      await expect(first).resolves.toBe(true);
+      expect(room._resetRound).toHaveBeenCalledTimes(1);
+      expect(messages.filter((message) => message.type === 'game_starting')).toHaveLength(2);
+    } finally {
+      room.destroy();
+      vi.useRealTimers();
+    }
+  });
+
+  it('returns to the lobby and broadcasts an actionable failure if countdown setup fails', async () => {
+    const room = createRoom();
+    const messages: Array<Record<string, unknown>> = [];
+    for (const player of room.players) player.ws = { readyState: 1 };
+    room.onBroadcast = (_playerId: string, message: Record<string, unknown>) => messages.push(message);
+    room.setReady('host-id', true);
+    room.setReady('guest-id', true);
+    room.initPhysics = vi.fn().mockRejectedValue(new Error('rapier init failed'));
+
+    await expect(room.startCountdown()).resolves.toBe(false);
+
+    expect(room.state).toBe('LOBBY');
+    expect(room.countdownStartPromise).toBeNull();
+    expect(messages).toContainEqual(expect.objectContaining({
+      type: 'error',
+      code: 'MATCH_START_FAILED',
+    }));
+    room.destroy();
+  });
+
+  it('sends a complete snapshot to both peers before resuming simulation', () => {
+    const room = createRoom();
+    const deliveries: Array<{ id: string; message: Record<string, any> }> = [];
+    for (const player of room.players) {
+      player.ws = { readyState: 1 };
+      player.player = {
+        serialize: () => ({
+          slot: player.slot,
+          position: { x: player.slot, y: 2, z: -player.slot },
+          velocity: { x: 1, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0, w: 1 },
+          boost: 50 + player.slot,
+          isBoosting: player.slot === 1,
+          isDead: false,
+          frozenTimer: 0.25,
+          iceCooldown: 1.5,
+          activePowerUps: [{ type: 'ACCELERATION_BOOST', remaining: 2 }],
+        }),
+      };
+    }
+    room.state = 'PLAYING';
+    room.tick = 42;
+    room.matchNumber = 4;
+    room.scores = { p1: 2, p2: 1 };
+    room.roundWinner = 1;
+    room.onBroadcast = (id: string, message: Record<string, any>) => deliveries.push({ id, message });
+
+    room.resumeAfterReconnect();
+
+    const fullStates = deliveries.filter((delivery) => delivery.message.type === 'full_state');
+    expect(fullStates).toHaveLength(2);
+    expect(fullStates.map((delivery) => delivery.id)).toEqual(['host-id', 'guest-id']);
+    expect(fullStates[0]!.message).toMatchObject({
+      tick: 42,
+      gameState: 'PLAYING',
+      scores: { p1: 2, p2: 1 },
+      lifecycle: { matchNumber: 4, roundWinner: 1 },
+      state: {
+        p1Boost: 51,
+        p2Boost: 52,
+        p1Dead: false,
+        p2PowerUps: [{ type: 'ACCELERATION_BOOST', remaining: 2 }],
+      },
+    });
+    expect(deliveries.map((delivery) => delivery.message.type)).toEqual([
+      'full_state', 'full_state', 'game_resumed', 'game_resumed',
+    ]);
+    room.destroy();
+  });
 });
 
 describe('simulation pacing', () => {
@@ -274,5 +422,32 @@ describe('spawn parity between client and server', () => {
     expect(p1.y).toBe(p2.y);
     // Tile surface (2) + radius (3) leaves the ball clear of the floor.
     expect(p1.y).toBeGreaterThan(2 + settings.sphereSize);
+  });
+
+  it('matches predicted frozen and falling control behavior on the server', async () => {
+    const room = createRoom();
+    await room.initPhysics();
+    room._resetRound();
+    const player = room.players[0].player!;
+    player.setInput({ forward: 1, right: 0, boost: true });
+
+    player.frozenTimer = 1;
+    player.update(1 / 60, room.arena);
+    expect(player.body.linvel().z).toBeCloseTo(0, 8);
+    expect(player.isBoosting).toBe(false);
+    expect(player.boostLevel).toBeGreaterThan(100 - 1e-6);
+
+    player.frozenTimer = 0;
+    player.body.setTranslation({ x: 0, y: -2, z: 0 }, true);
+    player.update(1 / 60, room.arena);
+    expect(player.body.linvel().z).toBeCloseTo(0, 8);
+    expect(player.isBoosting).toBe(false);
+
+    player.body.setTranslation({ x: 0, y: 5, z: 0 }, true);
+    player.update(1 / 60, room.arena);
+    expect(player.isBoosting).toBe(true);
+    expect(player.body.linvel().z).toBeLessThan(0);
+    expect(player.boostLevel).toBeLessThan(100);
+    room.destroy();
   });
 });

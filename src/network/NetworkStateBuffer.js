@@ -11,6 +11,8 @@ const MAX_OFFSET_SLEW_MS = 0.8;
 // Beyond this the connection genuinely moved (route change, sleep/wake). One
 // deliberate resync beats several seconds of starved interpolation.
 const OFFSET_RESYNC_MS = 250;
+const OFFSET_RESYNC_CONFIRMATIONS = 3;
+const OFFSET_RESYNC_TOLERANCE_MS = 40;
 
 function isVector(value) {
     return value
@@ -103,6 +105,7 @@ export class NetworkStateBuffer {
         this.jitterMs = 0;
         this.lastServerTime = null;
         this.lastMode = null;
+        this.pendingOffsetResync = null;
     }
 
     clear() {
@@ -113,6 +116,7 @@ export class NetworkStateBuffer {
         this.jitterMs = 0;
         this.lastServerTime = null;
         this.lastMode = null;
+        this.pendingOffsetResync = null;
         this.interpolationDelayMs = this.baseDelayMs;
     }
 
@@ -124,6 +128,26 @@ export class NetworkStateBuffer {
         this.snapshots = [];
         this.lastServerTime = null;
         this.lastMode = null;
+    }
+
+    /**
+     * Replaces presentation history with one complete, authoritative state.
+     *
+     * Full-state responses are recovery boundaries: any snapshots received
+     * before them can describe a different world. Keep the connection timing
+     * estimate by default, but seed the new timeline immediately so the next
+     * render cannot blend an old opponent position into the recovered world.
+     */
+    seedAuthoritativeState({
+        tick = 0,
+        serverTime,
+        receivedAt = Date.now(),
+        state,
+    }, { resetTiming = false } = {}) {
+        if (resetTiming) this.clear();
+        else this.clearSnapshots();
+
+        return this.push({ tick, serverTime, receivedAt, state });
     }
 
     _trackTiming(snapshot) {
@@ -155,9 +179,41 @@ export class NetworkStateBuffer {
         // hide behind the interpolation delay.
         this.jitterMs += ((offsetSample - windowMin) - this.jitterMs) * 0.1;
 
-        if (this.clockOffsetMs == null || Math.abs(windowMin - this.clockOffsetMs) > OFFSET_RESYNC_MS) {
+        if (this.clockOffsetMs == null) {
             this.clockOffsetMs = windowMin;
+            this.pendingOffsetResync = null;
+        } else if (Math.abs(offsetSample - this.clockOffsetMs) > OFFSET_RESYNC_MS) {
+            // A single unusually fast/slow packet is jitter, not a clock
+            // change. Moving the render clock immediately makes every remote
+            // entity (and therefore the camera) jump. Only resync after a few
+            // consecutive raw samples agree that the connection really
+            // shifted. This deliberately does not compare only against the
+            // five-second minimum: after latency increases, that old minimum
+            // would otherwise starve interpolation until it aged out.
+            const pending = this.pendingOffsetResync;
+            if (pending && Math.abs(offsetSample - pending.offset) <= OFFSET_RESYNC_TOLERANCE_MS) {
+                pending.offset += (offsetSample - pending.offset) / (pending.count + 1);
+                pending.count += 1;
+            } else {
+                this.pendingOffsetResync = { offset: offsetSample, count: 1 };
+            }
+
+            if (this.pendingOffsetResync.count >= OFFSET_RESYNC_CONFIRMATIONS) {
+                this.clockOffsetMs = this.pendingOffsetResync.offset;
+                this.pendingOffsetResync = null;
+                // Old-route samples must not keep pulling the new timeline.
+                this.offsetSamples = [{ receivedAt, offset: offsetSample }];
+                this.jitterMs = 0;
+            }
+        } else if (this.pendingOffsetResync) {
+            // The candidate route change did not persist. Discard its outlier
+            // from the minimum window as well; otherwise one fast packet
+            // would continue to tug the render clock for five seconds.
+            this.pendingOffsetResync = null;
+            this.offsetSamples = [{ receivedAt, offset: offsetSample }];
+            this.jitterMs = 0;
         } else {
+            this.pendingOffsetResync = null;
             const delta = windowMin - this.clockOffsetMs;
             this.clockOffsetMs += Math.max(-MAX_OFFSET_SLEW_MS, Math.min(MAX_OFFSET_SLEW_MS, delta));
         }

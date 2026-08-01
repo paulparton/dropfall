@@ -40,6 +40,12 @@ class OnlineManager {
         this.lastInputSentAt = 0;
         this.lastInputSignature = '';
         this.connectResolver = null;
+        this.rejoinResolver = null;
+        this.rejoinTimeout = null;
+        this.reconnectState = 'idle';
+        this.simulationSuspended = false;
+        this.awaitingAuthoritativeState = false;
+        this.serverResumeReceived = false;
 
         // Prediction / reconciliation state
         this.localTick = 0;
@@ -88,7 +94,15 @@ class OnlineManager {
         const { suppressConnectedEvent = false } = options;
 
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.disconnect();
+            // A timed-out rejoin leaves an unaffiliated transport open. Close
+            // that transport without treating it as a user disconnect (which
+            // would discard the reconnect token needed by the next attempt).
+            if (suppressConnectedEvent && this.isReconnecting) {
+                this.ws.close();
+                this.ws = null;
+            } else {
+                this.disconnect();
+            }
         }
 
         const fullUrl = OnlineManager.normalizeServerUrl(serverUrl);
@@ -104,39 +118,52 @@ class OnlineManager {
             return false;
         }
 
-        this.ws.onopen = () => {
+        const socket = this.ws;
+
+        socket.onopen = () => {
+            if (this.ws !== socket) {
+                socket.close();
+                return;
+            }
             console.log('[Online] Connected to server');
-            this.reconnectAttempts = 0;
             useGameStore.getState().setOnlineConnected(true, fullUrl);
 
-            if (suppressConnectedEvent) {
-                this.isReconnecting = false;
-            }
-
             if (!suppressConnectedEvent) {
+                this.reconnectAttempts = 0;
                 this.emit('connected');
             }
 
             if (this.pendingRejoinGameId) {
                 this.sendRejoinGame(this.pendingRejoinGameId);
-                this.pendingRejoinGameId = null;
-                this.isReconnecting = false;
-                this.emit('reconnected');
+                this.setReconnectState('awaiting_rejoin', {
+                    gameId: this.pendingRejoinGameId,
+                    attempt: this.reconnectAttempts,
+                });
+                this.emit('rejoinPending', { gameId: this.pendingRejoinGameId });
             }
 
-            while (this.messageQueue.length > 0) {
-                const msg = this.messageQueue.shift();
-                this.send(msg);
+            // Never replay input before a rejoin is accepted. Those commands
+            // belong to the previous socket/player identity and can make the
+            // recovered simulation jump before its full state arrives.
+            if (!this.pendingRejoinGameId) {
+                this.flushMessageQueue();
             }
 
             this.startPing();
             this.resolveConnectAttempt(true);
         };
 
-        this.ws.onclose = (event) => {
+        socket.onclose = (event) => {
+            if (this.ws !== socket) return;
+            this.ws = null;
             console.log('[Online] Disconnected from server', { code: event.code, reason: event.reason, wasClean: event.wasClean });
             this.stopPing();
             useGameStore.getState().setOnlineConnected(false);
+
+            if (this.isReconnecting) {
+                this.resolveRejoinAttempt({ success: false, reason: 'transport_closed' });
+                return;
+            }
 
             const state = useGameStore.getState();
             const hasRejoinableRoom = state.gameMode === 'ONLINE' && Boolean(state.online?.currentGame?.id);
@@ -158,12 +185,14 @@ class OnlineManager {
             }
         };
 
-        this.ws.onerror = (err) => {
+        socket.onerror = (err) => {
+            if (this.ws !== socket) return;
             console.error('[Online] WebSocket error:', err);
             this.resolveConnectAttempt(false);
         };
 
-        this.ws.onmessage = (event) => {
+        socket.onmessage = (event) => {
+            if (this.ws !== socket) return;
             try {
                 const msg = JSON.parse(event.data);
                 this.handleMessage(msg);
@@ -198,13 +227,113 @@ class OnlineManager {
         });
     }
 
+    setReconnectState(reconnectState, details = {}) {
+        this.reconnectState = reconnectState;
+        this.emit('connectionState', {
+            state: reconnectState,
+            suspended: this.simulationSuspended,
+            ...details,
+        });
+    }
+
+    suspendSimulation(reason, details = {}) {
+        const wasSuspended = this.simulationSuspended;
+        this.simulationSuspended = true;
+        this.awaitingAuthoritativeState = true;
+        this.serverResumeReceived = false;
+        this.messageQueue = this.messageQueue.filter((msg) => msg?.type !== 'player_input');
+        if (!wasSuspended) {
+            this.emit('simulationSuspended', { reason, ...details });
+        }
+        this.emit('connectionState', {
+            state: this.reconnectState,
+            suspended: true,
+            reason,
+            ...details,
+        });
+    }
+
+    markAuthoritativeStateReceived() {
+        this.awaitingAuthoritativeState = false;
+        this.resumeSimulationIfReady();
+    }
+
+    markServerResumed() {
+        this.serverResumeReceived = true;
+        this.resumeSimulationIfReady();
+    }
+
+    resumeSimulationIfReady() {
+        if (!this.simulationSuspended || this.awaitingAuthoritativeState || !this.serverResumeReceived) return;
+        this.simulationSuspended = false;
+        this.emit('simulationResumed');
+        this.emit('connectionState', { state: this.reconnectState, suspended: false });
+        this.flushMessageQueue();
+    }
+
+    flushMessageQueue() {
+        while (this.messageQueue.length > 0) {
+            const msg = this.messageQueue.shift();
+            this.send(msg);
+        }
+    }
+
+    waitForRejoinAcknowledgement(timeoutMs = 4000) {
+        this.resolveRejoinAttempt({ success: false, reason: 'superseded' });
+        return new Promise((resolve) => {
+            this.rejoinResolver = resolve;
+            this.rejoinTimeout = setTimeout(() => {
+                this.resolveRejoinAttempt({ success: false, reason: 'timeout' });
+            }, timeoutMs);
+        });
+    }
+
+    resolveRejoinAttempt(result) {
+        if (this.rejoinTimeout) {
+            clearTimeout(this.rejoinTimeout);
+            this.rejoinTimeout = null;
+        }
+        if (this.rejoinResolver) {
+            const resolver = this.rejoinResolver;
+            this.rejoinResolver = null;
+            resolver(result);
+        }
+    }
+
+    returnToOnlineLobby(message) {
+        this.isReconnecting = false;
+        this.pendingRejoinGameId = null;
+        this.reconnectToken = null;
+        this.simulationSuspended = false;
+        this.awaitingAuthoritativeState = false;
+        this.serverResumeReceived = false;
+        const state = useGameStore.getState();
+        const playerName = state.online?.myName || '';
+        // The replacement socket is still a valid lobby connection and has
+        // already received its new player id. Clear only room membership;
+        // resetting all online state here would leave an open socket whose
+        // client believes it has no identity.
+        state.clearOnlineRoom?.();
+        state.setOnlineConnected?.(this.isConnected, this.lastServerUrl);
+        state.enterOnlineLobby?.();
+        if (this.isConnected) {
+            if (playerName) this.setName(playerName);
+            this.listGames();
+        }
+        this.setReconnectState('failed', { reason: message });
+        this.emit('reconnectFailed', { reason: message });
+        this.emit('error', message);
+    }
+
     async attemptReconnection(gameId) {
         this.isReconnecting = true;
-        this.emit('reconnecting');
+        this.suspendSimulation('connection_lost', { gameId });
+        this.setReconnectState('reconnecting', { gameId });
+        this.emit('reconnecting', { gameId });
         const rejoinGameId = gameId;
         if (!rejoinGameId || !this.reconnectToken) {
             this.isReconnecting = false;
-            this.emit('error', 'This match can no longer be rejoined.');
+            this.returnToOnlineLobby('This match can no longer be rejoined.');
             return;
         }
 
@@ -224,25 +353,24 @@ class OnlineManager {
             }
 
             this.pendingRejoinGameId = rejoinGameId || null;
-
+            const acknowledgement = this.waitForRejoinAcknowledgement();
             const started = this.connect(this.lastServerUrl, { suppressConnectedEvent: true });
             if (!started) {
+                this.resolveRejoinAttempt({ success: false, reason: 'connect_failed' });
                 continue;
             }
 
-            const connected = await this.waitForConnection();
-            if (connected) {
+            const outcome = await acknowledgement;
+            if (outcome?.success) {
+                return;
+            }
+            if (outcome?.terminal) {
+                this.returnToOnlineLobby(outcome.message || 'This match can no longer be rejoined.');
                 return;
             }
         }
 
-        this.isReconnecting = false;
-        this.pendingRejoinGameId = null;
-        this.reconnectToken = null;
-        const state = useGameStore.getState();
-        state.resetOnlineState();
-        state.enterOnlineLobby?.();
-        this.emit('error', 'Connection lost and reconnection failed. Returned to lobby.');
+        this.returnToOnlineLobby('Connection lost and reconnection failed. Returned to lobby.');
     }
 
     disconnect() {
@@ -250,6 +378,11 @@ class OnlineManager {
         this.isReconnecting = false;
         this.pendingRejoinGameId = null;
         this.reconnectToken = null;
+        this.resolveRejoinAttempt({ success: false, reason: 'clean_disconnect' });
+        this.simulationSuspended = false;
+        this.awaitingAuthoritativeState = false;
+        this.serverResumeReceived = false;
+        this.setReconnectState('idle');
         this.stopPing();
         if (this.ws) {
             this.ws.close();
@@ -259,11 +392,13 @@ class OnlineManager {
     }
 
     send(msg) {
+        if (this.simulationSuspended && msg?.type === 'player_input') return false;
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(msg));
         } else {
             this.messageQueue.push(msg);
         }
+        return true;
     }
 
     handleMessage(msg) {
@@ -295,6 +430,15 @@ class OnlineManager {
 
             case 'error':
                 console.error(`[Online] Server error: ${msg.message}`);
+                if (this.isReconnecting && this.pendingRejoinGameId) {
+                    const terminal = msg.code === 'REJOIN_DENIED' || msg.code === 'GAME_NOT_FOUND';
+                    this.resolveRejoinAttempt({
+                        success: false,
+                        terminal,
+                        reason: 'server_error',
+                        message: msg.message,
+                    });
+                }
                 this.emit('error', msg.message);
                 break;
 
@@ -312,7 +456,7 @@ class OnlineManager {
                 this.emit('gameCreated', msg.game);
                 break;
 
-            case 'game_joined':
+            case 'game_joined': {
                 this.reconnectToken = msg.reconnectToken || null;
                 state.setOnlineCurrentGame(withClientHurryDeadline(msg.game));
                 state.setOnlineHost(false);
@@ -354,6 +498,7 @@ class OnlineManager {
 
                 this.emit('gameJoined', msg.game);
                 break;
+            }
 
             case 'left_game':
                 this.reconnectToken = null;
@@ -362,7 +507,7 @@ class OnlineManager {
                 this.emit('leftGame');
                 break;
 
-            case 'player_joined':
+            case 'player_joined': {
                 state.setOnlineOpponentConnected(true);
                 if (msg.game) state.setOnlineCurrentGame(msg.game);
                 const opponentName = msg.player.name || 'Player';
@@ -394,6 +539,7 @@ class OnlineManager {
 
                 this.emit('playerJoined', msg.player);
                 break;
+            }
 
             case 'player_left':
                 state.setOnlineOpponentConnected(false);
@@ -439,6 +585,16 @@ class OnlineManager {
                 state.setOnlinePlayerSlot(slot);
                 state.setOnlineHost(rejoinedGame.hostId === state.online.playerId);
                 state.setOpponentDisconnected?.(false);
+                const rejoinedGameId = this.pendingRejoinGameId;
+                this.pendingRejoinGameId = null;
+                this.isReconnecting = false;
+                this.reconnectAttempts = 0;
+                this.setReconnectState('rejoined', { gameId: rejoinedGameId });
+                this.resolveRejoinAttempt({ success: true, game: rejoinedGame });
+                // This announces authenticated transport recovery only. The
+                // simulation remains suspended until game_resumed plus a full
+                // authoritative snapshot arrive.
+                this.emit('reconnected', { game: rejoinedGame });
                 this.emit('rejoinSuccess', rejoinedGame);
                 break;
             }
@@ -482,9 +638,11 @@ class OnlineManager {
                     settings: msg.settings,
                     players: msg.players || [],
                 });
+                this.markServerResumed();
                 break;
 
             case 'game_started':
+                this.markServerResumed();
                 this.emit('gameStarted');
                 break;
 
@@ -536,6 +694,18 @@ class OnlineManager {
             }
 
             case 'full_state':
+                if (msg.state) {
+                    const tick = Number.isFinite(msg.tick) ? msg.tick : this.serverTick;
+                    if (Number.isFinite(tick)) this.serverTick = tick;
+                    this.stateBuffer.seedAuthoritativeState({
+                        tick: Number.isFinite(tick) ? tick : 0,
+                        serverTime: msg.serverTime,
+                        receivedAt: Date.now(),
+                        state: msg.state,
+                    });
+                }
+                this.markAuthoritativeStateReceived();
+                this.emit('authoritativeState', msg);
                 this.emit('fullState', msg);
                 break;
 
@@ -585,6 +755,7 @@ class OnlineManager {
 
             case 'opponent_disconnected':
                 state.setOpponentDisconnected?.(true);
+                this.suspendSimulation('opponent_disconnected', { slot: normalizeServerSlot(msg.slot) });
                 break;
 
             case 'player_reconnected':
@@ -593,6 +764,7 @@ class OnlineManager {
 
             case 'game_resumed':
                 state.setOpponentDisconnected?.(false);
+                this.markServerResumed();
                 this.emit('gameResumed');
                 break;
 
@@ -739,6 +911,7 @@ class OnlineManager {
     }
 
     sendInput(input) {
+        if (this.simulationSuspended) return false;
         // Normalize boolean or numeric inputs into the server's expected format.
         const forward = input.forward ? 1 : (input.backward ? -1 : 0);
         const right = input.right ? 1 : (input.left ? -1 : 0);
@@ -758,6 +931,7 @@ class OnlineManager {
         this.localTick += 1;
         this.lastInputSentAt = performance.now();
         this.lastInputSignature = `${forward}:${right}:${normalizedInput.boost ? 1 : 0}`;
+        return true;
     }
 
     shouldSendInput(input, now = performance.now()) {
@@ -887,6 +1061,8 @@ class OnlineManager {
     getConnectionInfo() {
         return {
             connected: this.isConnected,
+            reconnectState: this.reconnectState,
+            simulationSuspended: this.simulationSuspended,
             playerId: useGameStore.getState().online.playerId,
             currentGame: useGameStore.getState().online.currentGame,
             isHost: useGameStore.getState().online.isHost,

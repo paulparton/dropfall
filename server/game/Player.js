@@ -106,10 +106,15 @@ export class ServerPlayer {
 
         this._updatePowerUps(delta);
 
+        // Keep the authoritative control predicate exactly aligned with client
+        // prediction: an iced player or a player already falling cannot steer
+        // or initiate/continue a boost, although boost regeneration continues.
+        const hasControl = this.frozenTimer <= 0 && pos.y >= -1;
+
         // Boost logic: can start above 20%, continues until 0%.
-        if (this.input.boost && this.boostLevel > 20 && !this.isBoosting) {
+        if (this.input.boost && this.boostLevel > 20 && !this.isBoosting && hasControl) {
             this.isBoosting = true;
-        } else if (!this.input.boost || this.boostLevel <= 0) {
+        } else if (!this.input.boost || this.boostLevel <= 0 || !hasControl) {
             this.isBoosting = false;
         }
 
@@ -131,7 +136,9 @@ export class ServerPlayer {
         this.body.setLinearDamping(0.0);
         this.body.setAngularDamping(0.0);
 
-        this.body.applyImpulse({ x: forceX, y: 0, z: forceZ }, true);
+        if (hasControl && (forceX !== 0 || forceZ !== 0)) {
+            this.body.applyImpulse({ x: forceX, y: 0, z: forceZ }, true);
+        }
     }
 
     _applyPowerUp(type) {
@@ -208,7 +215,10 @@ export class ServerPlayer {
             velocity: { x: vel.x, y: vel.y, z: vel.z },
             rotation: { x: rot.x, y: rot.y, z: rot.z, w: rot.w },
             boost: this.boostLevel,
+            isBoosting: this.isBoosting,
             isDead: this.isDead,
+            frozenTimer: this.frozenTimer,
+            iceCooldown: this.iceCooldown,
             activePowerUps: this.activePowerUps.map(effect => ({ ...effect })),
         };
     }

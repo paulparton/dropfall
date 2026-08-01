@@ -544,6 +544,7 @@ let roundOverLogFrames = 0;
 let onlineSetupPanelTeardown = null;
 let opponentDisconnectOverlayEl = null;
 let isGamePaused = false;
+let onlineSimulationSuspended = false;
 // Newest authoritative snapshot for the locally predicted player. Reconciliation
 // runs every frame from this, not on packet arrival, so corrections are spread
 // smoothly instead of arriving in 20-30Hz jolts.
@@ -551,6 +552,20 @@ let onlineLocalCorrection = null;
 // Presentation state for the remote (kinematic) player: a smoothed position and
 // an accumulated roll so the opponent's ball rolls instead of sliding.
 let onlineRemoteRender = null;
+
+function suspendOnlineSimulation() {
+    if (onlineSimulationSuspended) return;
+    onlineSimulationSuspended = true;
+    onlineLocalCorrection = null;
+    if (online.isConnected) {
+        online.sendInput({ forward: false, backward: false, left: false, right: false, boost: false });
+    }
+}
+
+function resumeOnlineSimulation() {
+    onlineSimulationSuspended = false;
+    clock.getDelta();
+}
 
 const HEX_GRID_SPACING = 8.0;
 const TILE_HEIGHT = 4.0;
@@ -920,6 +935,18 @@ function getRemotePlayer(state) {
     return null;
 }
 
+function applyAuthoritativePlayerFlags(player, prefix, authoritativeState) {
+    if (!player || !authoritativeState) return;
+    const dead = authoritativeState[`${prefix}Dead`];
+    const frozenTimer = authoritativeState[`${prefix}FrozenTimer`];
+    const iceCooldown = authoritativeState[`${prefix}IceCooldown`];
+    const boosting = authoritativeState[`${prefix}Boosting`];
+    if (typeof dead === 'boolean') player.isDead = dead;
+    if (Number.isFinite(frozenTimer)) player.freezeTimer = Math.max(0, frozenTimer);
+    if (Number.isFinite(iceCooldown)) player.iceCooldown = Math.max(0, iceCooldown);
+    if (typeof boosting === 'boolean') player.isBoosting = boosting;
+}
+
 // Matches the gravity configured in PhysicsSystem and the server world.
 const ONLINE_GRAVITY_Y = -20;
 // Never project a snapshot further than this, however bad the connection is.
@@ -1170,15 +1197,34 @@ async function setupLanDetection() {
     }
 
     const suggested = info.lanAddresses[0];
-    const wsUrl = `ws://${suggested.address}:${info.port}`;
-    lanInfo.innerHTML = `
-        <p style="margin: 0.3rem 0;">A server is running on your local network:</p>
-        <p style="margin: 0.3rem 0;"><code style="color: #00ff88; font-size: 1rem;">${suggested.address}:${info.port}</code></p>
-        <button id="online-lan-connect-btn" class="retro-btn" style="margin-top: 0.5rem; padding: 0.4rem 1rem; font-size: 0.9rem;">CONNECT VIA LAN</button>
-    `;
+    const address = typeof suggested?.address === 'string' && OnlineManager.isPrivateIp(suggested.address)
+        ? suggested.address
+        : null;
+    const port = Number(info.port);
+    if (!address || !Number.isInteger(port) || port < 1 || port > 65535) {
+        lanSuggestion.style.display = 'none';
+        return;
+    }
+    const wsUrl = `ws://${address}:${port}`;
+    const description = document.createElement('p');
+    description.style.margin = '0.3rem 0';
+    description.textContent = 'A server is running on your local network:';
+    const addressLine = document.createElement('p');
+    addressLine.style.margin = '0.3rem 0';
+    const addressCode = document.createElement('code');
+    addressCode.style.color = '#00ff88';
+    addressCode.style.fontSize = '1rem';
+    addressCode.textContent = `${address}:${port}`;
+    addressLine.append(addressCode);
+    const connectButton = document.createElement('button');
+    connectButton.id = 'online-lan-connect-btn';
+    connectButton.className = 'retro-btn';
+    connectButton.style.cssText = 'margin-top: 0.5rem; padding: 0.4rem 1rem; font-size: 0.9rem;';
+    connectButton.textContent = 'CONNECT VIA LAN';
+    lanInfo.replaceChildren(description, addressLine, connectButton);
     lanSuggestion.style.display = 'block';
 
-    const lanBtn = document.getElementById('online-lan-connect-btn');
+    const lanBtn = connectButton;
     if (lanBtn) {
         lanBtn.addEventListener('click', () => {
             serverInput.value = wsUrl;
@@ -1428,6 +1474,7 @@ function resetEntities() {
     // Camera
     camera.position.set(0, 32, 32);
     camera.lookAt(0, 0, 0);
+    camera.userData.lookAtTarget = new THREE.Vector3(0, 0, 0);
 
     pendingWinner = null;
     winTimer = 0;
@@ -1530,6 +1577,7 @@ function resetOnlineEntities() {
 
     camera.position.set(0, 32, 32);
     camera.lookAt(0, 0, 0);
+    camera.userData.lookAtTarget = new THREE.Vector3(0, 0, 0);
 
     if (isInVR()) {
         reparentToVRContainer(scene);
@@ -2251,6 +2299,7 @@ function setupOnlineHandlers() {
     });
 
     online.on('reconnecting', () => {
+        suspendOnlineSimulation();
         updateLobbyConnectionStatus('reconnecting');
         showOnlineToast('Connection lost. Reconnecting...');
     });
@@ -2258,6 +2307,14 @@ function setupOnlineHandlers() {
     online.on('reconnected', () => {
         updateLobbyConnectionStatus('connected');
         showOnlineToast('Reconnected to server');
+    });
+
+    online.on('simulationSuspended', () => {
+        suspendOnlineSimulation();
+    });
+
+    online.on('simulationResumed', () => {
+        resumeOnlineSimulation();
     });
 
     online.on('gamesUpdated', (games) => {
@@ -2487,21 +2544,45 @@ function setupOnlineHandlers() {
         console.log('[fullState] Received full state sync:', data);
         if (!data.state || !player1 || !player2) return;
 
-        // A full sync is an explicit "you are out of date" signal, so the local
-        // predicted player is placed outright rather than nudged.
         const state = useGameStore.getState();
-        const localPlayer = getLocalPlayer(state);
-        const localPos = state.online?.playerSlot === 2 ? data.state.p2Pos : data.state.p1Pos;
-        const localVel = state.online?.playerSlot === 2 ? data.state.p2Vel : data.state.p1Vel;
-        if (localPlayer?.rigidBody && localPos) {
-            localPlayer.rigidBody.setTranslation(localPos, true);
-            localPlayer.rigidBody.setLinvel(localVel || { x: 0, y: 0, z: 0 }, true);
-        }
-        onlineLocalCorrection = null;
+        const authoritativeSettings = data.settings
+            ? { ...state.settings, ...data.settings }
+            : state.settings;
+        const nextGameState = ['COUNTDOWN', 'PLAYING', 'ROUND_OVER', 'GAME_OVER'].includes(data.gameState)
+            ? data.gameState
+            : state.gameState;
+        useGameStore.setState({
+            settings: authoritativeSettings,
+            gameState: nextGameState,
+            p1Score: data.state.p1Score ?? data.scores?.p1 ?? state.p1Score,
+            p2Score: data.state.p2Score ?? data.scores?.p2 ?? state.p2Score,
+            player1Boost: data.state.p1Boost ?? state.player1Boost,
+            player2Boost: data.state.p2Boost ?? state.player2Boost,
+        });
 
-        // The remote player is driven entirely by the snapshot buffer. Dropping
-        // its smoothing state makes the next sample seed cleanly instead of
-        // being chased from a stale position.
+        const countdownEndsAt = data.lifecycle?.countdownEndsAt;
+        if (Number.isFinite(countdownEndsAt) && Number.isFinite(data.serverTime)) {
+            countdownTimer = Math.max(0, (countdownEndsAt - data.serverTime) / 1000);
+        }
+
+        const placements = [
+            [player1, data.state.p1Pos, data.state.p1Vel],
+            [player2, data.state.p2Pos, data.state.p2Vel],
+        ];
+        for (const [player, position, velocity] of placements) {
+            if (!player?.rigidBody || !position) continue;
+            player.rigidBody.setTranslation(position, true);
+            player.rigidBody.setLinvel(velocity || { x: 0, y: 0, z: 0 }, true);
+        }
+        const p1Rotation = data.state.p1Rotation;
+        const p2Rotation = data.state.p2Rotation;
+        if (p1Rotation) player1.rigidBody?.setRotation(p1Rotation, true);
+        if (p2Rotation) player2.rigidBody?.setRotation(p2Rotation, true);
+        applyAuthoritativePlayerFlags(player1, 'p1', data.state);
+        applyAuthoritativePlayerFlags(player2, 'p2', data.state);
+
+        arena?.applyAuthoritativeTileStates(data.state.tileStates || []);
+        onlineLocalCorrection = null;
         onlineRemoteRender = null;
     });
 
@@ -2550,6 +2631,8 @@ function setupOnlineHandlers() {
         if (data.type === 'game_state_update' && data.state && player1 && player2) {
             const state = useGameStore.getState();
             const mySlot = state.online?.playerSlot;
+            applyAuthoritativePlayerFlags(player1, 'p1', data.state);
+            applyAuthoritativePlayerFlags(player2, 'p2', data.state);
 
             // Determine local and remote server positions.
             const localServerPos = mySlot === 1 ? data.state.p1Pos : data.state.p2Pos;
@@ -2578,19 +2661,8 @@ function setupOnlineHandlers() {
             }
 
             // Sync tile states from authoritative server.
-            if (data.state.tileStates && arena) {
-                data.state.tileStates.forEach(tileUpdate => {
-                    const tile = arena.getTileAt(tileUpdate.q, tileUpdate.r);
-                    if (tile) {
-                        const wasFalling = tile.state === 'FALLING';
-                        tile.state = tileUpdate.state;
-                        tile.timer = tileUpdate.timer;
-                        tile.powerUpType = tileUpdate.powerUpType || null;
-                        if (tileUpdate.state === 'FALLING' && !wasFalling) {
-                            arena.hideTile(tileUpdate.q, tileUpdate.r);
-                        }
-                    }
-                });
+            if (Array.isArray(data.state.tileStates) && arena) {
+                arena.applyAuthoritativeTileStates(data.state.tileStates);
             }
         }
     });
@@ -2634,6 +2706,15 @@ function animate(_timestamp, _frame) {
     }
 
     if (isGamePaused) {
+        updateRenderer();
+        return;
+    }
+
+    if (
+        (onlineSimulationSuspended || online.simulationSuspended) &&
+        state.gameMode === 'ONLINE' &&
+        (state.gameState === 'COUNTDOWN' || state.gameState === 'PLAYING')
+    ) {
         updateRenderer();
         return;
     }
@@ -2741,11 +2822,12 @@ function animate(_timestamp, _frame) {
             if (player2.glow.intensity > 1) player2.glow.intensity -= delta * 10;
             if (sceneFlashLight?.intensity > 0) sceneFlashLight.intensity -= delta * 40;
 
-            // Frame-rate independent camera movement (constant speed, not delta-dependent)
+            // Frame-rate independent camera movement. A fixed per-frame lerp
+            // changes feel with frame rate and exaggerates network hitches.
             const centerPos = new THREE.Vector3().addVectors(p1Pos, p2Pos).multiplyScalar(0.5);
             const arenaFraming = Math.max(26, Number(state.settings.arenaSize || 4) * 5.4, distance * 0.96);
             const targetCamPos = new THREE.Vector3(centerPos.x, arenaFraming, centerPos.z + arenaFraming);
-            const camSpeed = 0.08; // Interpolation factor per frame (0-1)
+            const camSpeed = 1 - Math.exp(-Math.max(0, delta) * 5);
             camera.position.lerp(targetCamPos, camSpeed);
             
             // Smooth camera lookAt target
@@ -2759,8 +2841,11 @@ function animate(_timestamp, _frame) {
             if (survivor && !survivor.isDead && survivor.mesh) {
                 const pos = survivor.mesh.position;
                 const targetCamPos = new THREE.Vector3(pos.x, pos.y + 8, pos.z + 12);
-                camera.position.lerp(targetCamPos, 0.05);
-                camera.lookAt(pos);
+                const camSpeed = 1 - Math.exp(-Math.max(0, delta) * 4);
+                camera.position.lerp(targetCamPos, camSpeed);
+                if (!camera.userData.lookAtTarget) camera.userData.lookAtTarget = pos.clone();
+                camera.userData.lookAtTarget.lerp(pos, camSpeed);
+                camera.lookAt(camera.userData.lookAtTarget);
             }
         }
 
@@ -2930,13 +3015,9 @@ function startNextRound() {
     const st = useGameStore.getState();
 
     if (st.gameMode === 'ONLINE') {
-        countdownTimer = 3.0;
-
-        // Both peers enter round state and then sample the authoritative server.
-        useGameStore.getState().startRound();
-        resetOnlineEntities();
-        updateHUDNames();
-        setTimeout(() => online.requestSync(), 120);
+        // Online round transitions are server-authoritative. The server sends
+        // game_starting to both peers after the result delay; resetting here
+        // races that message and can put the clients into different worlds.
         return;
     }
 
@@ -3059,7 +3140,10 @@ function setupStoreSubscription() {
                 case 'ROUND_OVER':
                     if (!roundOverTimeoutSet) {
                         roundOverTimeoutSet = true;
-                        if (state.settings.autoRestart) {
+                        if (state.gameMode === 'ONLINE') {
+                            // The authoritative server will send the next
+                            // game_starting event to both clients.
+                        } else if (state.settings.autoRestart) {
                             // Auto-advance after brief pause.
                             console.log('[STATE] ROUND_OVER: auto-starting next round in 500ms');
                             setTimeout(() => {
@@ -3110,7 +3194,7 @@ function setupStoreSubscription() {
                         document.getElementById('restart-btn').disabled = false;
                         document.getElementById('restart-btn').style.opacity = '1';
                     }
-                    if (state.settings.autoRestart) {
+                    if (state.settings.autoRestart && state.gameMode !== 'ONLINE') {
                         setTimeout(() => {
                             if (useGameStore.getState().gameState === 'GAME_OVER') {
                                 useGameStore.getState().resetScores();
@@ -3129,6 +3213,8 @@ function setupStoreSubscription() {
             const inOnlineSession = state.gameMode === 'ONLINE' && state.gameState !== 'MENU';
             const showOverlay = inOnlineSession && Boolean(state.online?.opponentDisconnected);
             setOpponentDisconnectOverlayVisible(showOverlay);
+            if (showOverlay) suspendOnlineSimulation();
+            if (!inOnlineSession) resumeOnlineSimulation();
         }
         // Update HUD
         document.getElementById('p1-score').textContent = state.p1Score;

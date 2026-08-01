@@ -374,6 +374,67 @@ export class Arena {
         }
     }
 
+    /**
+     * Applies a complete authoritative sparse tile snapshot. Tiles omitted by
+     * the server are NORMAL; this is intentionally not treated as a delta.
+     */
+    applyAuthoritativeTileStates(tileStates = []) {
+        const authoritative = new Map(
+            tileStates.map(tile => [`${tile.q},${tile.r}`, tile]),
+        );
+
+        for (const tile of this.tiles) {
+            const update = authoritative.get(`${tile.q},${tile.r}`);
+            if (!update) {
+                // Falling/warning tiles remain in the sparse server snapshot
+                // for the rest of a round. ICE and BONUS can disappear when
+                // they expire or are collected, and must be actively cleared.
+                if (tile.state === 'ICE' || tile.state === 'BONUS') {
+                    this.convertTileToNormal(tile);
+                    tile.timer = 0;
+                    tile.collider.setFriction(0.5);
+                }
+                continue;
+            }
+
+            const nextState = update.state || 'NORMAL';
+            if (nextState === 'NORMAL') {
+                this.convertTileToNormal(tile);
+                tile.timer = 0;
+                tile.collider.setFriction(0.5);
+                continue;
+            }
+
+            if (tile.state === 'BONUS' && nextState !== 'BONUS') {
+                this.convertTileToNormal(tile);
+            }
+
+            const wasFalling = tile.state === 'FALLING';
+            tile.state = nextState;
+            tile.timer = Number(update.timer) || 0;
+            tile.powerUpType = update.powerUpType || null;
+            if (tile.uniforms?.uState) tile.uniforms.uState.value = STATE_MAP[nextState] ?? STATE_MAP.NORMAL;
+
+            if (nextState === 'ICE') {
+                tile.collider.setFriction(0.0);
+            } else if (nextState !== 'FALLING') {
+                tile.collider.setFriction(0.5);
+            }
+
+            if (nextState === 'BONUS' && !tile.statue) {
+                const powerUp = POWER_UP_EFFECTS.find(effect => effect.type === tile.powerUpType);
+                if (powerUp) {
+                    tile.statue = this._createStatue(powerUp, tile.mesh.position);
+                    tile.statuePowerUp = powerUp;
+                }
+            }
+
+            if (nextState === 'FALLING' && !wasFalling) {
+                this.hideTile(tile.q, tile.r);
+            }
+        }
+    }
+
     triggerDrop() {
         const stableTiles = this.tiles.filter(t => t.state === 'NORMAL' || t.state === 'ICE');
         if (stableTiles.length === 0) return;
@@ -502,8 +563,9 @@ export class Arena {
             });
             tile.statue = null;
             tile.statuePowerUp = null;
-            tile.powerUpType = null;
         }
+        tile.statuePowerUp = null;
+        tile.powerUpType = null;
         tile.edges.material.color.setHex(this.edgeColor);
     }
 
