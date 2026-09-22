@@ -4,6 +4,19 @@ This directory contains the Unreal Engine 5.8 implementation of Dropfall Arena.
 The existing Three.js game remains Dropfall Classic: the free web edition and
 playable design reference.
 
+## First playable greybox
+
+The editor boots directly into a runtime-generated arena with no content
+dependencies. Play-in-Editor defaults to local versus AI.
+
+- Player 1: `WASD`, `Space` to boost
+- Player 2: arrow keys, `Right Shift` to boost
+- `F1`: switch between versus AI and couch versus
+- `R`: reset the match
+- First fighter to three ring-outs wins
+
+Click the PIE viewport once if keyboard focus is not already captured.
+
 ## Product boundary
 
 - **Arena** is the primary party and competitive product for Steam and future
