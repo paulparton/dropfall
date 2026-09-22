@@ -1,5 +1,6 @@
 #include "DropfallFighterPawn.h"
 
+#include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
@@ -35,6 +36,8 @@ ADropfallFighterPawn::ADropfallFighterPawn()
     Body->SetAngularDamping(0.25f);
     Body->BodyInstance.bUseCCD = true;
     Body->SetGenerateOverlapEvents(false);
+    Body->SetNotifyRigidBodyCollision(true);
+    Body->OnComponentHit.AddDynamic(this, &ADropfallFighterPawn::HandleBodyHit);
 }
 
 void ADropfallFighterPawn::BeginPlay()
@@ -48,19 +51,20 @@ void ADropfallFighterPawn::Tick(const float DeltaSeconds)
     Super::Tick(DeltaSeconds);
 
     BoostCooldownRemaining = FMath::Max(0.0f, BoostCooldownRemaining - DeltaSeconds);
+    ImpactLockoutRemaining = FMath::Max(0.0f, ImpactLockoutRemaining - DeltaSeconds);
 
     const FVector Direction(MoveIntent.X, MoveIntent.Y, 0.0f);
     if (!Direction.IsNearlyZero())
     {
         LastMoveDirection = Direction.GetSafeNormal();
-        Body->AddForce(LastMoveDirection * MoveAcceleration, NAME_None, true);
+        Body->AddForce(LastMoveDirection * Tuning.MoveAcceleration, NAME_None, true);
     }
 
     FVector Velocity = Body->GetPhysicsLinearVelocity();
     const FVector PlanarVelocity(Velocity.X, Velocity.Y, 0.0f);
-    const float AllowedSpeed = BoostCooldownRemaining > BoostCooldown - 0.35f
-        ? BoostMaxPlanarSpeed
-        : MaxPlanarSpeed;
+    const float AllowedSpeed = IsBoostActive()
+        ? Tuning.BoostMaxPlanarSpeed
+        : Tuning.MaxPlanarSpeed;
     if (PlanarVelocity.SizeSquared() > FMath::Square(AllowedSpeed))
     {
         const FVector ClampedPlanar = PlanarVelocity.GetSafeNormal() * AllowedSpeed;
@@ -75,15 +79,16 @@ void ADropfallFighterPawn::SetMoveIntent(const FVector2D& Intent)
     MoveIntent = Intent.GetClampedToMaxSize(1.0f);
 }
 
-void ADropfallFighterPawn::TryBoost()
+bool ADropfallFighterPawn::TryBoost()
 {
     if (BoostCooldownRemaining > 0.0f)
     {
-        return;
+        return false;
     }
 
-    Body->AddImpulse(LastMoveDirection * BoostImpulse, NAME_None, true);
-    BoostCooldownRemaining = BoostCooldown;
+    Body->AddImpulse(LastMoveDirection * Tuning.BoostImpulse, NAME_None, true);
+    BoostCooldownRemaining = Tuning.BoostCooldown;
+    return true;
 }
 
 void ADropfallFighterPawn::ResetFighter(const FVector& SpawnLocation)
@@ -95,6 +100,62 @@ void ADropfallFighterPawn::ResetFighter(const FVector& SpawnLocation)
     MoveIntent = FVector2D::ZeroVector;
     LastMoveDirection = SpawnLocation.X < 0.0f ? FVector::ForwardVector : -FVector::ForwardVector;
     BoostCooldownRemaining = 0.0f;
+    ImpactLockoutRemaining = 0.0f;
+}
+
+float ADropfallFighterPawn::GetBoostReadiness() const
+{
+    if (Tuning.BoostCooldown <= UE_SMALL_NUMBER)
+    {
+        return 1.0f;
+    }
+    return 1.0f - FMath::Clamp(BoostCooldownRemaining / Tuning.BoostCooldown, 0.0f, 1.0f);
+}
+
+float ADropfallFighterPawn::GetPlanarSpeed() const
+{
+    return Body ? Body->GetPhysicsLinearVelocity().Size2D() : 0.0f;
+}
+
+bool ADropfallFighterPawn::IsBoostActive() const
+{
+    return BoostCooldownRemaining > Tuning.BoostCooldown - BoostSpeedWindow;
+}
+
+void ADropfallFighterPawn::HandleBodyHit(UPrimitiveComponent* HitComponent, AActor* OtherActor,
+    UPrimitiveComponent* OtherComponent, FVector NormalImpulse, const FHitResult& Hit)
+{
+    ADropfallFighterPawn* OtherFighter = Cast<ADropfallFighterPawn>(OtherActor);
+    if (!OtherFighter || OtherFighter == this || ImpactLockoutRemaining > 0.0f
+        || OtherFighter->ImpactLockoutRemaining > 0.0f
+        || GetUniqueID() > OtherFighter->GetUniqueID())
+    {
+        return;
+    }
+
+    const FVector RelativeVelocity = Body->GetPhysicsLinearVelocity()
+        - OtherFighter->Body->GetPhysicsLinearVelocity();
+    const float ClosingSpeed = RelativeVelocity.Size2D();
+    if (ClosingSpeed < MinimumImpactSpeed)
+    {
+        return;
+    }
+
+    FVector ImpactDirection = OtherFighter->GetActorLocation() - GetActorLocation();
+    ImpactDirection.Z = 0.0f;
+    ImpactDirection = ImpactDirection.GetSafeNormal();
+    if (ImpactDirection.IsNearlyZero())
+    {
+        return;
+    }
+
+    const float ImpactStrength = FMath::Clamp(
+        (ClosingSpeed - MinimumImpactSpeed) * ImpactVelocityScale,
+        MinimumImpactImpulse, MaximumImpactImpulse);
+    Body->AddImpulse(-ImpactDirection * ImpactStrength, NAME_None, true);
+    OtherFighter->Body->AddImpulse(ImpactDirection * ImpactStrength, NAME_None, true);
+    ImpactLockoutRemaining = ImpactLockout;
+    OtherFighter->ImpactLockoutRemaining = ImpactLockout;
 }
 
 void ADropfallFighterPawn::SetFighterColor(const FLinearColor& Color)

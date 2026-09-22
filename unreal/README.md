@@ -10,10 +10,16 @@ The editor boots directly into a runtime-generated arena with no content
 dependencies. Play-in-Editor defaults to local versus AI.
 
 - Player 1: `WASD`, `Space` to boost
+- Player 1 gamepad: left stick, bottom face button to boost
 - Player 2: arrow keys, `Right Shift` to boost
 - `F1`: switch between versus AI and couch versus
+- `F2`: cycle Rookie, Rival, and Ace AI
 - `R`: reset the match
 - First fighter to three ring-outs wins
+
+The boost bars at the bottom of the screen refill toward ready. AI tiers change
+reaction time, prediction, aggression, and edge recovery without changing the
+fighter's mass, acceleration, speed cap, or boost physics.
 
 Click the PIE viewport once if keyboard focus is not already captured.
 

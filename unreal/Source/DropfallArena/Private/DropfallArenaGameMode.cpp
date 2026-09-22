@@ -145,6 +145,10 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
     {
         ToggleOpponentMode();
     }
+    if (Controller->WasInputKeyJustPressed(EKeys::F2))
+    {
+        CycleAIDifficulty();
+    }
     if (Controller->WasInputKeyJustPressed(EKeys::R))
     {
         ResetMatch();
@@ -160,8 +164,16 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
     FVector2D PlayerOneIntent(
         Controller->IsInputKeyDown(EKeys::W) ? 1.0f : Controller->IsInputKeyDown(EKeys::S) ? -1.0f : 0.0f,
         Controller->IsInputKeyDown(EKeys::D) ? 1.0f : Controller->IsInputKeyDown(EKeys::A) ? -1.0f : 0.0f);
+    const FVector2D GamepadIntent(
+        Controller->GetInputAnalogKeyState(EKeys::Gamepad_LeftY),
+        Controller->GetInputAnalogKeyState(EKeys::Gamepad_LeftX));
+    if (GamepadIntent.SizeSquared() > FMath::Square(0.2f))
+    {
+        PlayerOneIntent = GamepadIntent;
+    }
     PlayerOne->SetMoveIntent(PlayerOneIntent);
-    if (Controller->WasInputKeyJustPressed(EKeys::SpaceBar))
+    if (Controller->WasInputKeyJustPressed(EKeys::SpaceBar)
+        || Controller->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Bottom))
     {
         PlayerOne->TryBoost();
     }
@@ -169,12 +181,7 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
     AIClock += DeltaSeconds;
     if (bPlayerTwoAI)
     {
-        PlayerTwo->SetMoveIntent(GetAIIntent(DeltaSeconds));
-        const float Distance = FVector::Dist2D(PlayerOne->GetActorLocation(), PlayerTwo->GetActorLocation());
-        if (Distance < 310.0f && FMath::Fmod(AIClock, 1.4f) < DeltaSeconds)
-        {
-            PlayerTwo->TryBoost();
-        }
+        UpdateAI(DeltaSeconds);
     }
     else
     {
@@ -189,13 +196,57 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
     }
 }
 
-FVector2D ADropfallArenaGameMode::GetAIIntent(float DeltaSeconds) const
+void ADropfallArenaGameMode::UpdateAI(const float DeltaSeconds)
 {
-    const FVector ToPlayer = PlayerOne->GetActorLocation() - PlayerTwo->GetActorLocation();
+    AIThinkRemaining -= DeltaSeconds;
+    AIBoostRemaining -= DeltaSeconds;
+
+    const float ThinkInterval = AIDifficulty == EDropfallAIDifficulty::Rookie ? 0.32f
+        : AIDifficulty == EDropfallAIDifficulty::Rival ? 0.16f : 0.07f;
+    if (AIThinkRemaining <= 0.0f)
+    {
+        CachedAIIntent = CalculateAIIntent();
+        AIThinkRemaining = ThinkInterval;
+    }
+    PlayerTwo->SetMoveIntent(CachedAIIntent);
+
+    const float BoostDistance = AIDifficulty == EDropfallAIDifficulty::Rookie ? 235.0f
+        : AIDifficulty == EDropfallAIDifficulty::Rival ? 315.0f : 390.0f;
+    const float BoostInterval = AIDifficulty == EDropfallAIDifficulty::Rookie ? 2.2f
+        : AIDifficulty == EDropfallAIDifficulty::Rival ? 1.45f : 0.9f;
+    const float Distance = FVector::Dist2D(PlayerOne->GetActorLocation(), PlayerTwo->GetActorLocation());
+    if (AIBoostRemaining <= 0.0f && Distance < BoostDistance && PlayerTwo->TryBoost())
+    {
+        AIBoostRemaining = BoostInterval;
+    }
+}
+
+FVector2D ADropfallArenaGameMode::CalculateAIIntent() const
+{
+    FVector TargetLocation = PlayerOne->GetActorLocation();
+    if (AIDifficulty == EDropfallAIDifficulty::Ace)
+    {
+        TargetLocation += PlayerOne->GetVelocity() * 0.22f;
+    }
+
+    const FVector ToPlayer = TargetLocation - PlayerTwo->GetActorLocation();
     const FVector2D Chase(ToPlayer.X, ToPlayer.Y);
     const FVector2D Strafe(-Chase.Y, Chase.X);
-    return (Chase.GetSafeNormal() + Strafe.GetSafeNormal() * FMath::Sin(AIClock * 1.7f) * 0.28f)
-        .GetClampedToMaxSize(1.0f);
+    const float ChaseWeight = AIDifficulty == EDropfallAIDifficulty::Rookie ? 0.72f : 1.0f;
+    const float StrafeWeight = AIDifficulty == EDropfallAIDifficulty::Rookie ? 0.35f
+        : AIDifficulty == EDropfallAIDifficulty::Rival ? 0.24f : 0.14f;
+    FVector2D Intent = Chase.GetSafeNormal() * ChaseWeight
+        + Strafe.GetSafeNormal() * FMath::Sin(AIClock * 1.7f) * StrafeWeight;
+
+    const FVector AILocation = PlayerTwo->GetActorLocation();
+    const float EdgePressure = AIDifficulty == EDropfallAIDifficulty::Rookie ? 0.8f
+        : AIDifficulty == EDropfallAIDifficulty::Rival ? 1.5f : 2.4f;
+    if (FMath::Abs(AILocation.X) > 940.0f || FMath::Abs(AILocation.Y) > 590.0f)
+    {
+        const FVector2D ToCenter(-AILocation.X, -AILocation.Y);
+        Intent += ToCenter.GetSafeNormal() * EdgePressure;
+    }
+    return Intent.GetClampedToMaxSize(1.0f);
 }
 
 void ADropfallArenaGameMode::CheckRingOuts()
@@ -222,6 +273,9 @@ void ADropfallArenaGameMode::CheckRingOuts()
 void ADropfallArenaGameMode::AwardPoint(const int32 ScoringPlayer)
 {
     bRoundActive = false;
+    LastScoringPlayer = ScoringPlayer;
+    PlayerOne->SetMoveIntent(FVector2D::ZeroVector);
+    PlayerTwo->SetMoveIntent(FVector2D::ZeroVector);
     if (ScoringPlayer == 1)
     {
         ++PlayerOneScore;
@@ -244,6 +298,9 @@ void ADropfallArenaGameMode::ResetRound()
 {
     PlayerOne->ResetFighter(FVector(-390.0f, 0.0f, 110.0f));
     PlayerTwo->ResetFighter(FVector(390.0f, 0.0f, 110.0f));
+    LastScoringPlayer = 0;
+    AIThinkRemaining = 0.0f;
+    AIBoostRemaining = 0.0f;
     bRoundActive = true;
 }
 
@@ -260,4 +317,35 @@ void ADropfallArenaGameMode::ToggleOpponentMode()
 {
     bPlayerTwoAI = !bPlayerTwoAI;
     ResetMatch();
+}
+
+void ADropfallArenaGameMode::CycleAIDifficulty()
+{
+    if (AIDifficulty == EDropfallAIDifficulty::Rookie)
+    {
+        AIDifficulty = EDropfallAIDifficulty::Rival;
+    }
+    else if (AIDifficulty == EDropfallAIDifficulty::Rival)
+    {
+        AIDifficulty = EDropfallAIDifficulty::Ace;
+    }
+    else
+    {
+        AIDifficulty = EDropfallAIDifficulty::Rookie;
+    }
+    bPlayerTwoAI = true;
+    ResetMatch();
+}
+
+FString ADropfallArenaGameMode::GetAIDifficultyName() const
+{
+    switch (AIDifficulty)
+    {
+    case EDropfallAIDifficulty::Rookie:
+        return TEXT("ROOKIE");
+    case EDropfallAIDifficulty::Ace:
+        return TEXT("ACE");
+    default:
+        return TEXT("RIVAL");
+    }
 }
