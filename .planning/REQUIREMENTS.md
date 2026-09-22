@@ -1,120 +1,91 @@
----
-milestone: v3.0
-created: 2026-07-07
----
+# Requirements: Dropfall Arena Foundation
 
-# Dropfall v3.0 Requirements: Release Readiness
+**Defined:** 2026-09-22
+**Core Value:** Every round creates an immediate, legible contest of movement, timing, positioning, and ring-outs.
 
-## Milestone v3.0 Requirements
+## v4.0 Requirements
 
-### Deployment (DEP)
+### Combat
 
-- [x] **DEP-01**: Static game client builds and deploys to railway.app (or associated static hosting).
-- [x] **DEP-02**: WebSocket game server deploys to railway.app as a service.
-- [x] **DEP-03**: railway.app config is stored in repo (railway.json or Dockerfile + environment variables).
-- [x] **DEP-04**: Production build script runs cleanly (`npm ci && npm run build`).
-- [x] **DEP-05**: Server exposes a health-check endpoint for railway probes.
+- [ ] **COMBAT-01**: Player movement responds immediately while preserving physical momentum and counter-play.
+- [ ] **COMBAT-02**: Players can boost in their intended direction with a clearly communicated cooldown.
+- [ ] **COMBAT-03**: Player collisions create readable, speed-dependent knockback without random one-touch outcomes.
+- [ ] **COMBAT-04**: Falling beyond the arena boundary produces a reliable ring-out and deterministic round result.
 
-### Online Multiplayer — Server (ONLINE-S)
+### Local Play
 
-- [x] **ONLINE-S-01**: Server runs an authoritative Rapier3D physics simulation for online matches.
-- [x] **ONLINE-S-02**: Server accepts player inputs, advances simulation, and broadcasts authoritative game state.
-- [x] **ONLINE-S-03**: Server supports lobby creation, joining, ready-up, countdown, and match lifecycle.
-- [x] **ONLINE-S-04**: Server handles player disconnect/reconnect with a grace window.
-- [x] **ONLINE-S-05**: Server validates game settings and enforces consistent match parameters.
+- [ ] **LOCAL-01**: One player can begin a versus-AI match without setup friction.
+- [ ] **LOCAL-02**: Two players can complete a couch-versus match on one machine.
+- [ ] **LOCAL-03**: Local players can use keyboard or standard gamepads with clear control prompts.
+- [ ] **LOCAL-04**: Players can switch opponent mode and restart a match without restarting the application.
 
-### Online Multiplayer — Client (ONLINE-C)
+### AI Ladder
 
-- [x] **ONLINE-C-01**: Client sends local input to server every frame/tick.
-- [x] **ONLINE-C-02**: Client receives authoritative state and updates remote + local entities smoothly.
-- [x] **ONLINE-C-03**: Client implements prediction and reconciliation so local controls feel responsive.
-- [x] **ONLINE-C-04**: Lobby UI allows entering server URL (or auto-detects same-origin), creating/joining games, and ready-up.
-- [x] **ONLINE-C-05**: Connection status, opponent presence, and errors are clearly communicated in UI.
+- [ ] **AI-01**: Player can select Rookie, Rival, or Ace AI from the playable match.
+- [ ] **AI-02**: Each AI tier uses distinct reaction, aim, aggression, and recovery behavior without privileged physics.
+- [ ] **AI-03**: AI protects itself near an edge and can intentionally set up a ring-out attack.
+- [ ] **AI-04**: Player progress records wins and best streak per AI tier locally.
 
-### Configuration (CFG)
+### Match Experience
 
-- [x] **CFG-01**: WebSocket server URL is environment-driven, not hardcoded.
-- [x] **CFG-02**: Level editor API URL is environment-driven, not hardcoded to `localhost:3001`.
-- [x] **CFG-03**: Client build injects environment variables correctly for dev/staging/prod.
-- [x] **CFG-04**: Server port and CORS origins are configurable via environment variables.
+- [ ] **MATCH-01**: HUD communicates score, opponent mode/tier, boost readiness, round result, and match winner.
+- [ ] **MATCH-02**: First-to-three rounds reset quickly and never accept gameplay input during transition.
+- [ ] **MATCH-03**: Rematch flow returns both fighters and match state to a known clean state.
+- [ ] **MATCH-04**: Camera keeps the actionable arena and both fighters readable throughout a round.
 
-### Local Multiplayer UX (LOCAL)
+### Arena Foundation
 
-- [x] **LOCAL-01**: Local 2-player split-screen/classic mode still works without regression.
-- [x] **LOCAL-02**: Single-player race mode still works without regression.
-- [x] **LOCAL-03**: Input bindings and menu navigation remain unchanged for desktop.
+- [ ] **ARENA-01**: The first arena contains purposeful geometry that creates positioning choices without obscuring play.
+- [ ] **ARENA-02**: Arena dimensions, spawn points, hazards, score target, and tuning can move into data assets without changing match code.
+- [ ] **ARENA-03**: Runtime code separates authoritative rules from local input, presentation, and future transport.
 
-### Release Polish (POLISH)
+### Product Integrity
 
-- [x] **POLISH-01**: Power-up notifications no longer block player view.
-- [x] **POLISH-02**: Arena size slider is capped at 16 and destruction-rate slider direction is fixed.
-- [x] **POLISH-03**: Settings can be saved/loaded as presets.
-- [x] **POLISH-04**: Auto-restart preference persists across matches (local storage).
-- [ ] **POLISH-05**: Game maintains target frame rates on desktop and mid-range mobile.
+- [ ] **PROD-01**: Ads and monetization prompts are forbidden while a round or match is active.
+- [ ] **PROD-02**: A paid entitlement contract can disable all advertising without changing gameplay state.
+- [ ] **PROD-03**: Competitive gameplay tuning is covered by automated or headless validation where practical.
 
-## Future Requirements (v3.1+)
+## Future Requirements
 
-### Advanced Online Features (deferred)
+### Online Competition
 
-- **ONLINE-F-01**: Spectator mode.
-- **ONLINE-F-02**: Ranked matchmaking.
-- **ONLINE-F-03**: Replay recording.
-- **ONLINE-F-04**: Region selection / multiple server regions.
+- **ONLINE-01**: Players can join authoritative casual and ranked online matches.
+- **ONLINE-02**: Ranked results feed authenticated seasonal leaderboards.
+- **ONLINE-03**: Replays and server validation support disputes and cheat detection.
 
-### Mobile & PWA (deferred)
+### Creation and Community
 
-- **MOBILE-F-01**: PWA support (Add to Home Screen).
-- **MOBILE-F-02**: Advanced haptic feedback.
-- **MOBILE-F-03**: Native wrapper (Capacitor/Cordova).
+- **CREATE-01**: Players can build arenas from validated modular parts.
+- **CREATE-02**: Creators can test, validate, publish, and version arenas.
+- **COMM-01**: Players can browse curated and community arena rotations.
+
+### Commercial Release
+
+- **STORE-01**: Steam entitlement permanently disables advertising.
+- **STORE-02**: Free builds show only restrained menu/intermission placements with frequency caps.
 
 ## Out of Scope
 
 | Feature | Reason |
 |---------|--------|
-| Native mobile app packaging | PWA/native wrapper is future scope |
-| Ranked matchmaking | Out of scope for initial release |
-| Console ports | Web-first release |
-| Mobile-specific game modes | Classic/Race modes only for v3.0 |
+| Ranked online play in v4.0 | Local simulation and match feel must stabilize first |
+| Global leaderboard in v4.0 | Requires identity, backend authority, and anti-cheat |
+| Production ad provider in v4.0 | Policy and entitlement seam precede vendor integration |
+| Full art production | Greybox/readability validation comes before expensive content |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DEP-01 | Phase 8 | Complete |
-| DEP-02 | Phase 8 | Complete |
-| DEP-03 | Phase 8 | Complete |
-| DEP-04 | Phase 8 | Complete |
-| DEP-05 | Phase 8 | Complete |
-| CFG-01 | Phase 8 | Complete |
-| CFG-02 | Phase 8 | Complete |
-| CFG-03 | Phase 8 | Complete |
-| CFG-04 | Phase 8 | Complete |
-| LOCAL-01 | Phase 9 | Complete |
-| LOCAL-02 | Phase 9 | Complete |
-| LOCAL-03 | Phase 9 | Complete |
-| POLISH-01 | Phase 9 | Complete |
-| POLISH-02 | Phase 9 | Complete |
-| POLISH-03 | Phase 9 | Complete |
-| POLISH-04 | Phase 9 | Complete |
-| POLISH-05 | Phase 9 | Pending |
-| ONLINE-S-01 | Phase 10 | Complete |
-| ONLINE-S-02 | Phase 10 | Complete |
-| ONLINE-S-03 | Phase 10 | Complete |
-| ONLINE-S-04 | Phase 10 | Complete |
-| ONLINE-S-05 | Phase 10 | Complete |
-| ONLINE-C-01 | Phase 11 | Complete |
-| ONLINE-C-02 | Phase 11 | Complete |
-| ONLINE-C-03 | Phase 11 | Complete |
-| ONLINE-C-04 | Phase 11 | Complete |
-| ONLINE-C-05 | Phase 11 | Complete |
+| COMBAT-01, COMBAT-02, COMBAT-03, COMBAT-04 | Phase 12 | In Progress |
+| LOCAL-01, LOCAL-02, LOCAL-03, LOCAL-04 | Phase 13 | Pending |
+| AI-01, AI-02, AI-03, AI-04 | Phase 14 | Pending |
+| MATCH-01, MATCH-02, MATCH-03, MATCH-04 | Phase 13 | Pending |
+| ARENA-01, ARENA-02, ARENA-03 | Phase 15 | Pending |
+| PROD-01, PROD-02, PROD-03 | Phase 16 | Pending |
 
-**Coverage:**
-- v3.0 requirements: 28 total
-- Mapped to phases: 28
-- Complete: 27
-- Pending: 1 (POLISH-05)
-- Unmapped: 0 ✓
+**Coverage:** 22 v4.0 requirements | 22 mapped | 0 unmapped ✓
 
 ---
-*Requirements defined: 2026-07-07*
-*Last updated: 2026-07-07 after Phase 11 completion*
+*Requirements defined: 2026-09-22*
+*Last updated: 2026-09-22 after v4.0 roadmap creation*

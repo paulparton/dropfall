@@ -1,106 +1,104 @@
 ---
-name: Dropfall Release Readiness
-version: v3.0
-type: brownfield
-created: 2026-03-31
-updated: 2026-07-07
+name: Dropfall Arena
+version: v4.0
+type: brownfield-rewrite
+created: 2026-09-22
+updated: 2026-09-22
 ---
 
-# Dropfall v3.0: Release Readiness
+# Dropfall Arena
 
 ## What This Is
 
-Dropfall is a fast-paced, retro-styled 3D local and online multiplayer arena game built with Three.js and Rapier3D. Players battle in a cyber arena, use boosts, and knock opponents off the edge. This milestone prepares the game for public web release with first-class online multiplayer and railway.app deployment.
+Dropfall Arena is the native Unreal evolution of Dropfall: a fast, readable physics arena game that works immediately as local party play and rewards enough mastery to support serious competitive play. Dropfall Classic remains the web edition and design reference; Arena is a clean gameplay implementation rather than a line-for-line port.
 
 ## Core Value
 
-Players can reliably play Dropfall together online or locally in a smooth, responsive, and visually polished experience.
+Every round must create an immediate, legible contest of movement, timing, positioning, and ring-outs that is fun on the first match and remains skillful after hundreds.
 
 ## Business Context
 
-- **Customer**: Casual multiplayer gamers on web/desktop/mobile web.
-- **Revenue model**: Free web release; future monetization optional.
-- **Success metric**: Stable online matches with <100ms perceived latency; successful railway deployment of client + server.
-- **Strategy notes**: Ship a solid web MVP before considering native app stores or advanced features.
+- **Customer**: Party-game players, competitive arena players, and community event organizers.
+- **Revenue model**: Free-to-play with restrained ads outside active play; any paid storefront entitlement permanently removes ads.
+- **Success metric**: Players voluntarily rematch, progress through the AI ladder, and can trust competitive results.
+- **Strategy notes**: Ship local multiplayer and local AI quality before online services; preserve authoritative simulation boundaries from day one.
+
+## Current Milestone: v4.0 Arena Foundation
+
+**Goal:** Turn the Unreal greybox into a replayable local combat vertical slice with responsive controls, couch play, an AI ladder, clear match flow, and foundations that will not be discarded for online play.
+
+**Target features:**
+- Responsive physics combat with readable boost timing and reliable ring-outs.
+- Keyboard and controller-ready couch versus plus local versus AI.
+- Three-step AI ladder with distinct, visible difficulty behavior.
+- Clear HUD, round transitions, rematch flow, and local progress records.
+- Data-driven arena/gameplay seams and automated validation for later ranked authority.
 
 ## Requirements
 
 ### Validated
 
-- ✓ Local split-screen 2-player classic mode — existing
-- ✓ Ball physics, arena, tile destruction, power-ups — existing
-- ✓ Settings/customization (colors, hats, sphere params) — existing
-- ✓ Single-player race mode — existing
-- ✓ Basic WebSocket lobby + matchmaking — existing (to be replaced)
-- ✓ VR/AR headset support — existing
+- ✓ Dropfall's ball-on-arena ring-out loop is fun in local play — Dropfall Classic.
+- ✓ First Unreal greybox boots directly into local versus AI and supports couch versus — Arena prototype.
+- ✓ First-to-three scoring, reset, shared camera, and basic physics interactions function in PIE — Arena prototype.
 
 ### Active
 
-- [ ] Rebuild online multiplayer with authoritative hosted game server.
-- [ ] Deploy static client and game server to railway.app from GitHub.
-- [ ] Fix hardcoded environment dependencies (level API URL, WebSocket URL).
-- [ ] Ensure local multiplayer UX remains smooth and unchanged.
-- [ ] Polish release blockers: performance, UI clutter, settings UX.
-- [ ] Add production build, health checks, and startup resilience.
+- [ ] Movement and boost feel deliberate, responsive, and readable at competitive speed.
+- [ ] One or two local players can play immediately with keyboard or controllers.
+- [ ] AI difficulty provides a fair three-rung learning ladder rather than hidden stat cheating.
+- [ ] Match state, HUD, rounds, wins, and rematches are unambiguous.
+- [ ] Arena rules and tuning are separated from presentation and future network transport.
+- [ ] Monetization boundaries guarantee no advertising interrupts active gameplay.
 
 ### Out of Scope
 
-- Native mobile app packaging (PWA/capacitor) — future scope.
-- Advanced matchmaking/ranked play — future scope.
-- Cross-platform console ports — future scope.
-- Mobile-specific game modes — deferred; existing mobile UX work from v2.3 may be incorporated if low-risk.
+- Online matchmaking and ranked servers — follow after local simulation and match rules stabilize.
+- Global leaderboards — local records arrive first; authenticated leaderboards require online identity and anti-cheat.
+- Full creator/level-builder UI — establish validated modular arena data before exposing authoring tools.
+- Production advertising SDK integration — define the policy and entitlement seam now, integrate a provider near release.
+- Cosmetic economy — movement readability and competitive integrity come first.
 
 ## Context
 
-- Previous milestone v2.3 focused on first-class mobile support. While some responsive/touch work may land here, v3.0 prioritizes release readiness and online multiplayer.
-- Current online multiplayer uses a host-client relay model: player 1 (host) runs full physics and broadcasts `game_state`; player 2 interpolates. This causes desync, input lag, and host-disconnect failures.
-- The level editor API is hardcoded to `http://localhost:3001/api`, which breaks any non-local deployment.
-- No Dockerfile, railway.json, or environment-based configuration exists yet.
-- The GitHub repo is already connected to a railway.app account.
+- Unreal Engine 5.8.1 project lives in `unreal/`; C++ owns runtime rules and simulation contracts.
+- Dropfall Classic remains in the repository as a feature reference and web product.
+- The current Arena prototype generates its level at runtime and uses engine primitives, allowing gameplay iteration without content dependencies.
+- Steam is the initial native launch target, with other storefronts possible.
 
 ## Constraints
 
-- **Tech stack**: Must stay on Three.js + Rapier3D + Vite + Node.js + WebSocket.
-- **Budget**: Use railway.app free/ starter tier; avoid managed databases if possible (in-memory state acceptable for MVP).
-- **Compatibility**: Keep existing local-multiplayer and single-player modes working.
-- **Performance**: Maintain 60 FPS on desktop, 30 FPS minimum on mid-range mobile.
+- **Engine**: Unreal Engine 5.8.1 with `BuildSettingsVersion.V7`.
+- **Gameplay**: Active rounds may never show ads or monetization prompts.
+- **Architecture**: Runtime gameplay cannot depend on editor Python or hand-edited `.uasset` bytes.
+- **Networking**: Core rules must be deterministic enough to move behind server authority without redesigning player-facing behavior.
+- **Performance**: Stable 60 fps is the minimum gameplay target on supported desktop hardware.
+- **Input**: Keyboard and standard gamepads are first-class for local play.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Authoritative server physics | Eliminates host advantage, desync, and host-disconnect failures. | — Pending |
-| Deploy client + server on railway.app | User already connected the repo; simplest path to public release. | — Pending |
-| Replace rather than patch online code | Current relay model is fundamentally unreliable; cleaner to rebuild. | — Pending |
-| Keep local multiplayer unchanged | It already works; scope risk is online + deployment. | — Pending |
-
-## Current Milestone: v3.0 Release Readiness
-
-**Goal:** Ship Dropfall as a playable web release with first-class online multiplayer and railway.app deployment.
-
-**Target features:**
-- Authoritative online multiplayer with hosted game server.
-- railway.app deployment for static client and WebSocket server.
-- Environment-aware configuration (no hardcoded localhost).
-- Local + online multiplayer UX validation.
-- Release blocker fixes (performance, UI, settings).
+| Build Arena as a clean Unreal implementation | The Classic codebase is a design sketch, not a native competitive foundation | ✓ Good |
+| Prove local versus and AI before online | Fast iteration exposes whether the core loop deserves network investment | — Pending |
+| Use C++ for simulation/rules and data/Blueprint seams for tuning/presentation | Supports performance, testing, designers, and future server authority | — Pending |
+| Ads only in menus or between sessions; paid entitlement disables them | Revenue must not damage match enjoyment or competitive trust | — Pending |
+| AI difficulty changes decisions and timing, not physics privileges | Players should learn transferable skills at every rung | — Pending |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
-**After each phase transition** (via `/gsd-transition`):
-1. Requirements invalidated? → Move to Out of Scope with reason.
-2. Requirements validated? → Move to Validated with phase reference.
-3. New requirements emerged? → Add to Active.
-4. Decisions to log? → Add to Key Decisions.
-5. "What This Is" still accurate? → Update if drifted.
+**After each phase transition:**
+1. Move validated requirements to Validated with their phase reference.
+2. Move invalidated requirements to Out of Scope with a reason.
+3. Add newly discovered requirements and significant decisions.
+4. Re-check that the product description and core value remain accurate.
 
-**After each milestone** (via `/gsd-complete-milestone`):
-1. Full review of all sections.
-2. Core Value check — still the right priority?
-3. Audit Out of Scope — reasons still valid?
-4. Update Context with current state.
+**After each milestone:**
+1. Review every section against shipped behavior and player feedback.
+2. Re-check the core value and business context.
+3. Audit deferred scope and update the technical context.
 
 ---
-*Last updated: 2026-07-07 after milestone v3.0 initialization*
+*Last updated: 2026-09-22 after starting v4.0 Arena Foundation*

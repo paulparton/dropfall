@@ -1,140 +1,77 @@
----
-milestone: v3.0
-name: Release Readiness
-phases: 4
-created: 2026-07-07
----
+# Roadmap: Dropfall Arena v4.0
 
-# Dropfall v3.0 Roadmap: Release Readiness
+## Phase 12: Combat Foundation
 
-## Overview
+**Mode:** mvp
 
-| # | Phase | Goal | Requirements | Success Criteria |
-|---|-------|------|--------------|------------------|
-| 8 | Deployment Foundation | Make the project deployable to railway.app with environment-aware config. | DEP-01..05, CFG-01..04 | 5 |
-| 9 | Local UX & Release Polish | Preserve local play and knock out release blockers. | LOCAL-01..03, POLISH-01..05 | 5 |
-| 10 | Authoritative Server | Build a hosted server that runs physics and owns match state. | ONLINE-S-01..05 | 5 |
-| 11 | Online Client Integration | Wire client to authoritative server with prediction/reconciliation. | ONLINE-C-01..05 | 5 |
+**Goal:** As a local player, I want precise movement, boost timing, and dependable collisions so that every ring-out feels earned and I immediately want a rematch.
 
-**Total:** 4 phases | 20 requirements mapped | 20 success criteria
-
----
-
-## Phase 8: Deployment Foundation
-
-**Goal:** Make the project deployable to railway.app with environment-aware config.
-
-**Requirements:** DEP-01, DEP-02, DEP-03, DEP-04, DEP-05, CFG-01, CFG-02, CFG-03, CFG-04
+**Requirements:** COMBAT-01, COMBAT-02, COMBAT-03, COMBAT-04
 
 **Success Criteria:**
-1. `npm ci && npm run build` completes without errors.
-2. `railway.json` (or Dockerfile + service config) defines both static client and server services.
-3. Server reads `PORT` and CORS origins from environment variables.
-4. Client uses `import.meta.env.VITE_SERVER_URL` (or equivalent) instead of hardcoded `localhost:3000`.
-5. Level editor API URL is environment-driven and works in deployed builds.
+1. Movement responds instantly, preserves momentum, and remains controllable at arena edges.
+2. Boost exposes readiness state and cannot be spammed or silently fail.
+3. Collisions scale knockback with closing speed and retain counter-play.
+4. Simultaneous and individual ring-outs resolve once with predictable scoring.
+5. The editor target compiles cleanly and a full first-to-three PIE match completes without gameplay errors.
 
-**Deliverables:**
-- `railway.json`
-- Updated `package.json` scripts
-- Environment variable documentation
-- Working health-check endpoint (`/health`)
+## Phase 13: Local Match Experience
 
----
+**Goal:** Make couch versus and versus AI start instantly and play cleanly with keyboard or controllers.
 
-## Phase 9: Local UX & Release Polish
-
-**Goal:** Preserve local play and knock out release blockers.
-
-**Requirements:** LOCAL-01, LOCAL-02, LOCAL-03, POLISH-01, POLISH-02, POLISH-03, POLISH-04, POLISH-05
+**Requirements:** LOCAL-01, LOCAL-02, LOCAL-03, LOCAL-04, MATCH-01, MATCH-02, MATCH-03, MATCH-04
 
 **Success Criteria:**
-1. Local 2-player classic mode plays through a full match without regression.
-2. Single-player race mode plays through a full race without regression.
-3. Power-up notifications are repositioned so they do not obscure the arena.
-4. Arena size slider caps at 16 and destruction-rate slider maps low→little, high→much destruction.
-5. Settings presets can be saved, loaded, and deleted; auto-restart preference persists.
+1. One-player versus AI and two-player couch matches require no menus or restarts to switch.
+2. Keyboard and two standard controllers can independently move and boost fighters.
+3. HUD and camera communicate all actionable state at a glance.
+4. Round transitions lock input, reset cleanly, and reach rematch without stale state.
 
-**Deliverables:**
-- UI/UX fixes in `src/main.js` and `src/style.css`
-- Settings preset system
-- Regression tests for local modes
+## Phase 14: AI Ladder
 
----
+**Goal:** Create a three-rung solo ladder that teaches positioning and increasingly credible ring-out tactics.
 
-## Phase 10: Authoritative Server
-
-**Goal:** Build a hosted server that runs physics and owns match state.
-
-**Requirements:** ONLINE-S-01, ONLINE-S-02, ONLINE-S-03, ONLINE-S-04, ONLINE-S-05
+**Requirements:** AI-01, AI-02, AI-03, AI-04
 
 **Success Criteria:**
-1. Server imports Rapier3D and initializes a physics world identical to the client.
-2. Server advances simulation at a fixed tick rate (e.g., 60 Hz) and accepts player inputs.
-3. Server broadcasts serialized game state (player positions, velocities, tile states, scores) to both clients at 20 Hz.
-4. Lobby lifecycle works: create, join, ready-up, countdown, play, round-over, rematch.
-5. Disconnect grace window (15s) allows reconnect without ending the match.
+1. Rookie, Rival, and Ace are selectable and visibly identified.
+2. Tiers differ through reaction/decision quality, not hidden movement or mass advantages.
+3. AI attacks, recovers, and respects dangerous edges at increasing competence.
+4. Local wins and streaks persist independently for each tier.
 
-**Deliverables:**
-- New `server/game/` modules: `GameRoom.js`, `PhysicsWorld.js`, `Player.js`, `Arena.js`
-- Updated `server/server.js` to route WebSocket messages to game rooms
-- Shared serialization format between server and client
+## Phase 15: Arena and Presentation Foundation
 
----
+**Goal:** Establish a readable, tunable arena/content architecture for rapid design iteration.
 
-## Phase 11: Online Client Integration
-
-**Goal:** Wire client to authoritative server with prediction/reconciliation.
-
-**Requirements:** ONLINE-C-01, ONLINE-C-02, ONLINE-C-03, ONLINE-C-04, ONLINE-C-05
+**Requirements:** ARENA-01, ARENA-02, ARENA-03
 
 **Success Criteria:**
-1. Client sends input frames to server every local tick.
-2. Client applies authoritative state and interpolates remote player smoothly.
-3. Local player uses client-side prediction; server corrections are reconciled without jarring snaps.
-4. Lobby UI supports same-origin auto-connect, manual URL entry, create/join, ready-up, and error messages.
-5. Connection status, opponent presence, disconnect/reconnect, and round results are clearly shown.
+1. Arena geometry creates multiple viable approaches and preserves full visual readability.
+2. Rules and arena configuration are data-driven behind validated C++ contracts.
+3. Presentation, input, and future transport can change without rewriting authoritative rules.
+4. Hit, boost, ring-out, round, and win feedback form a cohesive presentation pass.
 
-**Deliverables:**
-- Refactored `src/online.js` or new `src/network/` modules
-- Updated `src/main.js` online hooks
-- New/updated lobby UI components
+## Phase 16: Product Integrity and Release Seams
 
----
+**Goal:** Lock competitive, monetization, validation, and storefront boundaries before online expansion.
 
-## Traceability
+**Requirements:** PROD-01, PROD-02, PROD-03
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| DEP-01 | 8 | Complete |
-| DEP-02 | 8 | Complete |
-| DEP-03 | 8 | Complete |
-| DEP-04 | 8 | Complete |
-| DEP-05 | 8 | Complete |
-| CFG-01 | 8 | Complete |
-| CFG-02 | 8 | Complete |
-| CFG-03 | 8 | Complete |
-| CFG-04 | 8 | Complete |
-| LOCAL-01 | 9 | Complete |
-| LOCAL-02 | 9 | Complete |
-| LOCAL-03 | 9 | Complete |
-| POLISH-01 | 9 | Complete |
-| POLISH-02 | 9 | Complete |
-| POLISH-03 | 9 | Complete |
-| POLISH-04 | 9 | Complete |
-| POLISH-05 | 9 | Pending |
-| ONLINE-S-01 | 10 | Complete |
-| ONLINE-S-02 | 10 | Complete |
-| ONLINE-S-03 | 10 | Complete |
-| ONLINE-S-04 | 10 | Complete |
-| ONLINE-S-05 | 10 | Complete |
-| ONLINE-C-01 | 11 | Complete |
-| ONLINE-C-02 | 11 | Complete |
-| ONLINE-C-03 | 11 | Complete |
-| ONLINE-C-04 | 11 | Complete |
-| ONLINE-C-05 | 11 | Complete |
+**Success Criteria:**
+1. Runtime policy makes active-play ad placement impossible.
+2. Paid entitlement disables all ad opportunities through one stable interface.
+3. Combat and match invariants run in automated/headless validation.
+4. Steam-facing build settings and future authoritative-server seams are documented and enforced.
 
-**Coverage:** 28 requirements mapped to 4 phases | 27 Complete | 1 Pending (POLISH-05) | Unmapped: 0 ✓
+## Progress
+
+| Phase | Status | Requirements | Progress |
+|-------|--------|--------------|----------|
+| 12. Combat Foundation | In Progress | 4 | 0% |
+| 13. Local Match Experience | Pending | 8 | 0% |
+| 14. AI Ladder | Pending | 4 | 0% |
+| 15. Arena and Presentation Foundation | Pending | 3 | 0% |
+| 16. Product Integrity and Release Seams | Pending | 3 | 0% |
 
 ---
-*Roadmap created: 2026-07-07*
-*Last updated: 2026-07-07 after Phase 11 completion*
+*Roadmap created: 2026-09-22*

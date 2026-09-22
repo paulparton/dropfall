@@ -1,92 +1,81 @@
 ---
 gsd_state_version: 1.0
-milestone: v3.0
-milestone_name: Release Readiness
+milestone: v4.0
+milestone_name: Arena Foundation
 status: executing
-last_updated: "2026-07-08T02:20:00.000Z"
-last_activity: 2026-07-08
+last_updated: "2026-09-22T06:10:00.000Z"
+last_activity: 2026-09-22
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 0
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 1
   completed_plans: 0
-  percent: 96
+  percent: 5
 ---
 
-# Dropfall v3.0 State
+# Dropfall Arena v4.0 State
 
 ## Project Reference
 
-**Core Value**: Players can reliably play Dropfall together online or locally in a smooth, responsive, and visually polished experience.
+See: `.planning/PROJECT.md` (updated 2026-09-22)
 
-**Current Focus**: Phase 11 — Online Client Integration (complete); pending POLISH-05 performance verification.
+**Core Value**: Every round creates an immediate, legible contest of movement, timing, positioning, and ring-outs.
 
-**Milestone**: v3.0 "Release Readiness"
+**Current Focus**: Phase 12 — Combat Foundation.
+
+**Milestone**: v4.0 "Arena Foundation"
 
 ## Current Position
 
-Phase: 11 — Online Client Integration
-Plan: —
-Status: Complete
-Last activity: 2026-07-07 — Phase 11 (Online Client Integration) completed.
+Phase: 12 — Combat Foundation
+Plan: 12-01 — Combat Foundation Vertical Slice
+Status: In progress; native build and runtime smoke test pass, awaiting player feel feedback
+Last activity: 2026-09-22 — Implemented and launched the first v4.0 combat slice
 
 ## Performance Metrics
 
 | Metric | Target | Current |
 |--------|--------|---------|
-| Phases Complete | 4 | 4 |
-| Plans Executed | TBD | 0 |
-| Requirements Met | 28 | 27 |
-| Desktop Regression | None | Passed |
+| Editor build | Clean | Passed |
+| PIE boot | Successful | Passed |
+| Full AI match | First to 3 resolves | Passed (3–1) |
+| Gameplay log errors | 0 project errors | Passed |
+| Player feel UAT | Positive/rematch-worthy | Pending |
 
 ## Accumulated Context
 
 ### Key Decisions
 
-- Authoritative server physics replaces host-client relay model.
-- Deploy client + server on railway.app from connected GitHub repo.
-- Replace rather than patch existing online multiplayer code.
-- Keep local multiplayer and single-player modes unchanged.
-- Environment-driven configuration; no hardcoded localhost URLs.
-- Rate sliders (destruction/ice/bonus) now use "intensity" semantics: higher value = more frequent effect.
-- Settings UI syncs from store on init and after preset load.
-- Server game modules: `GameRoom.js`, `PhysicsWorld.js`, `Arena.js`, `Player.js`.
-- Server validates and clamps all game settings.
-- Server broadcasts authoritative state at 20 Hz and runs physics at 60 Hz.
-- 15-second disconnect/reconnect grace window preserved.
-- Client sends normalized input every local tick (`forward`, `right`, `boost`, `tick`).
-- Client predicts local player movement and reconciles against server state with velocity-based smoothing.
-- Remote players are interpolated from an authoritative state buffer.
-- Connection status toasts replaced alerts for lobby/disconnect/reconnect events.
+- Dropfall Classic remains the web edition and design reference; Arena is a clean Unreal implementation.
+- Local multiplayer and local versus AI are proven before online services.
+- C++ owns simulation, match rules, future authority, and validation contracts.
+- AI tiers change reaction and decisions, never fighter physics.
+- Ads and monetization prompts are forbidden during active play.
+- Paid storefront entitlement will disable all advertising through one product-level seam.
+
+### Implemented in Current Slice
+
+- Tunable fighter movement and boost contract.
+- Normalized boost readiness for HUD/presentation.
+- Speed-scaled fighter collision impulses with contact gating.
+- Player 1 keyboard and gamepad input.
+- Rookie, Rival, and Ace AI switching with `F2`.
+- Clear point and match-winner states.
 
 ### Pending TODOs
 
-- POLISH-05: verify/maintain target frame rates on desktop and mid-range mobile.
+- Tune acceleration, speed, boost, and collision impulse from hands-on player feedback.
+- Complete independent two-controller input routing in Phase 13.
+- Persist AI ladder records in Phase 14.
+- Verify 60 fps budget as presentation/content grows.
 
 ### Blockers
 
-- None
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260428-qwy | Remove portals from game - comment out code for potential future use | 2026-04-28 | e173311 | [260428-qwy-remove-portals-from-game-comment-out-cod](./quick/260428-qwy-remove-portals-from-game-comment-out-cod/) |
-| 260526-tmm | Add AR mode to Dropfall VR/headset rooms (roomscale + tabletop) | 2026-05-26 | dbe6b94, ed9029b | [260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms](./quick/260526-tmm-add-ar-mode-to-dropfall-vr-headset-rooms/) |
-| 260708-h59 | Hide manual server URL UI for production Railway deploy | 2026-07-08 | — | [260708-h59-hide-manual-server-url-ui-for-production](./quick/260708-h59-hide-manual-server-url-ui-for-production/) |
-| 260708-m3g | Fix Railway build: EBUSY node_modules cache and Node 18 version mismatch | 2026-07-08 | — | [260708-m3g-fix-railway-build-ebusy-node-modules-cac](./quick/260708-m3g-fix-railway-build-ebusy-node-modules-cac/) |
-| 260708-mhf | Add GitHub Actions workflow to deploy to Railway | 2026-07-08 | d2ba94b | [260708-mhf-add-github-actions-workflow-to-deploy-to](./quick/260708-mhf-add-github-actions-workflow-to-deploy-to/) |
+- None.
 
 ## Session Continuity
 
-**Last Session**: 2026-07-08 — Quick tasks: hide manual server URL UI + fix Railway build + add GitHub Actions deploy workflow.
-**Next Action**: Commit all changes, add RAILWAY_TOKEN secret, and push to trigger deployment.
-**Context for Next Session**:
-
-- Phase 8 deployment foundation is in place: railway.json, env-driven URLs, health endpoint, working build.
-- Phase 9 polish is complete: arena size capped, rate sliders inverted, notifications repositioned, presets/auto-restart fixed.
-- Phase 10 authoritative server is in place and tested: GameRoom, PhysicsWorld, Arena, Player modules.
-- Phase 11 client integration is in place: prediction/reconciliation, remote interpolation, lobby UI, connection toasts.
+**Next Action**: Gather player feel feedback on the running Phase 12 slice, tune combat, then complete controller/couch match flow in Phase 13.
 
 ---
-*State initialized: 2026-07-07 for v3.0 Release Readiness milestone*
+*State updated: 2026-09-22 during Phase 12 execution*
