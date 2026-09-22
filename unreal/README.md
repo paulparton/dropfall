@@ -16,6 +16,8 @@ dependencies. Play-in-Editor opens match setup with Solo Ladder selected.
 - Player 2 gamepad: second controller left stick, bottom face button to boost
 - Left/Right, D-pad, `Tab`, or click: choose Practice / Solo Ladder / Couch
 - `Q` or gamepad Y: cycle AI difficulty in Practice setup
+- `E` or right shoulder: cycle Foundry / Crosswind / Skyway in setup
+- `F` or left shoulder: choose Fall Away / Stable Arena in setup
 - Enter/Space/gamepad A: start, advance from results, or replay
 - `R`: restart match (restarts the entire run in Solo Ladder)
 - `M` or gamepad Start: return to setup and abandon current run
@@ -23,14 +25,21 @@ dependencies. Play-in-Editor opens match setup with Solo Ladder selected.
 
 Movement is screen-relative: `W` always moves toward the top of the shared
 camera, regardless of Unreal world axes. Press Enter, Space, or the bottom
-gamepad face button at the ready screen to start the countdown. After 30
-seconds the platform enters Sudden Drop and begins shrinking.
+gamepad face button at the ready screen to start the countdown. Fall Away marks
+the next floor ring red for four seconds before it drops at 30 seconds, then
+removes further rings every 14 seconds. Stable Arena never removes terrain.
+
+Foundry is 16 x 16m with two ramps; Crosswind is 24 x 16m with four; Skyway is
+32 x 24m with six. Green ramps rise toward a gold launch lip. Speed and boost
+carry balls up the physical slope and into the air; no jump button is needed.
 
 The boost bars at the bottom of the screen refill toward ready. AI tiers change
 reaction time, prediction, aggression, and edge recovery without changing the
 fighter's mass, acceleration, speed cap, or boost physics. Solo Ladder progresses
 through Rookie, Rival and Ace. Only completed runs enter the saved local top five,
-ordered by fewest conceded rounds and then fastest active play time.
+ordered by fewest conceded rounds and then fastest active play time, separately
+for each map/terrain rule. Map/rule choices are fixed during a run. Legacy
+prototype scores remain in the save but do not compete against new-map scores.
 
 Click the PIE viewport once if keyboard focus is not already captured.
 

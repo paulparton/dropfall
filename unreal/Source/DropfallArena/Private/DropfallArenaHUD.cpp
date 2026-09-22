@@ -103,13 +103,14 @@ void ADropfallArenaHUD::DrawHUD()
         Label(TEXT("FEWEST CONCEDED, THEN FASTEST TIME"), 852, 255, 12, Gold);
         Rect(852, 284, 354, 1, Muted.CopyWithNewOpacity(0.3f));
         const UDropfallProgressSave* Progress = Game->GetProgress();
+        const TArray<FDropfallLadderRecord> Records = Progress ? Progress->GetBoard(Game->GetMap().Id, Game->IsFallAway()) : TArray<FDropfallLadderRecord>();
         for (int32 Index = 0; Index < 5; ++Index)
         {
             const float Y = 305 + Index * 46.0f;
             Label(FString::Printf(TEXT("%02d"), Index + 1), 854, Y, 19, Index == 0 ? Gold : Muted);
-            if (Progress && Progress->LadderRecords.IsValidIndex(Index))
+            if (Records.IsValidIndex(Index))
             {
-                const FDropfallLadderRecord& Record = Progress->LadderRecords[Index];
+                const FDropfallLadderRecord& Record = Records[Index];
                 Label(FString::Printf(TEXT("%d conceded"), Record.RoundsConceded), 900, Y, 18, FLinearColor::White);
                 Label(RunTime(Record.ActiveSeconds), 1110, Y, 18, Cyan);
             }
@@ -119,7 +120,8 @@ void ADropfallArenaHUD::DrawHUD()
                 Label(TEXT("--:--"), 1120, Y, 18, Muted);
             }
         }
-        Label(TEXT("This device  /  Solo ladder only"), 852, 565, 15, Muted);
+        Label(Game->GetMap().Name + TEXT(" / ") + Game->GetTerrainRuleName(), 852, 554, 15, Gold);
+        Label(TEXT("This device / separate records per map and rule"), 852, 578, 13, Muted);
     };
 
     const EDropfallMatchPhase Phase = Game->GetMatchPhase();
@@ -149,30 +151,29 @@ void ADropfallArenaHUD::DrawHUD()
                     FName(*FString::Printf(TEXT("Mode%d"), Index)), true);
                 MenuHit(FName(*FString::Printf(TEXT("Mode%d"), Index)), X, 164, 236, 118);
             }
-            Rect(48, 306, 740, 214, Panel);
+            Rect(48, 300, 740, 82, Panel);
+            Label(TEXT("MAP  /  ") + Game->GetMap().Name, 68, 315, 25, Cyan);
+            Label(Game->GetMap().Description, 68, 350, 17, Muted);
+            Label(TEXT("E / RB / click"), 602, 320, 16, Muted);
+            MenuHit(TEXT("Map"), 48, 300, 740, 82);
+            Rect(48, 390, 740, 75, Panel);
+            Label(Game->GetTerrainRuleName(), 68, 403, 23, Gold);
+            Label(Game->IsFallAway() ? TEXT("Red warning, then floor sections drop. First collapse at 30s.")
+                : TEXT("The entire floor stays. No collapse timer. Win by ring-out."), 68, 437, 16, Muted);
+            Label(TEXT("F / LB / click"), 602, 410, 16, Muted);
+            MenuHit(TEXT("Terrain"), 48, 390, 740, 75);
             if (bLadder)
             {
-                Label(TEXT("ROOKIE     /     RIVAL     /     ACE"), 72, 333, 28, Gold);
-                Label(TEXT("Win a match to climb. Lose a match and the run ends."), 72, 388, 21, FLinearColor::White);
-                Label(TEXT("Protect your edge. Concede fewer rounds. Set a faster time."), 72, 428, 18, Muted);
-                Label(TEXT("Your best five completed runs stay on this device."), 72, 468, 18, Muted);
+                Label(TEXT("ROOKIE / RIVAL / ACE  -  Win to climb; lose to restart."), 48, 491, 20, Gold);
             }
             else if (Game->IsPlayerTwoAI())
             {
-                Label(FString::Printf(TEXT("OPPONENT  /  %s"), *Game->GetAIDifficultyName()), 72, 333, 28, Gold);
-                Label(TEXT("Find your timing and learn to control the edge."), 72, 388, 21, FLinearColor::White);
-                Label(FString::Printf(TEXT("%d wins   /   %d current streak   /   %d best streak"),
-                    Game->GetAIWins(), Game->GetAICurrentStreak(), Game->GetAIBestStreak()), 72, 428, 18, Muted);
-                Label(TEXT("Q / gamepad Y / click here: change opponent"), 72, 468, 18, Cyan);
-                AddHitBox(Offset + FVector2D(48, 306) * Scale, FVector2D(740, 214) * Scale, TEXT("Difficulty"), true);
-                MenuHit(TEXT("Difficulty"), 48, 306, 740, 214);
+                Label(TEXT("OPPONENT: ") + Game->GetAIDifficultyName() + TEXT("   /   Q / Y / click to change"), 48, 491, 20, Cyan);
+                MenuHit(TEXT("Difficulty"), 48, 477, 740, 52);
             }
             else
             {
-                Label(TEXT("SETTLE IT ON THE ARENA"), 72, 333, 28, Coral);
-                Label(TEXT("CYAN  /  WASD + Space, or controller 1"), 72, 388, 21, Cyan);
-                Label(TEXT("CORAL  /  Arrow keys + Right Shift, or controller 2"), 72, 428, 21, Coral);
-                Label(TEXT("Push your opponent off. First to three ring-outs wins."), 72, 468, 18, Muted);
+                Label(TEXT("P1: WASD + Space    /    P2: Arrows + R Shift"), 48, 491, 20, FLinearColor::White);
             }
             Button(TEXT("Confirm"), bLadder ? TEXT("START RUN") : TEXT("START MATCH"), 48, 548, 290, Cyan);
             MenuHit(TEXT("Confirm"), 48, 548, 290, 52);
@@ -239,10 +240,12 @@ void ADropfallArenaHUD::DrawHUD()
         : TEXT("FIRST TO THREE"), 640, 96, 16, Muted);
     if (Phase == EDropfallMatchPhase::Playing)
     {
-        const FString Timer = Game->GetRoundTimeRemaining() <= 0 ? TEXT("FINAL SIZE")
-            : FString::Printf(TEXT("%02d"), FMath::CeilToInt(Game->GetRoundTimeRemaining()));
-        Center(Game->IsSuddenDeath() ? TEXT("SUDDEN DROP  /  ") + Timer : Timer,
-            640, 146, 22, Game->IsSuddenDeath() ? Gold : FLinearColor::White);
+        const FString Timer = !Game->IsFallAway() ? TEXT("STABLE ARENA / NO COLLAPSE")
+            : Game->GetRoundTimeRemaining() <= 0 ? TEXT("FINAL DROP")
+            : FString::Printf(TEXT("%s / %02d"), Game->IsSuddenDeath() ? TEXT("RED SECTIONS FALL IN") : TEXT("NEXT DROP"),
+                FMath::CeilToInt(Game->GetRoundTimeRemaining()));
+        Center(Timer, 640, 146, 22, Game->IsSuddenDeath() ? Gold : FLinearColor::White);
+        Center(Game->GetMap().Name, 640, 178, 14, Muted);
     }
     const ADropfallFighterPawn* Fighters[] = { Game->GetPlayerOne(), Game->GetPlayerTwo() };
     for (int32 Index = 0; Index < 2; ++Index)
@@ -282,6 +285,8 @@ void ADropfallArenaHUD::NotifyHitBoxClick(FName BoxName)
     if (BoxName == TEXT("Confirm")) Game->ConfirmSelection();
     else if (BoxName == TEXT("Setup")) Game->ReturnToSetup();
     else if (BoxName == TEXT("Difficulty")) Game->CycleAIDifficulty();
+    else if (BoxName == TEXT("Map")) Game->CycleMap();
+    else if (BoxName == TEXT("Terrain")) Game->ToggleTerrainRule();
     else if (BoxName == TEXT("Mode0")) Game->SelectPlayMode(EDropfallPlayMode::Practice);
     else if (BoxName == TEXT("Mode1")) Game->SelectPlayMode(EDropfallPlayMode::Ladder);
     else if (BoxName == TEXT("Mode2")) Game->SelectPlayMode(EDropfallPlayMode::Couch);

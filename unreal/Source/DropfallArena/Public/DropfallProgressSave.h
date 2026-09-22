@@ -29,6 +29,12 @@ struct FDropfallLadderRecord
     GENERATED_BODY()
 
     UPROPERTY()
+    FName ArenaId = TEXT("Legacy");
+
+    UPROPERTY()
+    bool bFallAway = true;
+
+    UPROPERTY()
     int32 RoundsConceded = 0;
 
     UPROPERTY()
@@ -46,7 +52,8 @@ class DROPFALLARENA_API UDropfallProgressSave : public USaveGame
 public:
     void EnsureValid();
     /** Returns a one-based rank, or zero when the run does not enter the board. */
-    int32 RecordLadderRun(const FDropfallLadderRun& Run);
+    int32 RecordLadderRun(const FDropfallLadderRun& Run, FName ArenaId = TEXT("Legacy"), bool bFallAway = true);
+    TArray<FDropfallLadderRecord> GetBoard(FName ArenaId, bool bFallAway) const;
 
     UPROPERTY(VisibleAnywhere, Category = "Dropfall|Progress")
     TArray<FDropfallLadderRecord> LadderRecords;

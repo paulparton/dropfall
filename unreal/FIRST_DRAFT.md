@@ -6,10 +6,12 @@ intended for hands-on feel testing, not public distribution yet.
 ## Play loop
 
 1. Choose Practice, Solo Ladder, or Couch Versus from match setup.
+   Choose a map with `E` / right shoulder, and terrain rule with `F` / left shoulder.
 2. Click Start, or press Enter, Space, or Gamepad A for a short countdown.
 3. Knock the opponent off the arena. First to three points wins.
-4. After 30 seconds, **Sudden Drop** shrinks the platform to its final size over
-   15 seconds. The round continues until a ring-out.
+4. **Fall Away** flashes the next floor ring red for four seconds, then drops
+   it at 30 seconds. Further rings fall every 14 seconds, including their
+   supported obstacles. **Stable Arena** keeps the entire floor indefinitely.
 5. Confirm results to rematch or advance to the next ladder opponent.
 
 ## Solo ladder and local leaderboard
@@ -22,6 +24,20 @@ this device alongside the existing per-tier wins and streaks.
 
 Practice, couch matches, incomplete runs and abandoned runs do not enter the
 ladder leaderboard. This is a local records board, not an online ranking.
+Records are separate for each map and terrain rule. Previous prototype records
+remain in the save's legacy board and are not mixed into these new boards.
+
+## Maps and ramps
+
+| Map | Size | Layout |
+|-----|------|--------|
+| Foundry | 16 x 16 metres | Pillars, angled barriers, two ramps |
+| Crosswind | 24 x 16 metres | Long lanes, staggered cover, four ramps |
+| Skyway | 32 x 24 metres | Wide run-ups, obstacle islands, six ramps |
+
+Green ramps rise toward their gold lip. Build speed and boost up the slope to
+launch; there is no separate jump button. Both players and bots use the same
+physics. The camera fits the map while preserving screen-relative movement.
 
 ## Controls
 
@@ -36,10 +52,12 @@ Movement is camera-relative: up is always the top of the screen.
 
 - Setup: `Left` / `Right`, D-pad, `Tab`, or click a card to choose mode.
 - Practice setup: `Q`, gamepad Y, or click the opponent panel to cycle difficulty.
+- Setup map: `E`, right shoulder, or click the map panel.
+- Setup terrain: `F`, left shoulder, or click the terrain panel.
 - `Enter` / `Space` / gamepad A: start, advance, or replay at results.
 - `R`: restart the match; in Solo Ladder, discard the run and start at Rookie.
 - `M` / gamepad Start: return to setup (abandons any current run).
-- Mode and difficulty changes are locked during a match.
+- Mode, difficulty, map and terrain changes are locked during a match and ladder run.
 
 ## Included first-draft systems
 
@@ -51,7 +69,8 @@ Movement is camera-relative: up is always the top of the screen.
 - Three-stage solo runs, results flow and persistent top-five local leaderboard.
 - Responsive mouse/keyboard/controller match setup and results screens.
 - Single shared camera, keyboard, and two-controller couch play.
-- Timed Sudden Drop platform shrink.
+- Three authored maps with collision ramps, pillars and angled barriers.
+- Optional warning-marked falling floor rings, or a completely stable floor.
 - Runtime arena/rules tuning structs and future authoritative-server seams.
 - Monetization policy API that makes active-match ad placement invalid and paid
   entitlement suppress all placements.
@@ -60,11 +79,13 @@ Movement is camera-relative: up is always the top of the screen.
 
 ## Verification limits
 
-Editor and native Mac game targets compile, and all five automated contracts
+Editor and native Mac game targets compile, and all nine automated tests
 pass. Setup, couch scoring/results/rematch, and arena presentation were checked
 in PIE. Physical two-controller play, every native mouse target, and a complete
 hands-on ladder run still need playtesting. The development preview is not a
 cooked distribution build.
+Map tests also exercise actual floor/ramp collision, collapse/reset, separate
+leaderboards and a simulated boosted ramp trajectory beyond the launch lip.
 
 ## Deliberately deferred
 

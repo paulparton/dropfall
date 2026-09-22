@@ -30,10 +30,12 @@ void UDropfallProgressSave::EnsureValid()
         return A.RoundsConceded != B.RoundsConceded
             ? A.RoundsConceded < B.RoundsConceded : A.ActiveSeconds < B.ActiveSeconds;
     });
-    if (LadderRecords.Num() > 5)
+    TMap<FString, int32> BoardCounts;
+    LadderRecords.RemoveAll([&](const FDropfallLadderRecord& Record)
     {
-        LadderRecords.SetNum(5);
-    }
+        const FString Key = Record.ArenaId.ToString() + (Record.bFallAway ? TEXT("/fall") : TEXT("/stable"));
+        return ++BoardCounts.FindOrAdd(Key) > 5;
+    });
 }
 
 void FDropfallLadderRun::Start()
@@ -84,7 +86,15 @@ bool FDropfallLadderRun::Advance()
     return true;
 }
 
-int32 UDropfallProgressSave::RecordLadderRun(const FDropfallLadderRun& Run)
+TArray<FDropfallLadderRecord> UDropfallProgressSave::GetBoard(const FName ArenaId, const bool bFallAway) const
+{
+    return LadderRecords.FilterByPredicate([&](const FDropfallLadderRecord& Record)
+    {
+        return Record.ArenaId == ArenaId && Record.bFallAway == bFallAway;
+    });
+}
+
+int32 UDropfallProgressSave::RecordLadderRun(const FDropfallLadderRun& Run, const FName ArenaId, const bool bFallAway)
 {
     if (!Run.bCompleted || Run.bActive || Run.Stage != 2
         || Run.RoundsConceded < 0 || !FMath::IsFinite(Run.ActiveSeconds) || Run.ActiveSeconds <= 0.0f)
@@ -93,13 +103,16 @@ int32 UDropfallProgressSave::RecordLadderRun(const FDropfallLadderRun& Run)
     }
     EnsureValid();
     FDropfallLadderRecord Record;
+    Record.ArenaId = ArenaId;
+    Record.bFallAway = bFallAway;
     Record.RoundsConceded = Run.RoundsConceded;
     Record.ActiveSeconds = Run.ActiveSeconds;
     Record.CompletedAt = FDateTime::UtcNow();
+    const TArray<FDropfallLadderRecord> Board = GetBoard(ArenaId, bFallAway);
     int32 Index = 0;
-    while (Index < LadderRecords.Num())
+    while (Index < Board.Num())
     {
-        const FDropfallLadderRecord& Existing = LadderRecords[Index];
+        const FDropfallLadderRecord& Existing = Board[Index];
         if (Record.RoundsConceded < Existing.RoundsConceded
             || (Record.RoundsConceded == Existing.RoundsConceded
                 && Record.ActiveSeconds < Existing.ActiveSeconds))
@@ -112,10 +125,7 @@ int32 UDropfallProgressSave::RecordLadderRun(const FDropfallLadderRun& Run)
     {
         return 0;
     }
-    LadderRecords.Insert(Record, Index);
-    if (LadderRecords.Num() > 5)
-    {
-        LadderRecords.SetNum(5);
-    }
+    LadderRecords.Add(Record);
+    EnsureValid();
     return Index + 1;
 }

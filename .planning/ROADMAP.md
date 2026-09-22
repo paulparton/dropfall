@@ -71,7 +71,15 @@ solo runs locally.
 
 **Plans:** 17-01-PLAN.md — run state, persistence, navigation, HUD and validation.
 
-## Progress
+## Phase 18: Maps, Ramps and Terrain Modes
+
+**Goal:** Core gameplay variety before presentation polish: three larger maps,
+varied obstacles, physical launch ramps, and selectable Stable Arena/Fall Away.
+
+**Plan:** 18-01-PLAN.md — authored layouts, terrain lifecycle, setup selectors,
+map/rule-specific boards, collision and trajectory validation.
+
+## Implementation progress
 
 | Phase | Status | Requirements | Progress |
 |-------|--------|--------------|----------|
@@ -81,6 +89,7 @@ solo runs locally.
 | 15. Arena and Presentation Foundation | Complete | 3 | 100% |
 | 16. Product Integrity and Release Seams | Complete | 3 | 100% |
 | 17. Solo Ladder and Front End | Implemented; hands-on follow-up | Local ladder and setup | 100% |
+| 18. Maps, Ramps and Terrain Modes | Implemented; playtest tuning next | Map variety and terrain rules | 100% |
 
 ---
 *Roadmap created: 2026-09-22*

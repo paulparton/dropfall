@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "DropfallProgressSave.h"
+#include "DropfallArenaLayout.h"
 #include "DropfallArenaGameMode.generated.h"
 
 class ACameraActor;
@@ -49,17 +50,6 @@ struct FDropfallArenaTuning
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float CountdownSeconds = 2.4f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float RoundDurationSeconds = 45.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float SuddenDeathStartSeconds = 30.0f;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FVector2D FloorScale = FVector2D(12.0f, 8.0f);
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    FVector2D SuddenDeathFloorScale = FVector2D(8.5f, 5.4f);
 };
 
 UCLASS()
@@ -103,15 +93,21 @@ public:
     void ConfirmSelection();
     void ReturnToSetup();
     void CycleAIDifficulty();
+    void CycleMap();
+    void ToggleTerrainRule();
+    FDropfallMapDefinition GetMap() const { return FDropfallMapDefinition::Get(MapIndex); }
+    bool IsFallAway() const { return bFallAway; }
+    FString GetTerrainRuleName() const { return bFallAway ? TEXT("FALL AWAY") : TEXT("STABLE ARENA"); }
 
 private:
     void ClearTemplateGeometry();
-    void BuildGreyboxArena();
+    void BuildArena();
+    void FrameArenaCamera();
     void SpawnFighters();
     void SpawnCamera();
     void ReadLocalInput(float DeltaSeconds);
     void UpdateMatchFlow(float DeltaSeconds);
-    void UpdateArenaShrink();
+    void UpdateArenaTerrain();
     void BeginCountdown();
     void UpdateAI(float DeltaSeconds);
     FVector2D CalculateAIIntent() const;
@@ -119,7 +115,6 @@ private:
     void AwardPoint(int32 ScoringPlayer);
     void ResetRound();
     void ResetMatch();
-    void ToggleOpponentMode();
     void SetMenuInput(bool bMenu);
     void StartSelectedMode();
     void SaveProgress();
@@ -136,13 +131,7 @@ private:
     TObjectPtr<ACameraActor> ArenaCamera;
 
     UPROPERTY()
-    TObjectPtr<UStaticMesh> CubeMesh;
-
-    UPROPERTY()
-    TObjectPtr<UMaterialInterface> ArenaMaterial;
-
-    UPROPERTY()
-    TObjectPtr<UStaticMeshComponent> ArenaFloorMesh;
+    TObjectPtr<ADropfallArenaLayout> ArenaLayout;
 
     UPROPERTY()
     TObjectPtr<UDropfallProgressSave> ProgressSave;
@@ -167,6 +156,8 @@ private:
     FDropfallLadderRun LadderRun;
     int32 LadderRank = 0;
     bool bSaveFailed = false;
+    int32 MapIndex = 0;
+    bool bFallAway = true;
     FTimerHandle RoundResetTimer;
 
     static const FString ProgressSlotName;

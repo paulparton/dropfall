@@ -48,10 +48,13 @@ Every round must create an immediate, legible contest of movement, timing, posit
 - ✓ Camera-basis movement mapping; solo-run progression, local top-five ranking
   and save roundtrip — Phase 17 automated contracts.
 - ✓ Match setup/results and couch rematch flow — Phase 17 PIE checks.
+- ✓ Three larger maps, physical boost ramps, Stable/Fall Away terrain rules,
+  map/rule-specific records and collision/reset contracts — Phase 18.
 
 ### Active
 
 - [ ] Tune combat values from broader hands-on playtesting.
+- [ ] Playtest large-map traversal, ramp approaches, bot navigation and falling-floor pacing before the final presentation pass.
 - [ ] Replace greybox presentation with production characters, environments, music, and accessibility settings.
 - [ ] Validate physical controllers, native mouse targets and a complete ladder run.
 - [ ] Add settings/accessibility and cooked packaging needed for a public demo.
