@@ -9,9 +9,9 @@ intended for hands-on feel testing, not public distribution yet.
    Choose a map with `E` / right shoulder, and terrain rule with `F` / left shoulder.
 2. Click Start, or press Enter, Space, or Gamepad A for a short countdown.
 3. Knock the opponent off the arena. First to three points wins.
-4. **Fall Away** flashes the next floor ring red for four seconds, then drops
-   it at 30 seconds. Further rings fall every 14 seconds, including their
-   supported obstacles. **Stable Arena** keeps the entire floor indefinitely.
+4. **Fall Away** flashes outer extensions red for four seconds, then drops
+   them at 30 seconds. Intermediate galleries fall at 50 seconds. The final
+   16m core and its elevated terrace remain. **Stable Arena** keeps everything.
 5. Confirm results to rematch or advance to the next ladder opponent.
 
 ## Solo ladder and local leaderboard
@@ -31,13 +31,22 @@ remain in the save's legacy board and are not mixed into these new boards.
 
 | Map | Size | Layout |
 |-----|------|--------|
-| Foundry | 16 x 16 metres | Pillars, angled barriers, two ramps |
-| Crosswind | 24 x 16 metres | Long lanes, staggered cover, four ramps |
-| Skyway | 32 x 24 metres | Wide run-ups, obstacle islands, six ramps |
+| Foundry | 24 x 24 metres | Industrial forge; six ramps; four pads; 2.4m galleries |
+| Crosswind | 32 x 24 metres | White/teal skyport; eight ramps; six pads; 3.6m flight decks |
+| Skyway | 32 x 32 metres | Neon orbital; ten ramps; eight pads; 4.2m causeways |
 
-Green ramps rise toward their gold lip. Build speed and boost up the slope to
-launch; there is no separate jump button. Both players and bots use the same
+Lit ramp edges and chevrons show climbing routes. Build speed and boost up free
+slopes to launch; no jump button is needed. Circular pads launch automatically
+in the gold arrow's direction. Pads cannot fire from below their deck, after
+falling, or repeatedly within a 1.4-second lockout. Both players use identical
 physics. The camera fits the map while preserving screen-relative movement.
+
+Each arena has an original matching sphere shell: riveted Forge, swept Turbine,
+or ringed Orbit. Team-coloured channels remain cyan/coral. Cosmetic shells have
+no collision and do not change mass, boost, acceleration or the physical radius.
+The brighter square boundary marks the final core. A round can continue on
+this core indefinitely until a ring-out; it no longer drops the last tile.
+Layered layouts have versioned leaderboards, preserving previous map scores.
 
 ## Controls
 
@@ -69,8 +78,9 @@ Movement is camera-relative: up is always the top of the screen.
 - Three-stage solo runs, results flow and persistent top-five local leaderboard.
 - Responsive mouse/keyboard/controller match setup and results screens.
 - Single shared camera, keyboard, and two-controller couch play.
-- Three authored maps with collision ramps, pillars and angled barriers.
-- Optional warning-marked falling floor rings, or a completely stable floor.
+- Three themed multi-level maps with connecting ramps, launch slopes and pads.
+- Two warning-marked collapse stages ending in a permanent playable core.
+- Original Blender sphere shells and an adjustable metallic/emissive material.
 - Runtime arena/rules tuning structs and future authoritative-server seams.
 - Monetization policy API that makes active-match ad placement invalid and paid
   entitlement suppress all placements.
@@ -79,17 +89,20 @@ Movement is camera-relative: up is always the top of the screen.
 
 ## Verification limits
 
-Editor and native Mac game targets compile, and all nine automated tests
-pass. Setup, couch scoring/results/rematch, and arena presentation were checked
+Editor and native Mac game targets compile and all 13 automated tests pass.
+This theme/layer pass adds connectivity, launch-pad lifecycle, terrace traversal
+and cosmetic physics parity tests. Setup, couch scoring/results/rematch, and presentation were checked
 in PIE. Physical two-controller play, every native mouse target, and a complete
 hands-on ladder run still need playtesting. The development preview is not a
 cooked distribution build.
 Map tests also exercise actual floor/ramp collision, collapse/reset, separate
 leaderboards and a simulated boosted ramp trajectory beyond the launch lip.
+All three surviving terraces are climbed using normal movement in physics tests.
+Assets passed Blender export/reimport and Unreal bounds/material-slot validation.
 
 ## Deliberately deferred
 
-- Final characters, animation, music, environments, and accessibility menu.
+- Further art refinement, music and environment dressing.
 - Settings and accessibility UI.
 - Online services, ranked play, global leaderboard, and replay authority.
 - Production ad/storefront SDKs and public packaging/signing.

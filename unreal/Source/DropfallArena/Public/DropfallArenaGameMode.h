@@ -102,7 +102,7 @@ public:
 private:
     void ClearTemplateGeometry();
     void BuildArena();
-    void FrameArenaCamera();
+    void FrameArenaCamera(bool bInterpolate = false);
     void SpawnFighters();
     void SpawnCamera();
     void ReadLocalInput(float DeltaSeconds);

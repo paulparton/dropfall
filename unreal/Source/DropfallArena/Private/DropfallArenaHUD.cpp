@@ -158,7 +158,7 @@ void ADropfallArenaHUD::DrawHUD()
             MenuHit(TEXT("Map"), 48, 300, 740, 82);
             Rect(48, 390, 740, 75, Panel);
             Label(Game->GetTerrainRuleName(), 68, 403, 23, Gold);
-            Label(Game->IsFallAway() ? TEXT("Red warning, then floor sections drop. First collapse at 30s.")
+            Label(Game->IsFallAway() ? TEXT("Outer falls at 30s. Middle at 50s. Final arena stays.")
                 : TEXT("The entire floor stays. No collapse timer. Win by ring-out."), 68, 437, 16, Muted);
             Label(TEXT("F / LB / click"), 602, 410, 16, Muted);
             MenuHit(TEXT("Terrain"), 48, 390, 740, 75);
@@ -241,7 +241,7 @@ void ADropfallArenaHUD::DrawHUD()
     if (Phase == EDropfallMatchPhase::Playing)
     {
         const FString Timer = !Game->IsFallAway() ? TEXT("STABLE ARENA / NO COLLAPSE")
-            : Game->GetRoundTimeRemaining() <= 0 ? TEXT("FINAL DROP")
+            : Game->GetRoundTimeRemaining() <= 0 ? TEXT("FINAL ARENA / CORE HOLDS")
             : FString::Printf(TEXT("%s / %02d"), Game->IsSuddenDeath() ? TEXT("RED SECTIONS FALL IN") : TEXT("NEXT DROP"),
                 FMath::CeilToInt(Game->GetRoundTimeRemaining()));
         Center(Timer, 640, 146, 22, Game->IsSuddenDeath() ? Gold : FLinearColor::White);

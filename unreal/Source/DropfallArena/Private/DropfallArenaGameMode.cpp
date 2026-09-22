@@ -102,16 +102,27 @@ void ADropfallArenaGameMode::BuildArena()
         SetDevelopmentLabel(ArenaLayout, TEXT("Arena Layout"));
     }
     ArenaLayout->Build(GetMap());
+    if (PlayerOne) PlayerOne->SetArenaTheme(MapIndex);
+    if (PlayerTwo) PlayerTwo->SetArenaTheme(MapIndex);
     FrameArenaCamera();
 }
 
-void ADropfallArenaGameMode::FrameArenaCamera()
+void ADropfallArenaGameMode::FrameArenaCamera(bool bInterpolate)
 {
     if (!ArenaCamera) return;
-    const FVector2D Half = GetMap().HalfSize();
+    FVector2D Half = GetMap().HalfSize();
+    if (bFallAway && RoundElapsedSeconds >= FDropfallMapDefinition::FirstDrop)
+    {
+        const float Extent = RoundElapsedSeconds >= FDropfallMapDefinition::FirstDrop + FDropfallMapDefinition::DropInterval ? 800 : 1200;
+        Half.X = FMath::Min(Half.X, static_cast<double>(Extent));
+        Half.Y = FMath::Min(Half.Y, static_cast<double>(Extent));
+    }
     // Keep the same camera basis (and input mapping) while fitting every map.
-    const float DistanceScale = FMath::Max(Half.X / 780.0f, Half.Y / 780.0f);
-    ArenaCamera->SetActorLocation(GetArenaCameraLocation() * DistanceScale);
+    // Reserve vertical safe area for scores and boost bars, including high decks.
+    const float DistanceScale = FMath::Max(Half.X / 780.0f, Half.Y / 560.0f);
+    const FVector Target = GetArenaCameraLocation() * DistanceScale;
+    ArenaCamera->SetActorLocation(bInterpolate
+        ? FMath::VInterpTo(ArenaCamera->GetActorLocation(), Target, GetWorld()->GetDeltaSeconds(), 2.0f) : Target);
 }
 
 void ADropfallArenaGameMode::CycleMap()
@@ -140,11 +151,13 @@ void ADropfallArenaGameMode::SpawnFighters()
     {
         SetDevelopmentLabel(PlayerOne, TEXT("Cyan Fighter"));
         PlayerOne->SetFighterColor(FLinearColor(0.02f, 0.8f, 1.0f));
+        PlayerOne->SetArenaTheme(MapIndex);
     }
     if (PlayerTwo)
     {
         SetDevelopmentLabel(PlayerTwo, TEXT("Coral Fighter"));
         PlayerTwo->SetFighterColor(FLinearColor(1.0f, 0.04f, 0.12f));
+        PlayerTwo->SetArenaTheme(MapIndex);
     }
 }
 
@@ -155,6 +168,8 @@ void ADropfallArenaGameMode::SpawnCamera()
     ArenaCamera = GetWorld()->SpawnActor<ACameraActor>(CameraLocation, CameraRotation);
     SetDevelopmentLabel(ArenaCamera, TEXT("Arena Camera"));
     ArenaCamera->GetCameraComponent()->SetFieldOfView(60.0f);
+    ArenaCamera->GetCameraComponent()->PostProcessSettings.bOverride_AutoExposureBias = true;
+    ArenaCamera->GetCameraComponent()->PostProcessSettings.AutoExposureBias = -1.0f;
     FrameArenaCamera();
 
     if (APlayerController* Controller = UGameplayStatics::GetPlayerController(this, 0))
@@ -313,7 +328,13 @@ void ADropfallArenaGameMode::UpdateMatchFlow(const float DeltaSeconds)
 
 void ADropfallArenaGameMode::UpdateArenaTerrain()
 {
-    if (ArenaLayout) ArenaLayout->SetRoundTime(RoundElapsedSeconds, bFallAway);
+    if (ArenaLayout)
+    {
+        ArenaLayout->SetRoundTime(RoundElapsedSeconds, bFallAway);
+        ArenaLayout->TryLaunch(PlayerOne);
+        ArenaLayout->TryLaunch(PlayerTwo);
+        FrameArenaCamera(true);
+    }
 }
 
 void ADropfallArenaGameMode::BeginCountdown()
@@ -360,6 +381,7 @@ FVector2D ADropfallArenaGameMode::CalculateAIIntent() const
         TargetLocation += PlayerOne->GetVelocity() * 0.22f;
     }
 
+    TargetLocation = GetMap().RouteToElevation(PlayerTwo->GetActorLocation(), TargetLocation, RoundElapsedSeconds, bFallAway);
     const FVector ToPlayer = TargetLocation - PlayerTwo->GetActorLocation();
     const FVector2D Chase(ToPlayer.X, ToPlayer.Y);
     const FVector2D Strafe(-Chase.Y, Chase.X);
@@ -476,6 +498,7 @@ void ADropfallArenaGameMode::ResetRound()
     CachedAIIntent = FVector2D::ZeroVector;
     RoundElapsedSeconds = 0.0f;
     if (ArenaLayout) ArenaLayout->SetRoundTime(0, bFallAway);
+    FrameArenaCamera();
     BeginCountdown();
 }
 
@@ -495,6 +518,7 @@ void ADropfallArenaGameMode::ResetMatch()
     PlayerOne->ResetFighter(GetMap().Spawn(true));
     PlayerTwo->ResetFighter(GetMap().Spawn(false));
     if (ArenaLayout) ArenaLayout->SetRoundTime(0, bFallAway);
+    FrameArenaCamera();
     MatchPhase = EDropfallMatchPhase::Ready;
 }
 
@@ -541,7 +565,8 @@ float ADropfallArenaGameMode::GetRoundTimeRemaining() const
 bool ADropfallArenaGameMode::IsSuddenDeath() const
 {
     return MatchPhase == EDropfallMatchPhase::Playing
-        && bFallAway && GetMap().NextDrop(RoundElapsedSeconds) <= FDropfallMapDefinition::WarningSeconds;
+        && bFallAway && GetMap().NextDrop(RoundElapsedSeconds) > 0
+        && GetMap().NextDrop(RoundElapsedSeconds) <= FDropfallMapDefinition::WarningSeconds;
 }
 
 void ADropfallArenaGameMode::LoadProgress()

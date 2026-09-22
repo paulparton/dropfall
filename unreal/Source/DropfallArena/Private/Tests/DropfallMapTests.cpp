@@ -43,11 +43,11 @@ bool FDropfallMapCatalogTest::RunTest(const FString& Parameters)
             if (Spec.Kind == EDropfallObstacle::Ramp)
             {
                 ++Ramps;
-                TestTrue(TEXT("ramp entry top is flush"), FMath::Abs(Transform.TransformPosition(FVector(-50, 0, 50)).Z) < 0.01);
+                TestTrue(TEXT("ramp entry top is flush"), Transform.TransformPosition(FVector(-50, 0, 50)).Equals(Spec.Position, .01));
                 TestTrue(TEXT("launch lip is raised"), Transform.TransformPosition(FVector(50, 0, 50)).Z > 140);
             }
         }
-        TestEqual(TEXT("two more ramps on each larger map"), Ramps, 2 * (Index + 1));
+        TestEqual(TEXT("two more ramps on each larger map"), Ramps, 6 + 2 * Index);
         TestEqual(TEXT("stable bounds never shrink"), Map.SafeHalfSize(1000, false), Half);
         TestTrue(TEXT("warning encourages AI inward"), Map.SafeHalfSize(27, true).X < Half.X);
         TestEqual(TEXT("initial drop countdown"), Map.NextDrop(0), 30.0f);
@@ -81,10 +81,10 @@ bool FDropfallMapCollisionTest::RunTest(const FString& Parameters)
         Layout->SetRoundTime(29, true);
         TestEqual(TEXT("warning is still solid"), Layout->GetSolidFloorCount(), Total);
         Layout->SetRoundTime(30, true);
-        TestEqual(TEXT("outer ring removed on schedule"), Layout->GetSolidFloorCount(), (Map.Grid.X - 2) * (Map.Grid.Y - 2));
+        TestEqual(TEXT("outer extensions removed, cross-shaped middle remains"), Layout->GetSolidFloorCount(), 32);
         TestFalse(TEXT("dropped floor no longer collides"), HitFloor());
         Layout->SetRoundTime(100, true);
-        TestEqual(TEXT("all rings eventually fall"), Layout->GetSolidFloorCount(), 0);
+        TestEqual(TEXT("permanent sixteen-tile combat core survives"), Layout->GetSolidFloorCount(), 16);
         Layout->SetRoundTime(0, true);
         TestEqual(TEXT("rematch restores every tile"), Layout->GetSolidFloorCount(), Total);
         TestTrue(TEXT("rematch restores collision"), HitFloor());
@@ -125,7 +125,7 @@ bool FDropfallMapBoardsTest::RunTest(const FString& Parameters)
     TestTrue(TEXT("boards serialize"), UGameplayStatics::SaveGameToMemory(Save, Bytes));
     const UDropfallProgressSave* Loaded = Cast<UDropfallProgressSave>(UGameplayStatics::LoadGameFromMemory(Bytes));
     if (TestNotNull(TEXT("boards reload"), Loaded))
-        TestEqual(TEXT("map and terrain identities survive"), Loaded->GetBoard(TEXT("Skyway_v1"), false).Num(), 5);
+        TestEqual(TEXT("map and terrain identities survive"), Loaded->GetBoard(FDropfallMapDefinition::Get(2).Id, false).Num(), 5);
     return true;
 }
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDropfallRampFlightTest, "DropfallArena.Maps.BoostRampFlight",
@@ -140,10 +140,10 @@ bool FDropfallRampFlightTest::RunTest(const FString& Parameters)
     World->bShouldSimulatePhysics = true;
     ADropfallArenaLayout* Layout = World->SpawnActor<ADropfallArenaLayout>();
     Layout->Build(FDropfallMapDefinition::Get(0));
-    ADropfallFighterPawn* Fighter = World->SpawnActor<ADropfallFighterPawn>(FVector(-420, -300, 56), FRotator::ZeroRotator);
+    ADropfallFighterPawn* Fighter = World->SpawnActor<ADropfallFighterPawn>(FVector(430, -1020, 56), FRotator::ZeroRotator);
     TestWorld.BeginPlayInTestWorld();
-    Fighter->ResetFighter(FVector(-420, -300, 56));
-    Fighter->SetMoveIntent(FVector2D(0, 1));
+    Fighter->ResetFighter(FVector(430, -1020, 56));
+    Fighter->SetMoveIntent(FVector2D(1, 0));
     TestWorld.TickTestWorld(1.0f / 60);
     Fighter->TryBoost();
     bool bAirBeyondLip = false;
@@ -153,13 +153,142 @@ bool FDropfallRampFlightTest::RunTest(const FString& Parameters)
         TestWorld.TickTestWorld(1.0f / 60);
         const FVector Position = Fighter->GetActorLocation();
         HighestZ = FMath::Max(HighestZ, Position.Z);
-        // Foundry's +Y ramp lip ends near Y=258, top Z=144. Beyond the
-        // lip, this altitude proves free flight instead of merely climbing.
-        if (Position.Y > 325 && Position.Z > 205) bAirBeyondLip = true;
+        // Outer launch ramp ends at X=1020, Z=145, with no receiving deck.
+        if (Position.X > 1090 && Position.Z > 205) bAirBeyondLip = true;
     }
     AddInfo(FString::Printf(TEXT("Ramp trajectory apex: %.1f cm; final %s"), HighestZ, *Fighter->GetActorLocation().ToString()));
     TestTrue(TEXT("boosted ball becomes airborne beyond physical ramp lip"), bAirBeyondLip);
     TestWorld.ForwardErrorMessages(this);
+    return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDropfallLayerConnectivityTest, "DropfallArena.Maps.LayerConnectivity",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDropfallLayerConnectivityTest::RunTest(const FString& Parameters)
+{
+    for (int32 Index = 0; Index < 3; ++Index)
+    {
+        const FDropfallMapDefinition Map = FDropfallMapDefinition::Get(Index);
+        TestEqual(TEXT("no further collapse after middle"), Map.NextDrop(1000), 0.0f);
+        TestEqual(TEXT("core bounds remain usable forever"), Map.SafeHalfSize(1000, true), FVector2D(800));
+        for (const FDropfallObstacleSpec& Deck : Map.Obstacles)
+        {
+            if (Deck.Kind != EDropfallObstacle::Deck) continue;
+            bool bConnected = false;
+            const float Top = Deck.Position.Z + Deck.Size.Z / 2;
+            for (const FDropfallObstacleSpec& Ramp : Map.Obstacles)
+            {
+                if (Ramp.Kind != EDropfallObstacle::Ramp || Ramp.Layer != Deck.Layer) continue;
+                const FVector End = Map.RampTransform(Ramp).TransformPosition(FVector(50, 0, 50));
+                if (FMath::Abs(End.Z - Top) < .01 && FMath::Abs(End.X - Deck.Position.X) <= Deck.Size.X / 2 + .1
+                    && FMath::Abs(End.Y - Deck.Position.Y) <= Deck.Size.Y / 2 + .1) bConnected = true;
+            }
+            TestTrue(TEXT("every elevated deck has a flush ramp in the same collapse layer"), bConnected);
+        }
+        const FVector From(-320, -650, 56), Target(-320, 500, 240);
+        TestTrue(TEXT("AI approaches surviving core ramp before elevated opponent"),
+            Map.RouteToElevation(From, Target, 1000, true).Y < 0);
+    }
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDropfallPadTest, "DropfallArena.Maps.LaunchPadPhysicsAndLifecycle",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDropfallPadTest::RunTest(const FString& Parameters)
+{
+    FTestWorldWrapper TestWorld;
+    if (!TestWorld.CreateTestWorld(EWorldType::Game)) return false;
+    UWorld* World = TestWorld.GetTestWorld();
+    World->GetWorldSettings()->DefaultGameMode = AGameModeBase::StaticClass();
+    World->bShouldSimulatePhysics = true;
+    ADropfallArenaLayout* Layout = World->SpawnActor<ADropfallArenaLayout>();
+    Layout->Build(FDropfallMapDefinition::Get(0));
+    ADropfallFighterPawn* Fighter = World->SpawnActor<ADropfallFighterPawn>(FVector(-600, -420, 56), FRotator::ZeroRotator);
+    TestWorld.BeginPlayInTestWorld();
+    Fighter->ResetFighter(FVector(-600, -420, 56));
+    TestTrue(TEXT("core launch pad activates"), Layout->TryLaunch(Fighter));
+    TestFalse(TEXT("launch velocity cannot stack"), Layout->TryLaunch(Fighter));
+    double Highest = 0;
+    for (int32 Frame = 0; Frame < 90; ++Frame)
+    {
+        TestWorld.TickTestWorld(1.0f / 60);
+        Highest = FMath::Max(Highest, Fighter->GetActorLocation().Z);
+    }
+    AddInfo(FString::Printf(TEXT("Launch pad apex %.1fcm"), Highest));
+    TestTrue(TEXT("pad produces real flight"), Highest > 250);
+    Fighter->ResetFighter(FVector(990, 80, 56));
+    TestFalse(TEXT("cannot trigger raised pad from underneath"), Layout->TryLaunch(Fighter));
+    Fighter->ResetFighter(FVector(990, 80, 296));
+    Layout->SetRoundTime(49, true);
+    TestTrue(TEXT("warning pad still usable"), Layout->TryLaunch(Fighter));
+    Fighter->ResetFighter(FVector(990, 80, 296));
+    Layout->SetRoundTime(50, true);
+    TestFalse(TEXT("fallen pad disabled"), Layout->TryLaunch(Fighter));
+    Fighter->ResetFighter(FVector(-600, -420, 56));
+    Layout->SetRoundTime(1000, true);
+    TestTrue(TEXT("final core pad survives"), Layout->TryLaunch(Fighter));
+    Layout->SetRoundTime(0, false);
+    Fighter->ResetFighter(FVector(990, 80, 296));
+    TestTrue(TEXT("reset restores raised pad"), Layout->TryLaunch(Fighter));
+    TestWorld.ForwardErrorMessages(this);
+    return true;
+}
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDropfallTerraceTraversalTest, "DropfallArena.Maps.PermanentTerraceTraversal",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDropfallTerraceTraversalTest::RunTest(const FString& Parameters)
+{
+    for (int32 MapIndex = 0; MapIndex < 3; ++MapIndex)
+    {
+        FTestWorldWrapper TestWorld;
+        if (!TestWorld.CreateTestWorld(EWorldType::Game)) return false;
+        UWorld* World = TestWorld.GetTestWorld();
+        World->GetWorldSettings()->DefaultGameMode = AGameModeBase::StaticClass();
+        World->bShouldSimulatePhysics = true;
+        ADropfallArenaLayout* Layout = World->SpawnActor<ADropfallArenaLayout>();
+        Layout->Build(FDropfallMapDefinition::Get(MapIndex));
+        Layout->SetRoundTime(1000, true);
+        ADropfallFighterPawn* Fighter = World->SpawnActor<ADropfallFighterPawn>(FVector(-320, -450, 56), FRotator::ZeroRotator);
+        TestWorld.BeginPlayInTestWorld();
+        Fighter->ResetFighter(FVector(-320, -450, 56));
+        Fighter->SetMoveIntent(FVector2D(0, 1));
+        bool bReachedDeck = false;
+        for (int32 Frame = 0; Frame < 180; ++Frame)
+        {
+            TestWorld.TickTestWorld(1.0f / 60);
+            const FVector P = Fighter->GetActorLocation();
+            if (P.Y > 410 && P.Y < 650 && P.Z > (MapIndex == 2 ? 265 : 225))
+            { bReachedDeck = true; break; }
+        }
+        TestTrue(TEXT("ball climbs onto surviving terrace without boost or pad assistance"), bReachedDeck);
+        TestWorld.ForwardErrorMessages(this);
+    }
+    return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FDropfallCosmeticTest, "DropfallArena.Art.SpherePhysicsParity",
+    EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FDropfallCosmeticTest::RunTest(const FString& Parameters)
+{
+    UWorld* World = UWorld::CreateWorld(EWorldType::Game, false);
+    ADropfallFighterPawn* Fighter = World->SpawnActor<ADropfallFighterPawn>();
+    UStaticMeshComponent* Body = Cast<UStaticMeshComponent>(Fighter->GetRootComponent());
+    const UStaticMesh* PhysicsMesh = Body->GetStaticMesh();
+    for (int32 Theme = 0; Theme < 3; ++Theme)
+    {
+        Fighter->SetFighterColor(FLinearColor(.02f, .8f, 1));
+        Fighter->SetArenaTheme(Theme);
+        TestTrue(TEXT("cosmetics never replace physical sphere"), Body->GetStaticMesh() == PhysicsMesh);
+        TestEqual(TEXT("unchanged body scale"), Body->GetComponentScale(), FVector(1.05f));
+        TArray<UStaticMeshComponent*> Meshes;
+        Fighter->GetComponents(Meshes);
+        for (UStaticMeshComponent* Mesh : Meshes) if (Mesh != Body)
+        {
+            TestNotNull(TEXT("themed shell asset loads"), Mesh->GetStaticMesh().Get());
+            TestTrue(TEXT("shell visible"), Mesh->IsVisible());
+            TestEqual(TEXT("shell never alters collision"), Mesh->GetCollisionEnabled(), ECollisionEnabled::NoCollision);
+            TestEqual(TEXT("shell has distinct team and armour slots"), Mesh->GetNumMaterials(), 2);
+        }
+    }
+    World->DestroyWorld(false);
     return true;
 }
 #endif

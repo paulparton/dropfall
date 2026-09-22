@@ -44,6 +44,8 @@ public:
     bool TryBoost();
     void ResetFighter(const FVector& SpawnLocation);
     void SetFighterColor(const FLinearColor& Color);
+    void SetArenaTheme(int32 Theme);
+    bool LaunchFromPad(FVector Direction);
 
     float GetBoostReadiness() const;
     float GetPlanarSpeed() const;
@@ -57,6 +59,11 @@ private:
 
     UPROPERTY(VisibleAnywhere)
     TObjectPtr<UStaticMeshComponent> Body;
+    UPROPERTY() TObjectPtr<UStaticMeshComponent> Shell;
+    UPROPERTY() TArray<TObjectPtr<class UStaticMesh>> ThemeMeshes;
+    UPROPERTY() TObjectPtr<class UMaterialInterface> SurfaceMaterial;
+    FLinearColor TeamColor = FLinearColor::White;
+    float PadLockoutRemaining = 0;
 
     UPROPERTY(VisibleAnywhere)
     TObjectPtr<UPointLightComponent> FighterLight;

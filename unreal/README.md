@@ -7,8 +7,8 @@ work is scoped to Arena.
 
 ## First playable greybox
 
-The editor boots directly into a runtime-generated arena with no content
-dependencies. Play-in-Editor opens match setup with Solo Ladder selected.
+The editor boots into a runtime-generated arena using the original meshes and
+materials in `Content/Arena`. Play-in-Editor opens setup with Solo Ladder selected.
 
 - Player 1: `WASD`, `Space` to boost
 - Player 1 gamepad: left stick, bottom face button to boost
@@ -26,12 +26,19 @@ dependencies. Play-in-Editor opens match setup with Solo Ladder selected.
 Movement is screen-relative: `W` always moves toward the top of the shared
 camera, regardless of Unreal world axes. Press Enter, Space, or the bottom
 gamepad face button at the ready screen to start the countdown. Fall Away marks
-the next floor ring red for four seconds before it drops at 30 seconds, then
-removes further rings every 14 seconds. Stable Arena never removes terrain.
+outer extensions red for four seconds before they drop at 30 seconds, then
+removes the intermediate galleries at 50 seconds. The final 16 x 16m arena,
+its terrace, two connecting ramps and two launch pads never fall. Stable Arena
+never removes terrain.
 
-Foundry is 16 x 16m with two ramps; Crosswind is 24 x 16m with four; Skyway is
-32 x 24m with six. Green ramps rise toward a gold launch lip. Speed and boost
-carry balls up the physical slope and into the air; no jump button is needed.
+Foundry is a 24 x 24m industrial forge with six ramps; Crosswind is a 32 x 24m
+skyport with eight; Skyway is a 32 x 32m neon orbital arena with ten. All have
+multiple elevations, flush connecting ramps, free-flight slopes and automatic
+launch pads. Pad arrows indicate launch direction; a 1.4-second per-fighter
+lockout prevents stacked launches. Higher decks reach 4.2m on Skyway.
+Forge, Turbine and Orbit sphere shells change with the map while retaining
+cyan/coral player markings and identical spherical physics. Editable Blender
+sources and reproducible import scripts are in `ArtSource`.
 
 The boost bars at the bottom of the screen refill toward ready. AI tiers change
 reaction time, prediction, aggression, and edge recovery without changing the

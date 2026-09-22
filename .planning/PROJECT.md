@@ -50,11 +50,13 @@ Every round must create an immediate, legible contest of movement, timing, posit
 - ✓ Match setup/results and couch rematch flow — Phase 17 PIE checks.
 - ✓ Three larger maps, physical boost ramps, Stable/Fall Away terrain rules,
   map/rule-specific records and collision/reset contracts — Phase 18.
+- ✓ Themed multi-level arenas, permanent final cores, connecting ramps, launch
+  pads and original cosmetic sphere shells with unchanged physics — Phase 19.
 
 ### Active
 
 - [ ] Tune combat values from broader hands-on playtesting.
-- [ ] Playtest large-map traversal, ramp approaches, bot navigation and falling-floor pacing before the final presentation pass.
+- [ ] Playtest multi-level routes, launch-pad landings, AI terrace navigation and 30s/50s collapse pacing.
 - [ ] Replace greybox presentation with production characters, environments, music, and accessibility settings.
 - [ ] Validate physical controllers, native mouse targets and a complete ladder run.
 - [ ] Add settings/accessibility and cooked packaging needed for a public demo.

@@ -79,6 +79,14 @@ varied obstacles, physical launch ramps, and selectable Stable Arena/Fall Away.
 **Plan:** 18-01-PLAN.md — authored layouts, terrain lifecycle, setup selectors,
 map/rule-specific boards, collision and trajectory validation.
 
+## Phase 19: Themed Layered Arenas
+
+**Goal:** Design a complete permanent endgame arena, then intermediate and outer
+layers. Add themed spheres, elevated decks, connecting ramps and launch pads.
+
+**Plan:** 19-01-PLAN.md — deterministic collapse dependencies, original Blender
+cosmetics, theme materials, pad lifecycle, route logic and physics verification.
+
 ## Implementation progress
 
 | Phase | Status | Requirements | Progress |
@@ -90,6 +98,7 @@ map/rule-specific boards, collision and trajectory validation.
 | 16. Product Integrity and Release Seams | Complete | 3 | 100% |
 | 17. Solo Ladder and Front End | Implemented; hands-on follow-up | Local ladder and setup | 100% |
 | 18. Maps, Ramps and Terrain Modes | Implemented; playtest tuning next | Map variety and terrain rules | 100% |
+| 19. Themed Layered Arenas | Implemented; playtest tuning next | Themes, elevations and final core | 100% |
 
 ---
 *Roadmap created: 2026-09-22*
