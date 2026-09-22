@@ -80,6 +80,20 @@ class OnlineManager {
             return url.replace(/\/$/, '');
         }
 
+        // A copied game-page link identifies the server's origin, not a
+        // WebSocket route. Explicit ws/wss URLs above retain custom paths.
+        try {
+            const pageUrl = new URL(/^https?:\/\//i.test(url) ? url : `http://${url}`);
+            if (/^\/dropfall-arena(?:\/(?:index\.html\/?)?)?$/.test(pageUrl.pathname)) {
+                return pageUrl.origin
+                    .replace(/^https:\/\//i, 'wss://')
+                    .replace(/^http:\/\//i, 'ws://');
+            }
+        } catch {
+            // Let the WebSocket constructor report malformed manual input,
+            // using the same handling as other server address formats.
+        }
+
         if (/^https?:\/\//i.test(url)) {
             return url
                 .replace(/^https:\/\//i, 'wss://')
@@ -853,11 +867,10 @@ class OnlineManager {
 
     static async fetchNetworkInfo(serverUrl = OnlineManager.getDefaultServerUrl()) {
         try {
-            const httpUrl = serverUrl
+            const httpUrl = new URL(OnlineManager.normalizeServerUrl(serverUrl)
                 .replace(/^wss:\/\//i, 'https://')
-                .replace(/^ws:\/\//i, 'http://')
-                .replace(/\/$/, '');
-            const res = await fetch(`${httpUrl}/api/network-info`);
+                .replace(/^ws:\/\//i, 'http://'));
+            const res = await fetch(`${httpUrl.origin}/api/network-info`);
             if (!res.ok) return null;
             return await res.json();
         } catch {

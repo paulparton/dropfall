@@ -3,9 +3,70 @@ import { existsSync, unlinkSync } from 'node:fs';
 import { resolve } from 'node:path';
 import WebSocket from 'ws';
 import { GameServer } from '../server/server.js';
+import { applyBaseSecurityHeaders } from '../server/security.js';
 import { DROPFALL_PROTOCOL_VERSION } from '../shared/protocolVersion.js';
 
 const PUBLIC_TEST_LEVEL_PATH = resolve('server/levels/test_public_unreachable.json');
+
+function policyDirectives(value: string | null) {
+  return new Map((value || '').split(';').map(directive => {
+    const [name = '', ...sources] = directive.trim().split(/\s+/);
+    return [name, sources];
+  }));
+}
+
+describe('analytics content security policy scope', () => {
+  const tagScript = 'https://www.googletagmanager.com/gtag/js';
+  const adScript = 'https://pagead2.googlesyndication.com';
+  const collectionOrigins = ['https://www.google-analytics.com', 'https://region1.google-analytics.com'];
+  const adOrigins = [
+    'https://pagead2.googlesyndication.com',
+    'https://*.googlesyndication.com',
+    'https://*.doubleclick.net',
+    'https://*.adtrafficquality.google',
+    'https://fundingchoicesmessages.google.com',
+  ];
+
+  function headersFor(options: { editorPage?: boolean; analyticsPage?: boolean } = {}) {
+    const headers = new Map<string, string>();
+    applyBaseSecurityHeaders({ setHeader(name: string, value: string) { headers.set(name.toLowerCase(), value); } }, options);
+    return headers;
+  }
+
+  it('permits only the selected tag path and two collection origins on analytics pages', () => {
+    const headers = headersFor({ analyticsPage: true });
+    const policy = policyDirectives(headers.get('content-security-policy') || null);
+    expect(policy.get('script-src')).toEqual(["'self'", "'wasm-unsafe-eval'", tagScript, adScript, 'https://*.adtrafficquality.google']);
+    expect(policy.get('connect-src')).toEqual(["'self'", 'ws:', 'wss:', ...collectionOrigins, ...adOrigins]);
+    expect(policy.get('img-src')).toEqual(["'self'", 'data:', 'blob:', ...collectionOrigins, ...adOrigins]);
+    expect(policy.get('frame-src')).toEqual(["'self'", ...adOrigins, 'https://www.google.com']);
+    expect(policy.get('default-src')).toEqual(["'self'"]);
+    expect(policy.get('object-src')).toEqual(["'none'"]);
+    expect(policy.get('frame-ancestors')).toEqual(["'none'"]);
+    expect(headers.get('referrer-policy')).toBe('no-referrer');
+    expect([...policy.values()].flat()).not.toContain("'unsafe-eval'");
+    expect([...policy.values()].flat()).not.toContain('*');
+  });
+
+  it.each([{}, { analyticsPage: false }])('leaves baseline pages without Google analytics permission: %j', options => {
+    const headers = headersFor(options);
+    const policy = policyDirectives(headers.get('content-security-policy') || null);
+    expect(policy.get('script-src')).toEqual(["'self'", "'wasm-unsafe-eval'"]);
+    expect(policy.get('connect-src')).toEqual(["'self'", 'ws:', 'wss:']);
+    expect(policy.get('img-src')).toEqual(["'self'", 'data:', 'blob:']);
+    expect(headers.get('content-security-policy')).not.toMatch(/googletagmanager|google-analytics/);
+    expect(headers.get('referrer-policy')).toBe('no-referrer');
+  });
+
+  it.each([false, true])('editor policy wins over analyticsPage=%s without permitting Google', analyticsPage => {
+    const headers = headersFor({ editorPage: true, analyticsPage });
+    const policy = policyDirectives(headers.get('content-security-policy') || null);
+    expect(policy.get('script-src')).toEqual(["'self'", "'wasm-unsafe-eval'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com']);
+    expect(headers.get('content-security-policy')).not.toMatch(/googletagmanager|google-analytics/);
+    expect([...policy.values()].flat()).not.toContain("'unsafe-eval'");
+    expect(headers.get('referrer-policy')).toBe('no-referrer');
+  });
+});
 
 function waitForMessage(socket: WebSocket): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
@@ -39,15 +100,35 @@ describe('production server boundaries', () => {
     expect(health.status).toBe(200);
     expect(health.headers.get('x-content-type-options')).toBe('nosniff');
     expect(health.headers.get('x-frame-options')).toBe('DENY');
+    expect(health.headers.get('referrer-policy')).toBe('no-referrer');
     const contentSecurityPolicy = health.headers.get('content-security-policy');
     expect(contentSecurityPolicy).toContain("object-src 'none'");
     expect(contentSecurityPolicy).toContain("script-src 'self' 'wasm-unsafe-eval'");
-    expect(contentSecurityPolicy).not.toMatch(/(?:^|\\s)'unsafe-eval'(?:\\s|;|$)/);
+    expect(policyDirectives(contentSecurityPolicy).get('script-src')).not.toContain("'unsafe-eval'");
+    expect(contentSecurityPolicy).not.toMatch(/googletagmanager|google-analytics/);
 
     const rejected = await fetch(`${baseUrl}/api/network-info`, {
       headers: { Origin: 'https://attacker.example' },
     });
     expect(rejected.status).toBe(403);
+  });
+
+  it.each(['/', '/index.html', '/dropfall-arena/', '/dropfall-arena/index.html'])('adds the narrow analytics policy to public entrypoint %s', async path => {
+    const response = await fetch(`${baseUrl}${path}`);
+    const policy = policyDirectives(response.headers.get('content-security-policy'));
+    expect(policy.get('script-src')).toEqual(["'self'", "'wasm-unsafe-eval'", 'https://www.googletagmanager.com/gtag/js', 'https://pagead2.googlesyndication.com', 'https://*.adtrafficquality.google']);
+    expect(policy.get('connect-src')).toContain('https://www.google-analytics.com');
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+  });
+
+  it.each(['/health', '/api/games', '/privacy.html', '/assets/not-present.js', '/missing-page', '/admin', '/editor', '/admin.html', '/editor-3d.html'])('does not widen analytics permissions on %s', async path => {
+    const response = await fetch(`${baseUrl}${path}`);
+    const contentSecurityPolicy = response.headers.get('content-security-policy');
+    expect(contentSecurityPolicy).not.toBeNull();
+    expect(contentSecurityPolicy).not.toMatch(/googletagmanager|google-analytics/);
+    expect(policyDirectives(contentSecurityPolicy).get('script-src')).toContain("'wasm-unsafe-eval'");
+    expect(policyDirectives(contentSecurityPolicy).get('script-src')).not.toContain("'unsafe-eval'");
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
   });
 
   it('allows public publishing of unreachable maps without gameplay validation', async () => {

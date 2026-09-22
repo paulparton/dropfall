@@ -24,6 +24,8 @@ server/data/
 !.vscode/extensions.json
 .idea
 .DS_Store
+.playwright-cli/
+output/playwright/
 *.suo
 *.ntvs*
 *.njsproj

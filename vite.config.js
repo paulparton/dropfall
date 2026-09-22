@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { fileURLToPath } from 'node:url';
 
 export default defineConfig(async ({ mode }) => {
   const plugins = [];
@@ -16,6 +17,10 @@ export default defineConfig(async ({ mode }) => {
       sourcemap: false,
       minify: 'terser',
       rollupOptions: {
+        input: {
+          library: fileURLToPath(new URL('./index.html', import.meta.url)),
+          arena: fileURLToPath(new URL('./dropfall-arena/index.html', import.meta.url)),
+        },
         output: {
           manualChunks: {
             three: ['three'],

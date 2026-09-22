@@ -77,17 +77,22 @@ export function consumeFixedWindow(bucket, now, maxEvents, windowMs) {
   return bucket.events <= maxEvents;
 }
 
-export function applyBaseSecurityHeaders(res, { editorPage = false } = {}) {
+export function applyBaseSecurityHeaders(res, { editorPage = false, analyticsPage = false } = {}) {
+  const allowAnalytics = analyticsPage && !editorPage;
   const scriptPolicy = editorPage
     ? "script-src 'self' 'wasm-unsafe-eval' 'unsafe-inline' https://cdnjs.cloudflare.com"
-    : "script-src 'self' 'wasm-unsafe-eval'";
+    : `script-src 'self' 'wasm-unsafe-eval'${allowAnalytics ? ' https://www.googletagmanager.com/gtag/js https://pagead2.googlesyndication.com https://*.adtrafficquality.google' : ''}`;
+  const analyticsOrigins = allowAnalytics ? ' https://www.google-analytics.com https://region1.google-analytics.com' : '';
+  const adOrigins = allowAnalytics ? ' https://pagead2.googlesyndication.com https://*.googlesyndication.com https://*.doubleclick.net https://*.adtrafficquality.google https://fundingchoicesmessages.google.com' : '';
+  const adFrameOrigins = allowAnalytics ? ' https://www.google.com' : '';
   res.setHeader('Content-Security-Policy', [
     "default-src 'self'",
     scriptPolicy,
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "font-src 'self' https://fonts.gstatic.com",
-    "img-src 'self' data: blob:",
-    "connect-src 'self' ws: wss:",
+    `img-src 'self' data: blob:${analyticsOrigins}${adOrigins}`,
+    `connect-src 'self' ws: wss:${analyticsOrigins}${adOrigins}`,
+    `frame-src 'self'${adOrigins}${adFrameOrigins}`,
     "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
@@ -95,7 +100,7 @@ export function applyBaseSecurityHeaders(res, { editorPage = false } = {}) {
   ].join('; '));
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Referrer-Policy', 'no-referrer');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
   res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
 }

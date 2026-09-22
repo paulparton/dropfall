@@ -65,6 +65,15 @@ import {
     updateLocalProfile,
 } from './services/localProfiles.js';
 import { getProductModel } from './services/monetization.js';
+import { createAnalytics } from './services/analytics.js';
+import { createGameAnalyticsObserver } from './services/gameAnalytics.js';
+import { mountAnalyticsConsent } from './components/AnalyticsConsent.js';
+
+// Document-lifetime controllers: no unload teardown, so browser back/forward
+// cache restores retain the same consent owner and match observer.
+const analytics = createAnalytics({ productId: 'dropfall' });
+const gameAnalytics = createGameAnalyticsObserver({ analytics });
+mountAnalyticsConsent(analytics, { productId: 'dropfall' });
 
 // ============================================
 // RANDOM BALL WITH HAT GENERATOR
@@ -1352,6 +1361,7 @@ function doStartGame() {
     }
     setMusicSpeed(0.6 + (state.p1Score + state.p2Score) * 0.1);
     beginLocalMatchTracking();
+    gameAnalytics.beginMatch({ eligible: !editorTestInProgress });
     useGameStore.getState().startGame();
     resetEntities();
     updateHUDNames();
@@ -1401,6 +1411,7 @@ async function proceedFromNameEntry() {
     
     // Start the game
     beginLocalMatchTracking();
+    gameAnalytics.beginMatch({ eligible: !editorTestInProgress });
     useGameStore.getState().startGame();
     resetEntities();
     updateHUDNames();
@@ -2517,6 +2528,7 @@ function setupOnlineHandlers() {
         });
 
         if (matchStart) {
+            gameAnalytics.beginMatch();
             useGameStore.getState().startGame();
         } else {
             useGameStore.setState({
@@ -3033,6 +3045,7 @@ function startNextRound() {
 // ============================================
 function setupStoreSubscription() {
     useGameStore.subscribe((state, prevState) => {
+        gameAnalytics.observe(state, prevState);
         document.body.dataset.gameState = state.gameState;
 
         if (state.settings?.vrScale !== prevState.settings?.vrScale) {
@@ -3394,6 +3407,7 @@ async function init() {
 
         showScreen('menu');
         renderer.setAnimationLoop(animate);
+        gameAnalytics.ready();
     } catch (error) {
         console.error('[Game] Initialization failed:', error);
     }

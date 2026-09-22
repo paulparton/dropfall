@@ -21,9 +21,10 @@ PORT=8080 npm run start
 
 ## Accessing the Server
 
-- **This computer**: `http://localhost:3000`
-- **Local hostname**: `http://your-computer.local:3000`
-- **Local IP**: for example, `http://192.168.1.100:3000`
+- **Game library**: `http://localhost:3000/`
+- **Dropfall on this computer**: `http://localhost:3000/dropfall-arena/`
+- **Dropfall by local hostname**: `http://your-computer.local:3000/dropfall-arena/`
+- **Dropfall by local IP**: for example, `http://192.168.1.100:3000/dropfall-arena/`
 
 The startup output prints the exact hostname and IP URLs available on the
 current computer.
@@ -38,7 +39,7 @@ For other players to connect:
 4. If macOS asks whether Node may accept incoming connections, choose **Allow**.
 
 Dropfall uses the page's hostname for its level API and multiplayer WebSocket,
-so a game opened at `http://your-computer.local:3000` stays on that hostname
+so a game opened at `http://your-computer.local:3000/dropfall-arena/` stays on that hostname
 instead of trying to connect to `localhost` on the mobile device.
 
 Optional binding overrides:
@@ -51,6 +52,36 @@ npm run start
 ```
 
 ### Internet deployment
+
+The Railway service serves the current Vite build directly from `dist/`:
+
+| Route | Content |
+| --- | --- |
+| `/` and `/index.html` | Dropfall game library (`dist/index.html`) |
+| `/dropfall-arena` | Permanent redirect to `/dropfall-arena/`, preserving query parameters |
+| `/dropfall-arena/` and `/dropfall-arena/index.html` | Dropfall game (`dist/dropfall-arena/index.html`) |
+| `/assets/*` and other built public files | Shared frontend assets from `dist/` |
+| `/api/*`, `/health`, WebSocket `/` | Existing game backend endpoints at the origin |
+| `/admin`, `/editor` | Access-controlled operator pages from `server/public/` |
+
+Run `npm run build` before `npm run start:prod`, or use `npm run start` to
+build and start together. Do not copy the build into `server/public/`.
+Unrecognized routes and missing assets return 404; there is no game HTML
+fallback. If `dist/` is absent, the frontend returns 404 while health, APIs,
+and authorized operator pages remain available. Static frontend routes accept
+GET and HEAD only.
+
+The game's install manifest starts at and is scoped to `/dropfall-arena/`.
+The library and game share an origin, so no API or WebSocket path prefix is
+required. Keep the Railway healthcheck at `/health`.
+
+When `dropfall.dropfall-game.com` is attached to this Railway service, its
+`/` and `/index.html` routes redirect to `/dropfall-arena/` on that same
+hostname. Query parameters are preserved. The hostname match is exact
+(case-insensitive, with an optional valid port); forwarded host headers do
+not enable the redirect. The apex domain and other hostnames retain the
+game library at their root. APIs, assets and WebSocket endpoints keep their
+existing paths on both domains.
 
 Do not expose the development server by directly forwarding the port. Internet
 deployments require TLS termination, an exact `DROPFALL_ALLOWED_ORIGINS`
@@ -106,10 +137,16 @@ environments. Browser origins must be same-origin or included in
 ## Architecture
 
 ```
+dist/
+├── index.html                # Game library
+├── dropfall-arena/index.html # Dropfall game
+└── assets/                   # Shared built assets
 server/
-├── server.js      # Main server (HTTP + WebSocket)
+├── server.js                 # Main server (HTTP + WebSocket)
+├── siteRouting.js            # Built frontend routing and safe file resolution
 └── public/
-    └── index.html # Admin web interface
+    ├── admin.html            # Protected operator interface
+    └── editor-3d.html        # Protected legacy editor
 ```
 
 The server uses:

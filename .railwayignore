@@ -1,0 +1,19 @@
+# Ship application sources and public assets; never upload local state or secrets.
+.git/
+.codex/
+.agents/
+.planning/
+.bg-shell/
+.playwright-cli/
+node_modules/
+dist/
+dist-ssr/
+output/
+logs/
+*.log
+.env
+.env.*
+.DS_Store
+server/data/
+server/public/assets/
+dropfall-updated/

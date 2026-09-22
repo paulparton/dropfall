@@ -1,0 +1,138 @@
+.df-analytics-root,
+.df-analytics-dialog {
+  font: 400 14px/1.55 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #f5f3e9;
+  color-scheme: dark;
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.df-analytics-root *,
+.df-analytics-root *::before,
+.df-analytics-root *::after { box-sizing: border-box; }
+.df-analytics-root [hidden] { display: none !important; }
+.df-analytics-launcher,
+.df-analytics-choice,
+.df-analytics-text-button,
+.df-analytics-close {
+  appearance: none;
+  min-height: 44px;
+  margin: 0;
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.35;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+  touch-action: manipulation;
+  box-shadow: none;
+  transform: none;
+}
+.df-analytics-launcher {
+  position: fixed;
+  inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) auto;
+  z-index: 10010;
+  width: auto;
+  padding: 10px 14px;
+  border: 1px solid #72776c;
+  border-radius: 9px;
+  background: #202720;
+  color: #f5f3e9;
+  font-size: 12px;
+}
+.df-analytics-banner {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(68px, calc(12px + env(safe-area-inset-bottom)));
+  z-index: 10010;
+  width: min(440px, calc(100vw - 24px));
+  max-height: calc(100dvh - 100px);
+  overflow-y: auto;
+  padding: 20px;
+  border: 1px solid #72776c;
+  border-radius: 14px;
+  background: #202720;
+  box-shadow: 0 8px 40px #0006;
+}
+.df-analytics-root .df-analytics-title {
+  margin: 0 0 12px;
+  padding: 0;
+  color: #f5f3e9;
+  font: 700 19px/1.3 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-transform: none;
+  letter-spacing: -.2px;
+}
+.df-analytics-root .df-analytics-copy {
+  margin: 0 0 13px;
+  padding: 0;
+  color: #e0e3d7;
+  font: inherit;
+}
+.df-analytics-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 0; }
+.df-analytics-choice {
+  flex: 1 1 120px;
+  width: auto;
+  padding: 11px 15px;
+  border: 1px solid #a9b499;
+  border-radius: 8px;
+  background: #e4ebd4;
+  color: #182015;
+  text-align: center;
+}
+.df-analytics-choice:hover { background: #f1f6e6; color: #182015; border-color: #dae6c8; }
+.df-analytics-text-button,
+.df-analytics-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 4px;
+  color: #f5f3e9;
+  background: transparent;
+}
+.df-analytics-text-button { text-decoration: underline; text-underline-offset: 3px; }
+.df-analytics-text-button:hover,
+.df-analytics-close:hover { color: #dbeaab; background: transparent; }
+.df-analytics-root :is(button, a):focus-visible { outline: 3px solid #dbeaab; outline-offset: 3px; }
+dialog.df-analytics-dialog {
+  position: fixed;
+  inset: 0;
+  width: min(540px, calc(100vw - 24px));
+  height: fit-content;
+  min-width: 0;
+  max-width: none;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 24px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid #72776c;
+  border-radius: 14px;
+  background: #202720;
+  box-shadow: 0 20px 100px #0008;
+  text-shadow: none;
+}
+dialog.df-analytics-dialog:not([open]) { display: none; }
+dialog.df-analytics-dialog[open] { display: block; }
+dialog.df-analytics-dialog::backdrop { background: #070d09b3; backdrop-filter: blur(3px); }
+.df-analytics-dialog-header { display: flex; align-items: center; gap: 16px; margin-bottom: 12px; }
+.df-analytics-dialog-header .df-analytics-title { flex: 1; margin: 0; }
+.df-analytics-close { flex: 0 0 44px; width: 44px; padding: 0; font-size: 28px; }
+.df-analytics-notice { display: inline-block; min-height: 44px; padding: 10px 0; color: #dbeaab; text-decoration: underline; text-underline-offset: 3px; font: inherit; }
+.df-analytics-notice:hover { color: #f1f6e6; }
+.df-analytics-new-tab { font-size: 12px; }
+.df-analytics-status { margin: 12px 0; padding: 12px; border: 1px solid #647256; border-radius: 8px; background: #2c3826; color: #f5f3e9; }
+.df-analytics-error { margin: 12px 0 0; color: #ffd0ca; }
+.df-analytics-done { margin-top: 8px; }
+/* Existing footer/menu triggers replace the fallback, including ones mounted
+   after this component. Consent never puts a floating control over a match. */
+body:has([data-analytics-settings]) .df-analytics-launcher,
+body:is([data-game-state="PLAYING"], [data-game-state="COUNTDOWN"]) :is(.df-analytics-launcher, .df-analytics-banner) { display: none; }
+@media (max-width: 400px) {
+  .df-analytics-banner { padding: 16px; }
+  dialog.df-analytics-dialog { padding: 18px; }
+  .df-analytics-root .df-analytics-title { font-size: 18px; }
+  .df-analytics-choice { padding: 11px 10px; font-size: 13px; }
+}

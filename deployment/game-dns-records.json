@@ -1,0 +1,16 @@
+{
+  "zone": "dropfall-game.com",
+  "status": "active",
+  "notes": "Imported successfully in Cloudflare on 2026-09-09 using game-subdomains.bind at 300-second TTL, DNS-only. Original three zone records unchanged. Verify HTTPS before switching catalog URLs. TTL 1 below is the API auto-TTL option for future reconciliation.",
+  "records": [
+    { "type": "CNAME", "name": "dropfall", "content": "4z38p7nj.up.railway.app", "ttl": 1, "proxied": false },
+    { "type": "TXT", "name": "_railway-verify.dropfall", "content": "railway-verify=07de3e45157635dbd2387803b2bbffad07867bdc5a39847b5d9a42019904be1d", "ttl": 1 },
+    { "type": "CNAME", "name": "super-face-pop", "content": "itxtdz7x.up.railway.app", "ttl": 1, "proxied": false },
+    { "type": "TXT", "name": "_railway-verify.super-face-pop", "content": "railway-verify=0b71a4f7922cf2147ad3db47039b025d21334a4f3b31189d3ed1e0096321c093", "ttl": 1 },
+    { "type": "CNAME", "name": "mofighter", "content": "6na4swos.up.railway.app", "ttl": 1, "proxied": false },
+    { "type": "TXT", "name": "_railway-verify.mofighter", "content": "railway-verify=bf85c20374bdd67b9639372cd23826563e60e353ea5e3731634732c54a2120a1", "ttl": 1 },
+    { "type": "CNAME", "name": "big-racers", "content": "custom-domains.chatgpt.site", "ttl": 1, "proxied": false },
+    { "type": "TXT", "name": "_openai-site-verification.big-racers", "content": "openai-site-verification=98pP1U8XsORJwh-DmE3b0R-qRBfsd3UPoYAuBw68Lfs", "ttl": 1 },
+    { "type": "TXT", "name": "_cf-custom-hostname.big-racers", "content": "0d7f8697-3304-4910-8cfe-09a1fe8a2099", "ttl": 1 }
+  ]
+}

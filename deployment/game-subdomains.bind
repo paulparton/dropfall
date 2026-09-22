@@ -1,0 +1,10 @@
+; Additive game subdomains only. Existing apex/www/email records are not included.
+dropfall.dropfall-game.com. 300 IN CNAME 4z38p7nj.up.railway.app.
+_railway-verify.dropfall.dropfall-game.com. 300 IN TXT "railway-verify=07de3e45157635dbd2387803b2bbffad07867bdc5a39847b5d9a42019904be1d"
+super-face-pop.dropfall-game.com. 300 IN CNAME itxtdz7x.up.railway.app.
+_railway-verify.super-face-pop.dropfall-game.com. 300 IN TXT "railway-verify=0b71a4f7922cf2147ad3db47039b025d21334a4f3b31189d3ed1e0096321c093"
+mofighter.dropfall-game.com. 300 IN CNAME 6na4swos.up.railway.app.
+_railway-verify.mofighter.dropfall-game.com. 300 IN TXT "railway-verify=bf85c20374bdd67b9639372cd23826563e60e353ea5e3731634732c54a2120a1"
+big-racers.dropfall-game.com. 300 IN CNAME custom-domains.chatgpt.site.
+_openai-site-verification.big-racers.dropfall-game.com. 300 IN TXT "openai-site-verification=98pP1U8XsORJwh-DmE3b0R-qRBfsd3UPoYAuBw68Lfs"
+_cf-custom-hostname.big-racers.dropfall-game.com. 300 IN TXT "0d7f8697-3304-4910-8cfe-09a1fe8a2099"

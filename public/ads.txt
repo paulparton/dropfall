@@ -1,0 +1,5 @@
+google.com, pub-7669551026428141, DIRECT, f08c47fec0942fa0
+subdomain=dropfall.dropfall-game.com
+subdomain=super-face-pop.dropfall-game.com
+subdomain=big-racers.dropfall-game.com
+subdomain=mofighter.dropfall-game.com

@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { readFileSync, existsSync, writeFileSync, readdirSync, statSync, mkdirSync, unlinkSync } from 'fs';
-import { join, dirname, extname, resolve, sep } from 'path';
+import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
 import { hostname as getSystemHostname, networkInterfaces } from 'os';
@@ -11,6 +11,7 @@ import { isLevelActive, validateLevelForLaunch } from '../shared/levelValidation
 import { parseLevelPayload } from '../shared/levelSchema.js';
 import { formatProtocolIssues, parseClientMessage } from '../shared/protocolSchemas.js';
 import { DROPFALL_PROTOCOL_VERSION } from '../shared/protocolVersion.js';
+import { ARENA_PATH, parseRequestTarget, serveSiteRequest } from './siteRouting.js';
 import {
     applyBaseSecurityHeaders,
     consumeFixedWindow,
@@ -37,6 +38,7 @@ const SYSTEM_MDNS_HOSTNAME = (
 const MDNS_HOSTNAME = (process.env.DROPFALL_LOCAL_HOSTNAME || 'skippy.local').toLowerCase();
 const LAN_HOSTNAMES = [...new Set([MDNS_HOSTNAME, SYSTEM_MDNS_HOSTNAME.toLowerCase()])];
 const PUBLIC_DIR = join(__dirname, 'public');
+const FRONTEND_DIR = join(__dirname, '..', 'dist');
 const LEVELS_DIR = join(__dirname, 'levels');
 const MAX_HTTP_BODY_BYTES = 256 * 1024;
 const MAX_WS_MESSAGE_BYTES = 16 * 1024;
@@ -53,24 +55,9 @@ function isLegacyEditorLevel(level, levelId) {
 
 mkdirSync(LEVELS_DIR, { recursive: true });
 
-const MIME_TYPES = {
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-    '.mjs': 'application/javascript',
-    '.json': 'application/json',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.svg': 'image/svg+xml',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.wasm': 'application/wasm',
-    '.ico': 'image/x-icon',
-};
-
 export class GameServer {
-    constructor() {
+    constructor({ frontendDir = FRONTEND_DIR } = {}) {
+        this.frontendDir = frontendDir;
         this.games = new Map();
         this.players = new Map();
         this.gameIdCounter = 1;
@@ -231,13 +218,22 @@ export class GameServer {
     }
 
     handleHttp(req, res) {
-        const parsedUrl = new URL(req.url || '/', 'http://localhost');
-        const requestPath = parsedUrl.pathname || '/';
+        const target = parseRequestTarget(req.url || '/');
+        if (!target) {
+            applyBaseSecurityHeaders(res);
+            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end(req.method === 'HEAD' ? undefined : 'Bad Request');
+            return;
+        }
+        const { url: parsedUrl, pathname: requestPath } = target;
         const normalizedPath = requestPath.length > 1 ? requestPath.replace(/\/+$/, '') || '/' : requestPath;
         const isLevelApiPath = normalizedPath === '/api/levels' || normalizedPath.startsWith('/api/levels/');
         const isScoreboardApiPath = normalizedPath === '/api/leaderboards/online';
         const isDevToolPage = normalizedPath === '/admin' || normalizedPath === '/editor';
-        applyBaseSecurityHeaders(res, { editorPage: isDevToolPage });
+        applyBaseSecurityHeaders(res, {
+            editorPage: isDevToolPage,
+            analyticsPage: ['/', '/index.html', '/dropfall-arena', '/dropfall-arena/index.html'].includes(normalizedPath),
+        });
 
         // 1) CORS preflight for level API
         if (req.method === 'OPTIONS' && (isLevelApiPath || isScoreboardApiPath)) {
@@ -294,12 +290,14 @@ export class GameServer {
                 'Content-Type': 'application/json',
                 'Cache-Control': 'no-store',
             });
+            const address = this.server.address();
+            const boundPort = typeof address === 'object' && address ? address.port : PORT;
             res.end(JSON.stringify({
                 lanAddresses: this.getLanAddresses(),
-                port: PORT,
+                port: boundPort,
                 hostname: MDNS_HOSTNAME,
                 hostnames: LAN_HOSTNAMES,
-                gameUrls: this.getLanGameUrls(PORT),
+                gameUrls: this.getLanGameUrls(boundPort),
             }));
             return;
         }
@@ -310,7 +308,7 @@ export class GameServer {
         }
 
         // 3) Clean URL routes (can be wrapped with auth middleware later)
-        if (req.method === 'GET' && normalizedPath === '/admin') {
+        if ((req.method === 'GET' || req.method === 'HEAD') && normalizedPath === '/admin') {
             if (!this.canAccessDevTools(req)) {
                 res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
                 res.end('Not Found');
@@ -318,8 +316,8 @@ export class GameServer {
             }
             const adminPath = join(PUBLIC_DIR, 'admin.html');
             if (existsSync(adminPath)) {
-                res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
-                res.end(readFileSync(adminPath));
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(req.method === 'HEAD' ? undefined : readFileSync(adminPath));
             } else {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('Not Found');
@@ -327,7 +325,7 @@ export class GameServer {
             return;
         }
 
-        if (req.method === 'GET' && normalizedPath === '/editor') {
+        if ((req.method === 'GET' || req.method === 'HEAD') && normalizedPath === '/editor') {
             if (!this.canAccessDevTools(req)) {
                 res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
                 res.end('Not Found');
@@ -335,8 +333,8 @@ export class GameServer {
             }
             const editorPath = join(PUBLIC_DIR, 'editor-3d.html');
             if (existsSync(editorPath)) {
-                res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
-                res.end(readFileSync(editorPath));
+                res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+                res.end(req.method === 'HEAD' ? undefined : readFileSync(editorPath));
             } else {
                 res.writeHead(404, { 'Content-Type': 'text/plain' });
                 res.end('Not Found');
@@ -345,56 +343,25 @@ export class GameServer {
         }
 
         // 4) Redirect old URLs
-        if (req.method === 'GET' && normalizedPath === '/admin.html') {
+        if ((req.method === 'GET' || req.method === 'HEAD') && normalizedPath === '/admin.html') {
             res.writeHead(301, { Location: '/admin' });
             res.end();
             return;
         }
 
-        if (req.method === 'GET' && normalizedPath === '/editor-3d.html') {
+        if ((req.method === 'GET' || req.method === 'HEAD') && normalizedPath === '/editor-3d.html') {
             res.writeHead(301, { Location: '/editor' });
             res.end();
             return;
         }
 
-        // 5) Static files. Map the origin root to index.html before resolving the
-        // MIME type so browsers render the game instead of treating it as an
-        // application/octet-stream download.
-        const staticRequestPath = requestPath === '/' ? '/index.html' : requestPath;
-        let decodedStaticPath = staticRequestPath;
-        try {
-            decodedStaticPath = decodeURIComponent(staticRequestPath);
-        } catch {
-            res.writeHead(400, { 'Content-Type': 'text/plain; charset=utf-8' });
-            res.end('Bad Request');
-            return;
-        }
-        const publicRoot = `${resolve(PUBLIC_DIR)}${sep}`;
-        const filePath = resolve(PUBLIC_DIR, decodedStaticPath.replace(/^[/\\]+/, ''));
-        const isPublicFile = filePath.startsWith(publicRoot) && existsSync(filePath) && statSync(filePath).isFile();
-
-        if (isPublicFile) {
-            const ext = extname(staticRequestPath).toLowerCase();
-            const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
-            res.writeHead(200, { 'Content-Type': mimeType });
-            res.end(readFileSync(filePath));
-        } else {
-            // 6) SPA fallback
-            const hasExtension = extname(requestPath) !== '';
-            if (!hasExtension) {
-                const spaFallback = join(PUBLIC_DIR, 'index.html');
-                if (existsSync(spaFallback)) {
-                    res.writeHead(200, { 'Content-Type': MIME_TYPES['.html'] });
-                    res.end(readFileSync(spaFallback));
-                    return;
-                }
-            }
-
-            const missingExt = extname(requestPath).toLowerCase();
-            const missingMimeType = MIME_TYPES[missingExt] || 'application/octet-stream';
-            res.writeHead(404, { 'Content-Type': missingMimeType });
-            res.end('Not Found');
-        }
+        // The library and arena are separate Vite entries. Only the current
+        // build is public; stale copies in server/public are never a fallback.
+        serveSiteRequest(req, res, {
+            frontendDir: this.frontendDir,
+            pathname: requestPath,
+            search: parsedUrl.search,
+        });
     }
 
     sanitizeLevelId(id) {
@@ -1295,9 +1262,9 @@ export class GameServer {
     }
 
     getLanGameUrls(port = PORT) {
-        const urls = LAN_HOSTNAMES.map(hostname => `http://${hostname}:${port}`);
+        const urls = LAN_HOSTNAMES.map(hostname => `http://${hostname}:${port}${ARENA_PATH}`);
         for (const { address } of this.getLanAddresses()) {
-            urls.push(`http://${address}:${port}`);
+            urls.push(`http://${address}:${port}${ARENA_PATH}`);
         }
         return [...new Set(urls)];
     }
@@ -1320,17 +1287,18 @@ export class GameServer {
 ║  Server is ready for local and LAN play                        ║
 ║                                                               ║
 ║  This computer:                                                ║
-║    Game:          http://localhost:${boundPort}                        ║
+║    Library:       http://localhost:${boundPort}/                       ║
+║    Game:          http://localhost:${boundPort}${ARENA_PATH}         ║
 ║    Admin:         http://localhost:${boundPort}/admin                  ║
 ║    Level Editor:  http://localhost:${boundPort}/editor                 ║
 ╚═══════════════════════════════════════════════════════════════╝
             `);
-                console.log(`  Preferred hostname: http://${MDNS_HOSTNAME}:${boundPort}`);
+                console.log(`  Preferred hostname: http://${MDNS_HOSTNAME}:${boundPort}${ARENA_PATH}`);
                 if (SYSTEM_MDNS_HOSTNAME.toLowerCase() !== MDNS_HOSTNAME) {
-                    console.log(`  Detected hostname: http://${SYSTEM_MDNS_HOSTNAME.toLowerCase()}:${boundPort}`);
+                    console.log(`  Detected hostname: http://${SYSTEM_MDNS_HOSTNAME.toLowerCase()}:${boundPort}${ARENA_PATH}`);
                 }
                 lanAddrs.forEach(({ interface: interfaceName, address: lanAddress }) => {
-                    console.log(`  ${interfaceName}: http://${lanAddress}:${boundPort}`);
+                    console.log(`  ${interfaceName}: http://${lanAddress}:${boundPort}${ARENA_PATH}`);
                 });
                 console.log(`\n  Listening on ${host}:${boundPort}`);
                 console.log('  Open one of the LAN URLs on a phone or tablet connected to this network.\n');

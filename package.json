@@ -8,8 +8,8 @@
     "dev:vr": "vite --host --mode vr",
     "dev:local": "vite",
     "build": "vite build",
-    "start": "npm run build && cp -r dist/* server/public/ && node server/server.js",
-    "start:prod": "cp -r dist/* server/public/ && node server/server.js",
+    "start": "npm run build && node server/server.js",
+    "start:prod": "node server/server.js",
     "preview": "vite preview",
     "server": "node server/server.js",
     "server:dev": "node --watch server/server.js",
@@ -21,6 +21,7 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint src",
     "validate:assets": "node scripts/validate-assets.mjs",
+    "check:monetization": "node scripts/check-monetization-readiness.mjs",
     "audit": "npm audit --audit-level=high",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
     "check:release-foundation": "npm run type-check && npm test && npm run validate:assets && npm run build && npm run audit"

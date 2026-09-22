@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "brand": "dropfall",
+  "purpose": "Offline approval checklist only. This file does not enable ads, analytics or payments, and cannot prove account ownership or live deployment state.",
+  "accountBoundary": {
+    "sharedInfrastructureAllowed": true,
+    "sharedCopyrightAttributionAllowed": true,
+    "sharedPdsAnalyticsAllowed": false,
+    "sharedPdsAdsAllowed": false,
+    "sharedPdsPaymentsAllowed": false
+  },
+  "accounts": {
+    "analytics": {
+      "provider": "Google Analytics 4",
+      "publicAccountId": "407483272",
+      "brandScope": "dropfall",
+      "dedicatedToDropfall": true,
+      "usesSharedPdsAccount": false,
+      "ownershipApproved": true,
+      "approvedBy": "Site owner",
+      "approvalReference": "2026-09-10 user-supplied account and authenticated UI verification; docs/ANALYTICS_SETUP.md",
+      "propertyId": "553499991",
+      "streamId": "15750213019",
+      "measurementId": "G-HSDS6QM123",
+      "note": "2026-09-10: owner confirmed general audience and dropfallgamestudio@gmail.com. Library and Arena opt-in analytics enabled in release b5418115-93ca-4ab1-9a15-942063073976; page_view, library_view and game_ready received in the dedicated property's Realtime report. Other games and all ads remain disabled. See docs/ANALYTICS_SETUP.md for limits and outstanding audit items."
+    },
+    "ads": {
+      "provider": "Google AdSense",
+      "publicAccountId": "pub-7669551026428141",
+      "brandScope": "dropfall",
+      "dedicatedToDropfall": true,
+      "usesSharedPdsAccount": false,
+      "ownershipApproved": true,
+      "approvedBy": "Site owner",
+      "approvalReference": "2026-09-10 supplied publisher URL and authenticated dashboard; docs/ADSENSE_SETUP.md",
+      "note": "2026-09-10: verification meta tag and ads.txt deployed. AdSense confirmed site verified and Review requested; status Getting ready. Site verification does not imply Google approval, H5 access or consent readiness. General audience and contact confirmed; certified ad CMP configuration/publication and full policy work remain pending. All ad delivery remains disabled."
+    },
+    "payments": {
+      "provider": null,
+      "publicAccountId": null,
+      "brandScope": null,
+      "dedicatedToDropfall": false,
+      "usesSharedPdsAccount": false,
+      "ownershipApproved": false,
+      "approvedBy": null,
+      "approvalReference": null
+    }
+  },
+  "products": [
+    {
+      "id": "library",
+      "name": "Dropfall game library",
+      "urls": ["https://dropfall-game.com/"],
+      "domainsVerified": true,
+      "integrations": { "analytics": "ready", "ads": "disabled", "payments": "disabled" },
+      "readiness": {
+        "audiencePolicyApproved": true,
+        "privacyPublished": true,
+        "consentPublished": true,
+        "consentEnforced": true,
+        "analyticsValidated": true,
+        "adPlacementValidated": false,
+        "adFreeSuppressionValidated": false,
+        "h5Approved": false,
+        "approvalReference": "Owner's general-audience/contact confirmation and 2026-09-10 live opt-in/tag/Realtime checks; docs/ANALYTICS_SETUP.md. Technical notice, not legal certification; analytics consent does not authorize ads."
+      }
+    },
+    {
+      "id": "super-face-pop",
+      "name": "Super Face Pop",
+      "urls": ["https://super-face-pop.dropfall-game.com/"],
+      "domainsVerified": true,
+      "integrations": { "analytics": "disabled", "ads": "disabled", "payments": "disabled" },
+      "readiness": {
+        "audiencePolicyApproved": false,
+        "privacyPublished": false,
+        "consentPublished": false,
+        "consentEnforced": false,
+        "analyticsValidated": false,
+        "adPlacementValidated": false,
+        "adFreeSuppressionValidated": false,
+        "h5Approved": false,
+        "approvalReference": null
+      }
+    },
+    {
+      "id": "dropfall",
+      "name": "Dropfall Arena",
+      "urls": ["https://dropfall-game.com/dropfall-arena/", "https://dropfall.dropfall-game.com/"],
+      "domainsVerified": true,
+      "integrations": { "analytics": "ready", "ads": "disabled", "payments": "disabled" },
+      "readiness": {
+        "audiencePolicyApproved": true,
+        "privacyPublished": true,
+        "consentPublished": true,
+        "consentEnforced": true,
+        "analyticsValidated": true,
+        "adPlacementValidated": false,
+        "adFreeSuppressionValidated": false,
+        "h5Approved": false,
+        "approvalReference": "Owner's general-audience/contact confirmation and 2026-09-10 live opt-in/tag/Realtime checks; docs/ANALYTICS_SETUP.md. Technical notice, not legal certification; analytics consent does not authorize ads."
+      }
+    },
+    {
+      "id": "big-racers",
+      "name": "Big Racers",
+      "urls": ["https://big-racers.dropfall-game.com/"],
+      "domainsVerified": true,
+      "integrations": { "analytics": "disabled", "ads": "disabled", "payments": "disabled" },
+      "pdsStripeReuseAllowed": false,
+      "note": "Local Big Racers source contains PDS Stripe reuse. Reusing that account, coffee link, price or payment credentials for Dropfall is blocked; shared hosting or copyright attribution is not approval.",
+      "readiness": {
+        "audiencePolicyApproved": false,
+        "privacyPublished": false,
+        "consentPublished": false,
+        "consentEnforced": false,
+        "analyticsValidated": false,
+        "adPlacementValidated": false,
+        "adFreeSuppressionValidated": false,
+        "h5Approved": false,
+        "approvalReference": null
+      }
+    },
+    {
+      "id": "mofighter",
+      "name": "moFighter",
+      "urls": ["https://mofighter.dropfall-game.com/"],
+      "domainsVerified": true,
+      "integrations": { "analytics": "disabled", "ads": "disabled", "payments": "disabled" },
+      "readiness": {
+        "audiencePolicyApproved": false,
+        "privacyPublished": false,
+        "consentPublished": false,
+        "consentEnforced": false,
+        "analyticsValidated": false,
+        "adPlacementValidated": false,
+        "adFreeSuppressionValidated": false,
+        "h5Approved": false,
+        "approvalReference": null
+      }
+    }
+  ]
+}
