@@ -6,6 +6,7 @@
 
 class UStaticMeshComponent;
 class UPrimitiveComponent;
+class UPointLightComponent;
 
 USTRUCT(BlueprintType)
 struct FDropfallFighterTuning
@@ -56,6 +57,9 @@ private:
 
     UPROPERTY(VisibleAnywhere)
     TObjectPtr<UStaticMeshComponent> Body;
+
+    UPROPERTY(VisibleAnywhere)
+    TObjectPtr<UPointLightComponent> FighterLight;
 
     UPROPERTY(EditAnywhere, Category = "Dropfall|Combat")
     FDropfallFighterTuning Tuning;

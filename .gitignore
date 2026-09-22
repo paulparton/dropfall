@@ -36,6 +36,7 @@ dropfall-updated/*
 
 # Unreal Engine generated state
 unreal/Binaries/
+unreal/Build/
 unreal/DerivedDataCache/
 unreal/Intermediate/
 unreal/Saved/

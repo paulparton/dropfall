@@ -2,17 +2,48 @@
 
 #include "DropfallArenaHUD.h"
 #include "DropfallFighterPawn.h"
+#include "DropfallProgressSave.h"
+#include "DropfallSynth.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
+#include "Engine/GameViewportClient.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
+
+const FString ADropfallArenaGameMode::ProgressSlotName = TEXT("DropfallArenaProgress");
+
+namespace
+{
+void SetMeshColor(UStaticMeshComponent* Mesh, const FLinearColor& Color)
+{
+    if (!Mesh || !Mesh->GetMaterial(0))
+    {
+        return;
+    }
+    UMaterialInstanceDynamic* Material = UMaterialInstanceDynamic::Create(Mesh->GetMaterial(0), Mesh);
+    Material->SetVectorParameterValue(TEXT("Color"), Color);
+    Material->SetVectorParameterValue(TEXT("BaseColor"), Color);
+    Mesh->SetMaterial(0, Material);
+}
+
+void SetDevelopmentLabel(AActor* Actor, const FString& Label)
+{
+#if WITH_EDITOR
+    if (Actor)
+    {
+        Actor->SetActorLabel(Label);
+    }
+#endif
+}
+}
 
 ADropfallArenaGameMode::ADropfallArenaGameMode()
 {
@@ -35,6 +66,15 @@ void ADropfallArenaGameMode::BeginPlay()
     BuildGreyboxArena();
     SpawnFighters();
     SpawnCamera();
+    LoadProgress();
+    MatchPhase = EDropfallMatchPhase::Ready;
+}
+
+FVector2D ADropfallArenaGameMode::ScreenToArenaIntent(const FVector2D& ScreenIntent)
+{
+    // The shared camera looks across the arena from negative Y. Its screen-right
+    // axis is negative world X and its screen-up axis is negative world Y.
+    return FVector2D(-ScreenIntent.X, -ScreenIntent.Y).GetClampedToMaxSize(1.0f);
 }
 
 void ADropfallArenaGameMode::ClearTemplateGeometry()
@@ -56,7 +96,8 @@ void ADropfallArenaGameMode::Tick(const float DeltaSeconds)
     Super::Tick(DeltaSeconds);
 
     ReadLocalInput(DeltaSeconds);
-    if (bRoundActive && WinnerIndex == 0)
+    UpdateMatchFlow(DeltaSeconds);
+    if (MatchPhase == EDropfallMatchPhase::Playing && WinnerIndex == 0)
     {
         CheckRingOuts();
     }
@@ -70,14 +111,15 @@ void ADropfallArenaGameMode::BuildGreyboxArena()
     }
 
     AActor* Floor = GetWorld()->SpawnActor<AActor>(FVector::ZeroVector, FRotator::ZeroRotator);
-    Floor->SetActorLabel(TEXT("Arena Floor"));
-    UStaticMeshComponent* FloorMesh = NewObject<UStaticMeshComponent>(Floor, TEXT("FloorMesh"));
-    Floor->SetRootComponent(FloorMesh);
-    FloorMesh->SetStaticMesh(CubeMesh);
-    FloorMesh->SetWorldScale3D(FVector(12.0f, 8.0f, 0.35f));
-    FloorMesh->SetWorldLocation(FVector(0.0f, 0.0f, -35.0f));
-    FloorMesh->SetCollisionProfileName(TEXT("BlockAll"));
-    FloorMesh->RegisterComponent();
+    SetDevelopmentLabel(Floor, TEXT("Arena Floor"));
+    ArenaFloorMesh = NewObject<UStaticMeshComponent>(Floor, TEXT("FloorMesh"));
+    Floor->SetRootComponent(ArenaFloorMesh);
+    ArenaFloorMesh->SetStaticMesh(CubeMesh);
+    ArenaFloorMesh->SetWorldScale3D(FVector(ArenaTuning.FloorScale.X, ArenaTuning.FloorScale.Y, 0.35f));
+    ArenaFloorMesh->SetWorldLocation(FVector(0.0f, 0.0f, -35.0f));
+    ArenaFloorMesh->SetCollisionProfileName(TEXT("BlockAll"));
+    ArenaFloorMesh->RegisterComponent();
+    SetMeshColor(ArenaFloorMesh, FLinearColor(0.025f, 0.055f, 0.11f));
 
     const FVector BumperLocations[] = {
         FVector(0.0f, 0.0f, 25.0f),
@@ -88,31 +130,59 @@ void ADropfallArenaGameMode::BuildGreyboxArena()
     for (int32 Index = 0; Index < UE_ARRAY_COUNT(BumperLocations); ++Index)
     {
         AActor* Bumper = GetWorld()->SpawnActor<AActor>(BumperLocations[Index], FRotator::ZeroRotator);
-        Bumper->SetActorLabel(FString::Printf(TEXT("Bumper %d"), Index + 1));
+        SetDevelopmentLabel(Bumper, FString::Printf(TEXT("Bumper %d"), Index + 1));
         UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Bumper);
         Bumper->SetRootComponent(Mesh);
         Mesh->SetStaticMesh(CubeMesh);
         Mesh->SetWorldScale3D(Index == 0 ? FVector(0.75f, 0.75f, 0.5f) : FVector(0.55f, 0.55f, 0.35f));
         Mesh->SetCollisionProfileName(TEXT("BlockAll"));
         Mesh->RegisterComponent();
+        SetMeshColor(Mesh, Index == 0
+            ? FLinearColor(1.0f, 0.45f, 0.05f)
+            : FLinearColor(0.08f, 0.65f, 1.0f));
+    }
+
+    struct FEdgeAccent
+    {
+        FVector Location;
+        FVector Scale;
+        FLinearColor Color;
+    };
+    const FEdgeAccent Accents[] = {
+        { FVector(0.0f, -395.0f, 2.0f), FVector(12.0f, 0.06f, 0.05f), FLinearColor(0.05f, 0.8f, 1.0f) },
+        { FVector(0.0f, 395.0f, 2.0f), FVector(12.0f, 0.06f, 0.05f), FLinearColor(1.0f, 0.12f, 0.2f) },
+        { FVector(-595.0f, 0.0f, 2.0f), FVector(0.06f, 8.0f, 0.05f), FLinearColor(0.05f, 0.8f, 1.0f) },
+        { FVector(595.0f, 0.0f, 2.0f), FVector(0.06f, 8.0f, 0.05f), FLinearColor(1.0f, 0.12f, 0.2f) }
+    };
+    for (int32 Index = 0; Index < UE_ARRAY_COUNT(Accents); ++Index)
+    {
+        AActor* Accent = GetWorld()->SpawnActor<AActor>(Accents[Index].Location, FRotator::ZeroRotator);
+        SetDevelopmentLabel(Accent, FString::Printf(TEXT("Edge Accent %d"), Index + 1));
+        UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Accent);
+        Accent->SetRootComponent(Mesh);
+        Mesh->SetStaticMesh(CubeMesh);
+        Mesh->SetWorldScale3D(Accents[Index].Scale);
+        Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+        Mesh->RegisterComponent();
+        SetMeshColor(Mesh, Accents[Index].Color);
     }
 }
 
 void ADropfallArenaGameMode::SpawnFighters()
 {
     PlayerOne = GetWorld()->SpawnActor<ADropfallFighterPawn>(
-        FVector(-390.0f, 0.0f, 110.0f), FRotator::ZeroRotator);
-    PlayerTwo = GetWorld()->SpawnActor<ADropfallFighterPawn>(
         FVector(390.0f, 0.0f, 110.0f), FRotator::ZeroRotator);
+    PlayerTwo = GetWorld()->SpawnActor<ADropfallFighterPawn>(
+        FVector(-390.0f, 0.0f, 110.0f), FRotator::ZeroRotator);
 
     if (PlayerOne)
     {
-        PlayerOne->SetActorLabel(TEXT("Cyan Fighter"));
+        SetDevelopmentLabel(PlayerOne, TEXT("Cyan Fighter"));
         PlayerOne->SetFighterColor(FLinearColor(0.02f, 0.8f, 1.0f));
     }
     if (PlayerTwo)
     {
-        PlayerTwo->SetActorLabel(TEXT("Coral Fighter"));
+        SetDevelopmentLabel(PlayerTwo, TEXT("Coral Fighter"));
         PlayerTwo->SetFighterColor(FLinearColor(1.0f, 0.04f, 0.12f));
     }
 }
@@ -122,7 +192,7 @@ void ADropfallArenaGameMode::SpawnCamera()
     const FVector CameraLocation(0.0f, -2050.0f, 2150.0f);
     const FRotator CameraRotation = (FVector::ZeroVector - CameraLocation).Rotation();
     ArenaCamera = GetWorld()->SpawnActor<ACameraActor>(CameraLocation, CameraRotation);
-    ArenaCamera->SetActorLabel(TEXT("Arena Camera"));
+    SetDevelopmentLabel(ArenaCamera, TEXT("Arena Camera"));
     ArenaCamera->GetCameraComponent()->SetFieldOfView(60.0f);
 
     if (APlayerController* Controller = UGameplayStatics::GetPlayerController(this, 0))
@@ -130,6 +200,20 @@ void ADropfallArenaGameMode::SpawnCamera()
         Controller->SetViewTarget(ArenaCamera);
         Controller->bShowMouseCursor = false;
         Controller->SetInputMode(FInputModeGameOnly());
+    }
+
+    if (!UGameplayStatics::GetPlayerController(this, 1))
+    {
+        UGameplayStatics::CreatePlayer(this, 1, true);
+    }
+    if (UGameViewportClient* Viewport = GetWorld()->GetGameViewport())
+    {
+        Viewport->SetForceDisableSplitscreen(true);
+    }
+    if (APlayerController* ControllerTwo = UGameplayStatics::GetPlayerController(this, 1))
+    {
+        ControllerTwo->SetViewTarget(ArenaCamera);
+        ControllerTwo->SetInputMode(FInputModeGameOnly());
     }
 }
 
@@ -141,35 +225,47 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
         return;
     }
 
-    if (Controller->WasInputKeyJustPressed(EKeys::F1))
+    if (Controller->WasInputKeyJustPressed(EKeys::Tab))
     {
         ToggleOpponentMode();
     }
-    if (Controller->WasInputKeyJustPressed(EKeys::F2))
+    if (Controller->WasInputKeyJustPressed(EKeys::Q))
     {
         CycleAIDifficulty();
     }
     if (Controller->WasInputKeyJustPressed(EKeys::R))
     {
         ResetMatch();
+        BeginCountdown();
     }
 
-    if (!bRoundActive || WinnerIndex != 0)
+    APlayerController* ControllerTwo = UGameplayStatics::GetPlayerController(this, 1);
+    const bool bStartPressed = Controller->WasInputKeyJustPressed(EKeys::Enter)
+        || Controller->WasInputKeyJustPressed(EKeys::SpaceBar)
+        || Controller->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Bottom)
+        || (ControllerTwo && ControllerTwo->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Bottom));
+    if (MatchPhase == EDropfallMatchPhase::Ready && bStartPressed)
+    {
+        BeginCountdown();
+    }
+
+    if (MatchPhase != EDropfallMatchPhase::Playing || WinnerIndex != 0)
     {
         PlayerOne->SetMoveIntent(FVector2D::ZeroVector);
         PlayerTwo->SetMoveIntent(FVector2D::ZeroVector);
         return;
     }
 
-    FVector2D PlayerOneIntent(
-        Controller->IsInputKeyDown(EKeys::W) ? 1.0f : Controller->IsInputKeyDown(EKeys::S) ? -1.0f : 0.0f,
-        Controller->IsInputKeyDown(EKeys::D) ? 1.0f : Controller->IsInputKeyDown(EKeys::A) ? -1.0f : 0.0f);
-    const FVector2D GamepadIntent(
-        Controller->GetInputAnalogKeyState(EKeys::Gamepad_LeftY),
-        Controller->GetInputAnalogKeyState(EKeys::Gamepad_LeftX));
-    if (GamepadIntent.SizeSquared() > FMath::Square(0.2f))
+    const FVector2D PlayerOneScreenIntent(
+        Controller->IsInputKeyDown(EKeys::D) ? 1.0f : Controller->IsInputKeyDown(EKeys::A) ? -1.0f : 0.0f,
+        Controller->IsInputKeyDown(EKeys::W) ? 1.0f : Controller->IsInputKeyDown(EKeys::S) ? -1.0f : 0.0f);
+    FVector2D PlayerOneIntent = ScreenToArenaIntent(PlayerOneScreenIntent);
+    const FVector2D GamepadScreenIntent(
+        Controller->GetInputAnalogKeyState(EKeys::Gamepad_LeftX),
+        Controller->GetInputAnalogKeyState(EKeys::Gamepad_LeftY));
+    if (GamepadScreenIntent.SizeSquared() > FMath::Square(0.2f))
     {
-        PlayerOneIntent = GamepadIntent;
+        PlayerOneIntent = ScreenToArenaIntent(GamepadScreenIntent);
     }
     PlayerOne->SetMoveIntent(PlayerOneIntent);
     if (Controller->WasInputKeyJustPressed(EKeys::SpaceBar)
@@ -185,15 +281,73 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
     }
     else
     {
-        FVector2D PlayerTwoIntent(
-            Controller->IsInputKeyDown(EKeys::Up) ? 1.0f : Controller->IsInputKeyDown(EKeys::Down) ? -1.0f : 0.0f,
-            Controller->IsInputKeyDown(EKeys::Right) ? 1.0f : Controller->IsInputKeyDown(EKeys::Left) ? -1.0f : 0.0f);
+        const FVector2D PlayerTwoScreenIntent(
+            Controller->IsInputKeyDown(EKeys::Right) ? 1.0f : Controller->IsInputKeyDown(EKeys::Left) ? -1.0f : 0.0f,
+            Controller->IsInputKeyDown(EKeys::Up) ? 1.0f : Controller->IsInputKeyDown(EKeys::Down) ? -1.0f : 0.0f);
+        FVector2D PlayerTwoIntent = ScreenToArenaIntent(PlayerTwoScreenIntent);
+        if (ControllerTwo)
+        {
+            const FVector2D PlayerTwoGamepadScreenIntent(
+                ControllerTwo->GetInputAnalogKeyState(EKeys::Gamepad_LeftX),
+                ControllerTwo->GetInputAnalogKeyState(EKeys::Gamepad_LeftY));
+            if (PlayerTwoGamepadScreenIntent.SizeSquared() > FMath::Square(0.2f))
+            {
+                PlayerTwoIntent = ScreenToArenaIntent(PlayerTwoGamepadScreenIntent);
+            }
+        }
         PlayerTwo->SetMoveIntent(PlayerTwoIntent);
-        if (Controller->WasInputKeyJustPressed(EKeys::RightShift))
+        if (Controller->WasInputKeyJustPressed(EKeys::RightShift)
+            || (ControllerTwo && ControllerTwo->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Bottom)))
         {
             PlayerTwo->TryBoost();
         }
     }
+}
+
+void ADropfallArenaGameMode::UpdateMatchFlow(const float DeltaSeconds)
+{
+    if (MatchPhase == EDropfallMatchPhase::Countdown)
+    {
+        CountdownRemaining = FMath::Max(0.0f, CountdownRemaining - DeltaSeconds);
+        if (CountdownRemaining <= 0.0f)
+        {
+            MatchPhase = EDropfallMatchPhase::Playing;
+            RoundElapsedSeconds = 0.0f;
+        }
+        return;
+    }
+
+    if (MatchPhase == EDropfallMatchPhase::Playing)
+    {
+        RoundElapsedSeconds += DeltaSeconds;
+        UpdateArenaShrink();
+    }
+}
+
+void ADropfallArenaGameMode::UpdateArenaShrink()
+{
+    if (!ArenaFloorMesh || RoundElapsedSeconds < ArenaTuning.SuddenDeathStartSeconds)
+    {
+        return;
+    }
+
+    const float ShrinkDuration = FMath::Max(1.0f,
+        ArenaTuning.RoundDurationSeconds - ArenaTuning.SuddenDeathStartSeconds);
+    const float Alpha = FMath::Clamp(
+        (RoundElapsedSeconds - ArenaTuning.SuddenDeathStartSeconds) / ShrinkDuration, 0.0f, 1.0f);
+    const FVector2D FloorScale = FMath::Lerp(
+        ArenaTuning.FloorScale, ArenaTuning.SuddenDeathFloorScale, Alpha);
+    ArenaFloorMesh->SetWorldScale3D(FVector(FloorScale.X, FloorScale.Y, 0.35f));
+}
+
+void ADropfallArenaGameMode::BeginCountdown()
+{
+    MatchPhase = EDropfallMatchPhase::Countdown;
+    CountdownRemaining = ArenaTuning.CountdownSeconds;
+    RoundElapsedSeconds = 0.0f;
+    PlayerOne->SetMoveIntent(FVector2D::ZeroVector);
+    PlayerTwo->SetMoveIntent(FVector2D::ZeroVector);
+    FDropfallSynth::PlayTone(this, FVector::ZeroVector, 440.0f, 0.12f, 0.10f);
 }
 
 void ADropfallArenaGameMode::UpdateAI(const float DeltaSeconds)
@@ -241,7 +395,11 @@ FVector2D ADropfallArenaGameMode::CalculateAIIntent() const
     const FVector AILocation = PlayerTwo->GetActorLocation();
     const float EdgePressure = AIDifficulty == EDropfallAIDifficulty::Rookie ? 0.8f
         : AIDifficulty == EDropfallAIDifficulty::Rival ? 1.5f : 2.4f;
-    if (FMath::Abs(AILocation.X) > 940.0f || FMath::Abs(AILocation.Y) > 590.0f)
+    const FVector CurrentFloorScale = ArenaFloorMesh
+        ? ArenaFloorMesh->GetComponentScale() : FVector(ArenaTuning.FloorScale, 0.35f);
+    const float SafeEdgeX = CurrentFloorScale.X * 50.0f - 95.0f;
+    const float SafeEdgeY = CurrentFloorScale.Y * 50.0f - 95.0f;
+    if (FMath::Abs(AILocation.X) > SafeEdgeX || FMath::Abs(AILocation.Y) > SafeEdgeY)
     {
         const FVector2D ToCenter(-AILocation.X, -AILocation.Y);
         Intent += ToCenter.GetSafeNormal() * EdgePressure;
@@ -256,7 +414,7 @@ void ADropfallArenaGameMode::CheckRingOuts()
 
     if (bPlayerOneOut && bPlayerTwoOut)
     {
-        bRoundActive = false;
+        MatchPhase = EDropfallMatchPhase::RoundOver;
         GetWorldTimerManager().SetTimer(RoundResetTimer, this,
             &ADropfallArenaGameMode::ResetRound, 1.0f, false);
     }
@@ -272,19 +430,21 @@ void ADropfallArenaGameMode::CheckRingOuts()
 
 void ADropfallArenaGameMode::AwardPoint(const int32 ScoringPlayer)
 {
-    bRoundActive = false;
+    MatchPhase = EDropfallMatchPhase::RoundOver;
     LastScoringPlayer = ScoringPlayer;
     PlayerOne->SetMoveIntent(FVector2D::ZeroVector);
     PlayerTwo->SetMoveIntent(FVector2D::ZeroVector);
+    FDropfallSynth::PlayTone(this, FVector::ZeroVector,
+        ScoringPlayer == 1 ? 760.0f : 620.0f, 0.24f, 0.16f);
     if (ScoringPlayer == 1)
     {
         ++PlayerOneScore;
-        WinnerIndex = PlayerOneScore >= WinningScore ? 1 : 0;
+        WinnerIndex = PlayerOneScore >= ArenaTuning.WinningScore ? 1 : 0;
     }
     else
     {
         ++PlayerTwoScore;
-        WinnerIndex = PlayerTwoScore >= WinningScore ? 2 : 0;
+        WinnerIndex = PlayerTwoScore >= ArenaTuning.WinningScore ? 2 : 0;
     }
 
     if (WinnerIndex == 0)
@@ -292,16 +452,32 @@ void ADropfallArenaGameMode::AwardPoint(const int32 ScoringPlayer)
         GetWorldTimerManager().SetTimer(RoundResetTimer, this,
             &ADropfallArenaGameMode::ResetRound, 1.0f, false);
     }
+    else
+    {
+        MatchPhase = EDropfallMatchPhase::MatchOver;
+        FDropfallSynth::PlayTone(this, FVector::ZeroVector,
+            WinnerIndex == 1 ? 1040.0f : 820.0f, 0.55f, 0.20f);
+        if (bPlayerTwoAI)
+        {
+            RecordAIResult(WinnerIndex == 1);
+        }
+    }
 }
 
 void ADropfallArenaGameMode::ResetRound()
 {
-    PlayerOne->ResetFighter(FVector(-390.0f, 0.0f, 110.0f));
-    PlayerTwo->ResetFighter(FVector(390.0f, 0.0f, 110.0f));
+    PlayerOne->ResetFighter(FVector(390.0f, 0.0f, 110.0f));
+    PlayerTwo->ResetFighter(FVector(-390.0f, 0.0f, 110.0f));
     LastScoringPlayer = 0;
     AIThinkRemaining = 0.0f;
     AIBoostRemaining = 0.0f;
-    bRoundActive = true;
+    RoundElapsedSeconds = 0.0f;
+    if (ArenaFloorMesh)
+    {
+        ArenaFloorMesh->SetWorldScale3D(
+            FVector(ArenaTuning.FloorScale.X, ArenaTuning.FloorScale.Y, 0.35f));
+    }
+    BeginCountdown();
 }
 
 void ADropfallArenaGameMode::ResetMatch()
@@ -310,7 +486,15 @@ void ADropfallArenaGameMode::ResetMatch()
     PlayerOneScore = 0;
     PlayerTwoScore = 0;
     WinnerIndex = 0;
-    ResetRound();
+    LastScoringPlayer = 0;
+    PlayerOne->ResetFighter(FVector(390.0f, 0.0f, 110.0f));
+    PlayerTwo->ResetFighter(FVector(-390.0f, 0.0f, 110.0f));
+    if (ArenaFloorMesh)
+    {
+        ArenaFloorMesh->SetWorldScale3D(
+            FVector(ArenaTuning.FloorScale.X, ArenaTuning.FloorScale.Y, 0.35f));
+    }
+    MatchPhase = EDropfallMatchPhase::Ready;
 }
 
 void ADropfallArenaGameMode::ToggleOpponentMode()
@@ -348,4 +532,65 @@ FString ADropfallArenaGameMode::GetAIDifficultyName() const
     default:
         return TEXT("RIVAL");
     }
+}
+
+float ADropfallArenaGameMode::GetRoundTimeRemaining() const
+{
+    return FMath::Max(0.0f, ArenaTuning.RoundDurationSeconds - RoundElapsedSeconds);
+}
+
+bool ADropfallArenaGameMode::IsSuddenDeath() const
+{
+    return MatchPhase == EDropfallMatchPhase::Playing
+        && RoundElapsedSeconds >= ArenaTuning.SuddenDeathStartSeconds;
+}
+
+void ADropfallArenaGameMode::LoadProgress()
+{
+    ProgressSave = Cast<UDropfallProgressSave>(
+        UGameplayStatics::LoadGameFromSlot(ProgressSlotName, 0));
+    if (!ProgressSave)
+    {
+        ProgressSave = Cast<UDropfallProgressSave>(
+            UGameplayStatics::CreateSaveGameObject(UDropfallProgressSave::StaticClass()));
+    }
+    ProgressSave->EnsureValid();
+}
+
+void ADropfallArenaGameMode::RecordAIResult(const bool bPlayerWon)
+{
+    if (!ProgressSave)
+    {
+        return;
+    }
+
+    const int32 Index = static_cast<int32>(AIDifficulty);
+    if (bPlayerWon)
+    {
+        ++ProgressSave->WinsByDifficulty[Index];
+        ++ProgressSave->CurrentStreakByDifficulty[Index];
+        ProgressSave->BestStreakByDifficulty[Index] = FMath::Max(
+            ProgressSave->BestStreakByDifficulty[Index],
+            ProgressSave->CurrentStreakByDifficulty[Index]);
+    }
+    else
+    {
+        ProgressSave->CurrentStreakByDifficulty[Index] = 0;
+    }
+    UGameplayStatics::SaveGameToSlot(ProgressSave, ProgressSlotName, 0);
+}
+
+int32 ADropfallArenaGameMode::GetAIWins() const
+{
+    return ProgressSave ? ProgressSave->WinsByDifficulty[static_cast<int32>(AIDifficulty)] : 0;
+}
+
+int32 ADropfallArenaGameMode::GetAIBestStreak() const
+{
+    return ProgressSave ? ProgressSave->BestStreakByDifficulty[static_cast<int32>(AIDifficulty)] : 0;
+}
+
+int32 ADropfallArenaGameMode::GetAICurrentStreak() const
+{
+    return ProgressSave ? ProgressSave->CurrentStreakByDifficulty[static_cast<int32>(AIDifficulty)] : 0;
 }

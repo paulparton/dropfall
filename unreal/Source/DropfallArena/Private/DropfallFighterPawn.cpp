@@ -1,7 +1,10 @@
 #include "DropfallFighterPawn.h"
 
+#include "DropfallSynth.h"
+
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
 #include "UObject/ConstructorHelpers.h"
@@ -38,6 +41,13 @@ ADropfallFighterPawn::ADropfallFighterPawn()
     Body->SetGenerateOverlapEvents(false);
     Body->SetNotifyRigidBodyCollision(true);
     Body->OnComponentHit.AddDynamic(this, &ADropfallFighterPawn::HandleBodyHit);
+
+    FighterLight = CreateDefaultSubobject<UPointLightComponent>(TEXT("FighterLight"));
+    FighterLight->SetupAttachment(Body);
+    FighterLight->SetAttenuationRadius(280.0f);
+    FighterLight->SetIntensity(900.0f);
+    FighterLight->SetCastShadows(false);
+
 }
 
 void ADropfallFighterPawn::BeginPlay()
@@ -52,6 +62,8 @@ void ADropfallFighterPawn::Tick(const float DeltaSeconds)
 
     BoostCooldownRemaining = FMath::Max(0.0f, BoostCooldownRemaining - DeltaSeconds);
     ImpactLockoutRemaining = FMath::Max(0.0f, ImpactLockoutRemaining - DeltaSeconds);
+    FighterLight->SetIntensity(IsBoostActive() ? 4200.0f : 900.0f);
+    FighterLight->SetAttenuationRadius(IsBoostActive() ? 430.0f : 280.0f);
 
     const FVector Direction(MoveIntent.X, MoveIntent.Y, 0.0f);
     if (!Direction.IsNearlyZero())
@@ -88,6 +100,7 @@ bool ADropfallFighterPawn::TryBoost()
 
     Body->AddImpulse(LastMoveDirection * Tuning.BoostImpulse, NAME_None, true);
     BoostCooldownRemaining = Tuning.BoostCooldown;
+    FDropfallSynth::PlayTone(this, GetActorLocation(), 520.0f, 0.10f, 0.12f);
     return true;
 }
 
@@ -154,6 +167,8 @@ void ADropfallFighterPawn::HandleBodyHit(UPrimitiveComponent* HitComponent, AAct
         MinimumImpactImpulse, MaximumImpactImpulse);
     Body->AddImpulse(-ImpactDirection * ImpactStrength, NAME_None, true);
     OtherFighter->Body->AddImpulse(ImpactDirection * ImpactStrength, NAME_None, true);
+    FDropfallSynth::PlayTone(this, Hit.ImpactPoint,
+        125.0f + ImpactStrength * 0.42f, 0.09f, 0.18f);
     ImpactLockoutRemaining = ImpactLockout;
     OtherFighter->ImpactLockoutRemaining = ImpactLockout;
 }
@@ -170,4 +185,8 @@ void ADropfallFighterPawn::SetFighterColor(const FLinearColor& Color)
     Material->SetVectorParameterValue(TEXT("Color"), Color);
     Material->SetVectorParameterValue(TEXT("BaseColor"), Color);
     Body->SetMaterial(0, Material);
+    if (FighterLight)
+    {
+        FighterLight->SetLightColor(Color);
+    }
 }

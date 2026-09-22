@@ -67,11 +67,11 @@
 
 | Phase | Status | Requirements | Progress |
 |-------|--------|--------------|----------|
-| 12. Combat Foundation | In Progress | 4 | 0% |
-| 13. Local Match Experience | Pending | 8 | 0% |
-| 14. AI Ladder | Pending | 4 | 0% |
-| 15. Arena and Presentation Foundation | Pending | 3 | 0% |
-| 16. Product Integrity and Release Seams | Pending | 3 | 0% |
+| 12. Combat Foundation | Complete | 4 | 100% |
+| 13. Local Match Experience | Complete | 8 | 100% |
+| 14. AI Ladder | Complete | 4 | 100% |
+| 15. Arena and Presentation Foundation | Complete | 3 | 100% |
+| 16. Product Integrity and Release Seams | Complete | 3 | 100% |
 
 ---
 *Roadmap created: 2026-09-22*

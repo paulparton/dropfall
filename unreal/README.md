@@ -12,10 +12,16 @@ dependencies. Play-in-Editor defaults to local versus AI.
 - Player 1: `WASD`, `Space` to boost
 - Player 1 gamepad: left stick, bottom face button to boost
 - Player 2: arrow keys, `Right Shift` to boost
-- `F1`: switch between versus AI and couch versus
-- `F2`: cycle Rookie, Rival, and Ace AI
+- Player 2 gamepad: second controller left stick, bottom face button to boost
+- `Tab`: switch between versus AI and couch versus
+- `Q`: cycle Rookie, Rival, and Ace AI
 - `R`: reset the match
 - First fighter to three ring-outs wins
+
+Movement is screen-relative: `W` always moves toward the top of the shared
+camera, regardless of Unreal world axes. Press Enter, Space, or the bottom
+gamepad face button at the ready screen to start the countdown. After 30
+seconds the platform enters Sudden Drop and begins shrinking.
 
 The boost bars at the bottom of the screen refill toward ready. AI tiers change
 reaction time, prediction, aggression, and edge recovery without changing the

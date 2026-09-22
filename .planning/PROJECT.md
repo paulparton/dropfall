@@ -41,15 +41,16 @@ Every round must create an immediate, legible contest of movement, timing, posit
 - ✓ Dropfall's ball-on-arena ring-out loop is fun in local play — Dropfall Classic.
 - ✓ First Unreal greybox boots directly into local versus AI and supports couch versus — Arena prototype.
 - ✓ First-to-three scoring, reset, shared camera, and basic physics interactions function in PIE — Arena prototype.
+- ✓ Camera-relative combat, ready/countdown/rematch flow, and two-controller couch input — v4.0 Phases 12–13.
+- ✓ Rookie/Rival/Ace ladder with persistent local records — v4.0 Phase 14.
+- ✓ Tunable arena, Sudden Drop, cohesive HUD, lighting, and procedural combat feedback — v4.0 Phase 15.
+- ✓ Active-play ad prohibition, paid-entitlement seam, and automated product contracts — v4.0 Phase 16.
 
 ### Active
 
-- [ ] Movement and boost feel deliberate, responsive, and readable at competitive speed.
-- [ ] One or two local players can play immediately with keyboard or controllers.
-- [ ] AI difficulty provides a fair three-rung learning ladder rather than hidden stat cheating.
-- [ ] Match state, HUD, rounds, wins, and rematches are unambiguous.
-- [ ] Arena rules and tuning are separated from presentation and future network transport.
-- [ ] Monetization boundaries guarantee no advertising interrupts active gameplay.
+- [ ] Tune combat values from broader hands-on playtesting.
+- [ ] Replace greybox presentation with production characters, environments, music, and accessibility settings.
+- [ ] Add the front-end navigation needed for a public demo build.
 
 ### Out of Scope
 
