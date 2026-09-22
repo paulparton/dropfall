@@ -33,3 +33,13 @@ output/playwright/
 *.sw?
 
 dropfall-updated/*
+
+# Unreal Engine generated state
+unreal/Binaries/
+unreal/DerivedDataCache/
+unreal/Intermediate/
+unreal/Saved/
+unreal/.vs/
+unreal/*.sln
+unreal/*.xcworkspace
+unreal/*.xcodeproj
