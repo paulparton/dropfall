@@ -13,8 +13,17 @@ bool FDropfallScreenInputTest::RunTest(const FString& Parameters)
 {
     const FVector2D Up = ADropfallArenaGameMode::ScreenToArenaIntent(FVector2D(0.0f, 1.0f));
     const FVector2D Right = ADropfallArenaGameMode::ScreenToArenaIntent(FVector2D(1.0f, 0.0f));
-    TestEqual(TEXT("screen up maps to camera-top arena direction"), Up, FVector2D(0.0f, -1.0f));
-    TestEqual(TEXT("screen right maps to camera-right arena direction"), Right, FVector2D(-1.0f, 0.0f));
+    const FRotationMatrix CameraBasis((-ADropfallArenaGameMode::GetArenaCameraLocation()).Rotation());
+    const FVector CameraUp = CameraBasis.GetUnitAxis(EAxis::Z);
+    const FVector CameraRight = CameraBasis.GetUnitAxis(EAxis::Y);
+    TestTrue(TEXT("W projects upward through the real camera"),
+        FVector::DotProduct(FVector(Up.X, Up.Y, 0), CameraUp) > 0.5f);
+    TestTrue(TEXT("D projects rightward through the real camera"),
+        FVector::DotProduct(FVector(Right.X, Right.Y, 0), CameraRight) > 0.99f);
+    const FVector2D Down = ADropfallArenaGameMode::ScreenToArenaIntent(FVector2D(0, -1));
+    TestTrue(TEXT("S projects downward"), FVector::DotProduct(FVector(Down.X, Down.Y, 0), CameraUp) < -0.5f);
+    TestTrue(TEXT("diagonal input cannot move faster"),
+        ADropfallArenaGameMode::ScreenToArenaIntent(FVector2D(1, 1)).Size() <= 1.0001f);
     return true;
 }
 

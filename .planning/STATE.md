@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v4.0
 milestone_name: Arena Foundation
-status: complete
-last_updated: "2026-09-22T07:08:00.000Z"
+status: ready_for_playtest
+last_updated: "2026-09-22T08:30:00.000Z"
 last_activity: 2026-09-22
 progress:
-  total_phases: 5
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 6
+  completed_plans: 6
   percent: 100
 ---
 
@@ -22,16 +22,16 @@ See: `.planning/PROJECT.md` (updated 2026-09-22)
 **Core Value**: Every round creates an immediate, legible contest of movement,
 timing, positioning, and ring-outs.
 
-**Current Focus**: First-draft playtesting and combat tuning.
+**Current Focus**: Arena-only playtesting and presentation polish after Phase 17.
 
 **Milestone**: v4.0 "Arena Foundation"
 
 ## Current Position
 
-Phase: 16 — Product Integrity and Release Seams
-Plan: 16-01 complete
-Status: First draft complete and verified
-Last activity: 2026-09-22 — Completed all Arena Foundation phases
+Phase: 17 — Solo Ladder and Front End
+Plan: 17-01 implemented
+Status: Ready for hands-on follow-up; not a verified public release
+Last activity: 2026-09-22 — Solo ladder, local board, match menus and camera/layout fixes
 
 ## Verification
 
@@ -39,10 +39,12 @@ Last activity: 2026-09-22 — Completed all Arena Foundation phases
 |------|--------|
 | Editor target | Passed |
 | Native Mac game target | Passed |
-| Arena automation suite | 3/3 passed |
+| Arena automation suite | 5/5 passed |
 | PIE ready/countdown/play loop | Passed |
 | First-to-three and rematch | Passed |
 | Camera-relative input contract | Passed |
+| Ladder progression/ranking/save roundtrip | Passed |
+| Physical two-controller and full native mouse coverage | Pending hands-on |
 
 ## Delivered
 
@@ -51,6 +53,8 @@ Last activity: 2026-09-22 — Completed all Arena Foundation phases
 - Safe ready screen, countdown, round timer, scoring, match win, and rematch.
 - Keyboard plus two-controller couch play on a shared camera.
 - Rookie/Rival/Ace AI tiers with persistent local wins and streaks.
+- Three-opponent solo runs with failure/retry and a persistent local top-five board.
+- Practice/ladder/couch setup and results navigation.
 - Tunable arena geometry and Sudden Drop shrinking platform.
 - Monetization policy/paid entitlement seams with automated enforcement.
 - Editor and standalone game build compatibility.
@@ -63,9 +67,16 @@ Last activity: 2026-09-22 — Completed all Arena Foundation phases
 - Should Sudden Drop begin earlier or later than 30 seconds?
 - How large should the next visual/content pass be before online work begins?
 
-## Blockers
+## Deferred Items
 
-- None.
+All Classic work, including nine historical open artifacts, is deferred by
+explicit user instruction. See `CLASSIC-DEFERRED.md` for the durable list.
+
+## Verification limits
+
+Phases 12–15 have no individual verification reports. The earlier all-complete
+claim exceeds the recorded evidence. Phase 16 records aggregate validation;
+new work will record its own results without retroactively asserting coverage.
 
 ---
-*State updated: 2026-09-22 after v4.0 first-draft verification*
+*Implementation progress counts are not a claim of complete release verification.*

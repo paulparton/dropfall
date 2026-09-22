@@ -2,9 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "DropfallProgressSave.h"
 #include "DropfallArenaGameMode.generated.h"
 
 class ACameraActor;
+class UMaterialInterface;
 class ADropfallFighterPawn;
 class UDropfallProgressSave;
 class UStaticMesh;
@@ -16,6 +18,14 @@ enum class EDropfallAIDifficulty : uint8
     Rookie,
     Rival,
     Ace
+};
+
+UENUM(BlueprintType)
+enum class EDropfallPlayMode : uint8
+{
+    Practice,
+    Ladder,
+    Couch
 };
 
 UENUM(BlueprintType)
@@ -65,6 +75,7 @@ public:
 
     /** Converts view-space input (right, up) into the arena's fixed world axes. */
     static FVector2D ScreenToArenaIntent(const FVector2D& ScreenIntent);
+    static FVector GetArenaCameraLocation() { return FVector(0.0f, -2050.0f, 2150.0f); }
 
     int32 GetPlayerOneScore() const { return PlayerOneScore; }
     int32 GetPlayerTwoScore() const { return PlayerTwoScore; }
@@ -83,6 +94,15 @@ public:
     FString GetAIDifficultyName() const;
     const ADropfallFighterPawn* GetPlayerOne() const { return PlayerOne; }
     const ADropfallFighterPawn* GetPlayerTwo() const { return PlayerTwo; }
+    EDropfallPlayMode GetPlayMode() const { return PlayMode; }
+    const FDropfallLadderRun& GetLadderRun() const { return LadderRun; }
+    const UDropfallProgressSave* GetProgress() const { return ProgressSave; }
+    int32 GetLadderRank() const { return LadderRank; }
+    bool DidSaveFail() const { return bSaveFailed; }
+    void SelectPlayMode(EDropfallPlayMode Mode);
+    void ConfirmSelection();
+    void ReturnToSetup();
+    void CycleAIDifficulty();
 
 private:
     void ClearTemplateGeometry();
@@ -100,7 +120,9 @@ private:
     void ResetRound();
     void ResetMatch();
     void ToggleOpponentMode();
-    void CycleAIDifficulty();
+    void SetMenuInput(bool bMenu);
+    void StartSelectedMode();
+    void SaveProgress();
     void LoadProgress();
     void RecordAIResult(bool bPlayerWon);
 
@@ -115,6 +137,9 @@ private:
 
     UPROPERTY()
     TObjectPtr<UStaticMesh> CubeMesh;
+
+    UPROPERTY()
+    TObjectPtr<UMaterialInterface> ArenaMaterial;
 
     UPROPERTY()
     TObjectPtr<UStaticMeshComponent> ArenaFloorMesh;
@@ -138,6 +163,10 @@ private:
     float AIBoostRemaining = 0.0f;
     FVector2D CachedAIIntent = FVector2D::ZeroVector;
     EDropfallAIDifficulty AIDifficulty = EDropfallAIDifficulty::Rival;
+    EDropfallPlayMode PlayMode = EDropfallPlayMode::Ladder;
+    FDropfallLadderRun LadderRun;
+    int32 LadderRank = 0;
+    bool bSaveFailed = false;
     FTimerHandle RoundResetTimer;
 
     static const FString ProgressSlotName;

@@ -41,16 +41,20 @@ Every round must create an immediate, legible contest of movement, timing, posit
 - ✓ Dropfall's ball-on-arena ring-out loop is fun in local play — Dropfall Classic.
 - ✓ First Unreal greybox boots directly into local versus AI and supports couch versus — Arena prototype.
 - ✓ First-to-three scoring, reset, shared camera, and basic physics interactions function in PIE — Arena prototype.
-- ✓ Camera-relative combat, ready/countdown/rematch flow, and two-controller couch input — v4.0 Phases 12–13.
-- ✓ Rookie/Rival/Ace ladder with persistent local records — v4.0 Phase 14.
+- ✓ Ready/countdown/rematch flow and shared-camera keyboard couch input — Phase 16 aggregate checks; physical two-controller validation remains open.
+- ✓ Rookie/Rival/Ace difficulty tiers with persistent per-tier records — Phase 14 implementation, Phase 16 aggregate checks.
 - ✓ Tunable arena, Sudden Drop, cohesive HUD, lighting, and procedural combat feedback — v4.0 Phase 15.
 - ✓ Active-play ad prohibition, paid-entitlement seam, and automated product contracts — v4.0 Phase 16.
+- ✓ Camera-basis movement mapping; solo-run progression, local top-five ranking
+  and save roundtrip — Phase 17 automated contracts.
+- ✓ Match setup/results and couch rematch flow — Phase 17 PIE checks.
 
 ### Active
 
 - [ ] Tune combat values from broader hands-on playtesting.
 - [ ] Replace greybox presentation with production characters, environments, music, and accessibility settings.
-- [ ] Add the front-end navigation needed for a public demo build.
+- [ ] Validate physical controllers, native mouse targets and a complete ladder run.
+- [ ] Add settings/accessibility and cooked packaging needed for a public demo.
 
 ### Out of Scope
 
@@ -63,7 +67,7 @@ Every round must create an immediate, legible contest of movement, timing, posit
 ## Context
 
 - Unreal Engine 5.8.1 project lives in `unreal/`; C++ owns runtime rules and simulation contracts.
-- Dropfall Classic remains in the repository as a feature reference and web product.
+- Dropfall Classic remains in the repository as a feature reference. All Classic work is deferred by user instruction; see `CLASSIC-DEFERRED.md`.
 - The current Arena prototype generates its level at runtime and uses engine primitives, allowing gameplay iteration without content dependencies.
 - Steam is the initial native launch target, with other storefronts possible.
 

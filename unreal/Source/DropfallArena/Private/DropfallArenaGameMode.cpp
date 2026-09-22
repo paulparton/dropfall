@@ -1,6 +1,7 @@
 #include "DropfallArenaGameMode.h"
 
 #include "DropfallArenaHUD.h"
+#include "DropfallPlayerController.h"
 #include "DropfallFighterPawn.h"
 #include "DropfallProgressSave.h"
 #include "DropfallSynth.h"
@@ -15,6 +16,7 @@
 #include "InputCoreTypes.h"
 #include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -50,6 +52,7 @@ ADropfallArenaGameMode::ADropfallArenaGameMode()
     PrimaryActorTick.bCanEverTick = true;
     DefaultPawnClass = nullptr;
     HUDClass = ADropfallArenaHUD::StaticClass();
+    PlayerControllerClass = ADropfallPlayerController::StaticClass();
 
     static ConstructorHelpers::FObjectFinder<UStaticMesh> CubeAsset(
         TEXT("/Engine/BasicShapes/Cube.Cube"));
@@ -57,6 +60,9 @@ ADropfallArenaGameMode::ADropfallArenaGameMode()
     {
         CubeMesh = CubeAsset.Object;
     }
+    static ConstructorHelpers::FObjectFinder<UMaterialInterface> MaterialAsset(
+        TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial"));
+    ArenaMaterial = MaterialAsset.Object;
 }
 
 void ADropfallArenaGameMode::BeginPlay()
@@ -68,13 +74,18 @@ void ADropfallArenaGameMode::BeginPlay()
     SpawnCamera();
     LoadProgress();
     MatchPhase = EDropfallMatchPhase::Ready;
+    AIDifficulty = EDropfallAIDifficulty::Rookie;
+    SetMenuInput(true);
 }
 
 FVector2D ADropfallArenaGameMode::ScreenToArenaIntent(const FVector2D& ScreenIntent)
 {
-    // The shared camera looks across the arena from negative Y. Its screen-right
-    // axis is negative world X and its screen-up axis is negative world Y.
-    return FVector2D(-ScreenIntent.X, -ScreenIntent.Y).GetClampedToMaxSize(1.0f);
+    // Derive both axes from the same pose used by the actual shared camera.
+    const FRotationMatrix CameraBasis((-GetArenaCameraLocation()).Rotation());
+    const FVector Right = CameraBasis.GetUnitAxis(EAxis::Y);
+    const FVector Up = CameraBasis.GetUnitAxis(EAxis::Z);
+    return (FVector2D(Right.X, Right.Y).GetSafeNormal() * ScreenIntent.X
+        + FVector2D(Up.X, Up.Y).GetSafeNormal() * ScreenIntent.Y).GetClampedToMaxSize(1.0f);
 }
 
 void ADropfallArenaGameMode::ClearTemplateGeometry()
@@ -115,8 +126,9 @@ void ADropfallArenaGameMode::BuildGreyboxArena()
     ArenaFloorMesh = NewObject<UStaticMeshComponent>(Floor, TEXT("FloorMesh"));
     Floor->SetRootComponent(ArenaFloorMesh);
     ArenaFloorMesh->SetStaticMesh(CubeMesh);
+    ArenaFloorMesh->SetMaterial(0, ArenaMaterial);
     ArenaFloorMesh->SetWorldScale3D(FVector(ArenaTuning.FloorScale.X, ArenaTuning.FloorScale.Y, 0.35f));
-    ArenaFloorMesh->SetWorldLocation(FVector(0.0f, 0.0f, -35.0f));
+    ArenaFloorMesh->SetWorldLocation(FVector(0.0f, 0.0f, -17.5f));
     ArenaFloorMesh->SetCollisionProfileName(TEXT("BlockAll"));
     ArenaFloorMesh->RegisterComponent();
     SetMeshColor(ArenaFloorMesh, FLinearColor(0.025f, 0.055f, 0.11f));
@@ -134,6 +146,8 @@ void ADropfallArenaGameMode::BuildGreyboxArena()
         UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Bumper);
         Bumper->SetRootComponent(Mesh);
         Mesh->SetStaticMesh(CubeMesh);
+        Mesh->SetMaterial(0, ArenaMaterial);
+        Mesh->SetWorldLocation(BumperLocations[Index]);
         Mesh->SetWorldScale3D(Index == 0 ? FVector(0.75f, 0.75f, 0.5f) : FVector(0.55f, 0.55f, 0.35f));
         Mesh->SetCollisionProfileName(TEXT("BlockAll"));
         Mesh->RegisterComponent();
@@ -161,10 +175,13 @@ void ADropfallArenaGameMode::BuildGreyboxArena()
         UStaticMeshComponent* Mesh = NewObject<UStaticMeshComponent>(Accent);
         Accent->SetRootComponent(Mesh);
         Mesh->SetStaticMesh(CubeMesh);
+        Mesh->SetMaterial(0, ArenaMaterial);
+        Mesh->SetWorldLocation(Accents[Index].Location);
         Mesh->SetWorldScale3D(Accents[Index].Scale);
         Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
         Mesh->RegisterComponent();
         SetMeshColor(Mesh, Accents[Index].Color);
+        Mesh->AttachToComponent(ArenaFloorMesh, FAttachmentTransformRules::KeepWorldTransform);
     }
 }
 
@@ -189,7 +206,7 @@ void ADropfallArenaGameMode::SpawnFighters()
 
 void ADropfallArenaGameMode::SpawnCamera()
 {
-    const FVector CameraLocation(0.0f, -2050.0f, 2150.0f);
+    const FVector CameraLocation = GetArenaCameraLocation();
     const FRotator CameraRotation = (FVector::ZeroVector - CameraLocation).Rotation();
     ArenaCamera = GetWorld()->SpawnActor<ACameraActor>(CameraLocation, CameraRotation);
     SetDevelopmentLabel(ArenaCamera, TEXT("Arena Camera"));
@@ -213,7 +230,6 @@ void ADropfallArenaGameMode::SpawnCamera()
     if (APlayerController* ControllerTwo = UGameplayStatics::GetPlayerController(this, 1))
     {
         ControllerTwo->SetViewTarget(ArenaCamera);
-        ControllerTwo->SetInputMode(FInputModeGameOnly());
     }
 }
 
@@ -225,18 +241,34 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
         return;
     }
 
-    if (Controller->WasInputKeyJustPressed(EKeys::Tab))
+    if (Controller->WasInputKeyJustPressed(EKeys::M)
+        || Controller->WasInputKeyJustPressed(EKeys::Gamepad_Special_Right))
     {
-        ToggleOpponentMode();
+        ReturnToSetup();
+        return;
     }
-    if (Controller->WasInputKeyJustPressed(EKeys::Q))
+    if (MatchPhase == EDropfallMatchPhase::Ready)
     {
-        CycleAIDifficulty();
+        const bool bNext = Controller->WasInputKeyJustPressed(EKeys::Right)
+            || Controller->WasInputKeyJustPressed(EKeys::Gamepad_DPad_Right)
+            || Controller->WasInputKeyJustPressed(EKeys::Tab);
+        const bool bPrevious = Controller->WasInputKeyJustPressed(EKeys::Left)
+            || Controller->WasInputKeyJustPressed(EKeys::Gamepad_DPad_Left);
+        if (bNext || bPrevious)
+        {
+            SelectPlayMode(static_cast<EDropfallPlayMode>(
+                (static_cast<int32>(PlayMode) + (bNext ? 1 : 2)) % 3));
+        }
+        if (Controller->WasInputKeyJustPressed(EKeys::Q)
+            || Controller->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Top))
+        {
+            CycleAIDifficulty();
+        }
     }
     if (Controller->WasInputKeyJustPressed(EKeys::R))
     {
-        ResetMatch();
-        BeginCountdown();
+        StartSelectedMode();
+        return;
     }
 
     APlayerController* ControllerTwo = UGameplayStatics::GetPlayerController(this, 1);
@@ -244,9 +276,11 @@ void ADropfallArenaGameMode::ReadLocalInput(const float DeltaSeconds)
         || Controller->WasInputKeyJustPressed(EKeys::SpaceBar)
         || Controller->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Bottom)
         || (ControllerTwo && ControllerTwo->WasInputKeyJustPressed(EKeys::Gamepad_FaceButton_Bottom));
-    if (MatchPhase == EDropfallMatchPhase::Ready && bStartPressed)
+    if ((MatchPhase == EDropfallMatchPhase::Ready || MatchPhase == EDropfallMatchPhase::MatchOver)
+        && bStartPressed)
     {
-        BeginCountdown();
+        ConfirmSelection();
+        return;
     }
 
     if (MatchPhase != EDropfallMatchPhase::Playing || WinnerIndex != 0)
@@ -320,6 +354,10 @@ void ADropfallArenaGameMode::UpdateMatchFlow(const float DeltaSeconds)
     if (MatchPhase == EDropfallMatchPhase::Playing)
     {
         RoundElapsedSeconds += DeltaSeconds;
+        if (PlayMode == EDropfallPlayMode::Ladder)
+        {
+            LadderRun.Tick(DeltaSeconds);
+        }
         UpdateArenaShrink();
     }
 }
@@ -342,6 +380,7 @@ void ADropfallArenaGameMode::UpdateArenaShrink()
 
 void ADropfallArenaGameMode::BeginCountdown()
 {
+    SetMenuInput(false);
     MatchPhase = EDropfallMatchPhase::Countdown;
     CountdownRemaining = ArenaTuning.CountdownSeconds;
     RoundElapsedSeconds = 0.0f;
@@ -455,11 +494,19 @@ void ADropfallArenaGameMode::AwardPoint(const int32 ScoringPlayer)
     else
     {
         MatchPhase = EDropfallMatchPhase::MatchOver;
+        SetMenuInput(true);
         FDropfallSynth::PlayTone(this, FVector::ZeroVector,
             WinnerIndex == 1 ? 1040.0f : 820.0f, 0.55f, 0.20f);
         if (bPlayerTwoAI)
         {
             RecordAIResult(WinnerIndex == 1);
+        }
+        if (PlayMode == EDropfallPlayMode::Ladder
+            && LadderRun.ResolveMatch(WinnerIndex == 1, PlayerTwoScore)
+            && LadderRun.bCompleted && ProgressSave)
+        {
+            LadderRank = ProgressSave->RecordLadderRun(LadderRun);
+            SaveProgress();
         }
     }
 }
@@ -469,8 +516,10 @@ void ADropfallArenaGameMode::ResetRound()
     PlayerOne->ResetFighter(FVector(390.0f, 0.0f, 110.0f));
     PlayerTwo->ResetFighter(FVector(-390.0f, 0.0f, 110.0f));
     LastScoringPlayer = 0;
+    AIClock = 0.0f;
     AIThinkRemaining = 0.0f;
     AIBoostRemaining = 0.0f;
+    CachedAIIntent = FVector2D::ZeroVector;
     RoundElapsedSeconds = 0.0f;
     if (ArenaFloorMesh)
     {
@@ -487,6 +536,12 @@ void ADropfallArenaGameMode::ResetMatch()
     PlayerTwoScore = 0;
     WinnerIndex = 0;
     LastScoringPlayer = 0;
+    AIClock = 0.0f;
+    AIThinkRemaining = 0.0f;
+    AIBoostRemaining = 0.0f;
+    CachedAIIntent = FVector2D::ZeroVector;
+    CountdownRemaining = 0.0f;
+    RoundElapsedSeconds = 0.0f;
     PlayerOne->ResetFighter(FVector(390.0f, 0.0f, 110.0f));
     PlayerTwo->ResetFighter(FVector(-390.0f, 0.0f, 110.0f));
     if (ArenaFloorMesh)
@@ -499,12 +554,16 @@ void ADropfallArenaGameMode::ResetMatch()
 
 void ADropfallArenaGameMode::ToggleOpponentMode()
 {
-    bPlayerTwoAI = !bPlayerTwoAI;
-    ResetMatch();
+    SelectPlayMode(PlayMode == EDropfallPlayMode::Couch
+        ? EDropfallPlayMode::Practice : EDropfallPlayMode::Couch);
 }
 
 void ADropfallArenaGameMode::CycleAIDifficulty()
 {
+    if (MatchPhase != EDropfallMatchPhase::Ready || PlayMode != EDropfallPlayMode::Practice)
+    {
+        return;
+    }
     if (AIDifficulty == EDropfallAIDifficulty::Rookie)
     {
         AIDifficulty = EDropfallAIDifficulty::Rival;
@@ -577,7 +636,96 @@ void ADropfallArenaGameMode::RecordAIResult(const bool bPlayerWon)
     {
         ProgressSave->CurrentStreakByDifficulty[Index] = 0;
     }
-    UGameplayStatics::SaveGameToSlot(ProgressSave, ProgressSlotName, 0);
+    SaveProgress();
+}
+
+void ADropfallArenaGameMode::SaveProgress()
+{
+    bSaveFailed = !ProgressSave || !UGameplayStatics::SaveGameToSlot(ProgressSave, ProgressSlotName, 0);
+}
+
+void ADropfallArenaGameMode::SetMenuInput(const bool bMenu)
+{
+    if (APlayerController* Controller = UGameplayStatics::GetPlayerController(this, 0))
+    {
+        Controller->bShowMouseCursor = bMenu;
+        // HUD handles menu clicks once through local input; actor clicks are unused.
+        Controller->bEnableClickEvents = false;
+        if (bMenu)
+        {
+            // GameOnly enables high-precision mouse capture even if the viewport
+            // capture mode is later changed. GameAndUI explicitly releases it.
+            FInputModeGameAndUI InputMode;
+            InputMode.SetHideCursorDuringCapture(false);
+            InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+            Controller->SetInputMode(InputMode);
+            // Keep CaptureDuringMouseDown: SceneViewport intentionally skips
+            // forwarding mouse presses to PlayerController in NoCapture mode.
+        }
+        else
+        {
+            Controller->SetInputMode(FInputModeGameOnly());
+        }
+    }
+}
+
+void ADropfallArenaGameMode::SelectPlayMode(const EDropfallPlayMode Mode)
+{
+    if (MatchPhase != EDropfallMatchPhase::Ready)
+    {
+        return;
+    }
+    PlayMode = Mode;
+    bPlayerTwoAI = Mode != EDropfallPlayMode::Couch;
+    if (Mode == EDropfallPlayMode::Ladder)
+    {
+        AIDifficulty = EDropfallAIDifficulty::Rookie;
+    }
+}
+
+void ADropfallArenaGameMode::StartSelectedMode()
+{
+    LadderRun = FDropfallLadderRun();
+    LadderRank = 0;
+    bPlayerTwoAI = PlayMode != EDropfallPlayMode::Couch;
+    if (PlayMode == EDropfallPlayMode::Ladder)
+    {
+        LadderRun.Start();
+        AIDifficulty = EDropfallAIDifficulty::Rookie;
+    }
+    ResetMatch();
+    BeginCountdown();
+}
+
+void ADropfallArenaGameMode::ConfirmSelection()
+{
+    if (MatchPhase == EDropfallMatchPhase::Ready)
+    {
+        StartSelectedMode();
+    }
+    else if (MatchPhase == EDropfallMatchPhase::MatchOver)
+    {
+        if (PlayMode == EDropfallPlayMode::Ladder && LadderRun.Advance())
+        {
+            AIDifficulty = static_cast<EDropfallAIDifficulty>(LadderRun.Stage);
+            ResetMatch();
+            BeginCountdown();
+        }
+        else
+        {
+            StartSelectedMode();
+        }
+    }
+}
+
+void ADropfallArenaGameMode::ReturnToSetup()
+{
+    // Leaving a run abandons it; only defeating Ace records a leaderboard entry.
+    LadderRun = FDropfallLadderRun();
+    LadderRank = 0;
+    ResetMatch();
+    SelectPlayMode(PlayMode);
+    SetMenuInput(true);
 }
 
 int32 ADropfallArenaGameMode::GetAIWins() const

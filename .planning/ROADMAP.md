@@ -63,6 +63,14 @@
 3. Combat and match invariants run in automated/headless validation.
 4. Steam-facing build settings and future authoritative-server seams are documented and enforced.
 
+## Phase 17: Solo Ladder and Front End
+
+**Goal:** Choose practice, couch versus or a Rookie-to-Ace run from a readable
+setup screen, progress through results, and retain the five best completed
+solo runs locally.
+
+**Plans:** 17-01-PLAN.md — run state, persistence, navigation, HUD and validation.
+
 ## Progress
 
 | Phase | Status | Requirements | Progress |
@@ -72,6 +80,7 @@
 | 14. AI Ladder | Complete | 4 | 100% |
 | 15. Arena and Presentation Foundation | Complete | 3 | 100% |
 | 16. Product Integrity and Release Seams | Complete | 3 | 100% |
+| 17. Solo Ladder and Front End | Implemented; hands-on follow-up | Local ladder and setup | 100% |
 
 ---
 *Roadmap created: 2026-09-22*
