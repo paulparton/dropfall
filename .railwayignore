@@ -17,3 +17,7 @@ logs/
 server/data/
 server/public/assets/
 dropfall-updated/
+
+# Native projects and local captures are not part of the web release.
+unreal/
+outputs/
