@@ -35,7 +35,7 @@ function approvedFixture() {
 describe('offline monetization readiness registry', () => {
   it('records verified library/Arena analytics while retaining all advertising and payment gates', () => {
     expect(registry.products.map((product: { id: string }) => product.id).sort()).toEqual(
-      ['library', 'super-face-pop', 'dropfall', 'big-racers', 'mofighter'].sort(),
+      ['library', 'ember-and-iron', 'super-face-pop', 'dropfall', 'big-racers', 'mofighter'].sort(),
     );
     expect(registry.products.every((product: { domainsVerified: boolean }) => product.domainsVerified)).toBe(true);
     for (const product of registry.products) {

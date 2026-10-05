@@ -109,13 +109,13 @@ function completeTagLoad() {
 }
 
 describe('library browsing from the real homepage', () => {
-  it('renders all four game cards with safe, announced new-tab launches', async () => {
+  it('renders all five game cards with safe, announced new-tab launches', async () => {
     await mountLibrary();
     expect(visibleTitles()).toEqual(games.map((game) => game.title));
-    expect(document.querySelector('#result-count')?.textContent).toBe('4 games');
+    expect(document.querySelector('#result-count')?.textContent).toBe('5 games');
 
     const launches = getAllByRole(document.body, 'link', { name: /opens in a new tab/ });
-    expect(launches).toHaveLength(5); // Featured Dropfall plus four cards.
+    expect(launches).toHaveLength(6); // Featured game plus five cards.
     for (const link of launches) {
       expect(link.getAttribute('target')).toBe('_blank');
       expect(link.getAttribute('rel')?.split(/\s+/)).toEqual(expect.arrayContaining(['noopener', 'noreferrer']));
@@ -129,7 +129,7 @@ describe('library browsing from the real homepage', () => {
     const staticDocument = new DOMParser().parseFromString(pageHtml, 'text/html');
     const fallback = staticDocument.querySelector('noscript')!;
     const fallbackLinks = fallback.querySelectorAll('a');
-    expect(fallbackLinks).toHaveLength(4);
+    expect(fallbackLinks).toHaveLength(5);
     for (const link of fallbackLinks) {
       expect(link.target).toBe('_blank');
       expect(link.relList.contains('noopener')).toBe(true);
@@ -143,7 +143,7 @@ describe('library browsing from the real homepage', () => {
     const featureTitle = document.querySelector('#feature-art-title');
     const featureLink = document.querySelector<HTMLAnchorElement>('#feature-play')!;
     expect(featureTitle?.textContent).toBe('DROPFALL');
-    expect(getAllByRole(document.querySelector('#feature-dots')!, 'button')).toHaveLength(4);
+    expect(getAllByRole(document.querySelector('#feature-dots')!, 'button')).toHaveLength(5);
 
     for (const game of games) {
       fireEvent.click(button(`Show ${game.title}`));
@@ -177,7 +177,7 @@ describe('library browsing from the real homepage', () => {
     expect(document.querySelector<HTMLDivElement>('#empty-state')?.hidden).toBe(false);
     expect(document.querySelector('img[src="search-injection"]')).toBeNull();
     fireEvent.click(button('Show all games'));
-    expect(visibleTitles()).toHaveLength(4);
+    expect(visibleTitles()).toHaveLength(5);
     expect((getByRole(document.body, 'searchbox') as HTMLInputElement).value).toBe('');
     expect(document.querySelector<HTMLDivElement>('#empty-state')?.hidden).toBe(true);
   });
@@ -185,16 +185,16 @@ describe('library browsing from the real homepage', () => {
   it('combines platform and genre filters and clears the full filter state', async () => {
     await mountLibrary();
     fireEvent.click(button('Mobile-friendly'));
-    expect(visibleTitles()).toEqual(['Super Face Pop', 'Dropfall', 'Big Racers']);
+    expect(visibleTitles()).toEqual(['Ember & Iron', 'Super Face Pop', 'Dropfall', 'Big Racers']);
     expect(button('Mobile-friendly').getAttribute('aria-pressed')).toBe('true');
     expect(button('All games').getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(button('Fighting'));
     expect(visibleTitles()).toEqual([]);
     expect(button('Fighting').getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(button('Desktop'));
-    expect(visibleTitles()).toEqual(['moFighter']);
+    expect(visibleTitles()).toEqual(['Titan Protocol']);
     fireEvent.click(button(/Clear filters/));
-    expect(visibleTitles()).toHaveLength(4);
+    expect(visibleTitles()).toHaveLength(5);
     expect(button('All games').getAttribute('aria-pressed')).toBe('true');
     expect(button('All genres').getAttribute('aria-pressed')).toBe('true');
   });
@@ -203,7 +203,7 @@ describe('library browsing from the real homepage', () => {
     await mountLibrary();
     const sort = getByRole(document.body, 'combobox', { name: 'Sort by' });
     fireEvent.change(sort, { target: { value: 'name' } });
-    expect(visibleTitles()).toEqual(['Big Racers', 'Dropfall', 'moFighter', 'Super Face Pop']);
+    expect(visibleTitles()).toEqual(['Big Racers', 'Dropfall', 'Ember & Iron', 'Super Face Pop', 'Titan Protocol']);
     fireEvent.change(sort, { target: { value: 'featured' } });
     expect(visibleTitles()).toEqual(games.map((game) => game.title));
   });
@@ -232,7 +232,7 @@ describe('device-local saved games', () => {
     expect(document.querySelector('#empty-message')?.textContent).toMatch(/bookmark.*save it here/i);
     expect(JSON.parse(localStorage.getItem(savedKey)!)).toEqual([]);
     fireEvent.click(getByRole(document.body, 'link', { name: 'Games' }));
-    expect(visibleTitles()).toHaveLength(4);
+    expect(visibleTitles()).toHaveLength(5);
     expect(button('Saved 0').getAttribute('aria-pressed')).toBe('false');
   });
 
@@ -245,16 +245,22 @@ describe('device-local saved games', () => {
 
     localStorage.setItem(savedKey, '{broken JSON');
     await mountLibrary();
-    expect(visibleTitles()).toHaveLength(4);
+    expect(visibleTitles()).toHaveLength(5);
     expect(button('Saved 0')).toBeDefined();
     expect(document.querySelector<HTMLElement>('#storage-note')?.hidden).toBe(false);
   });
 
   it('keeps session-only picks usable when browser storage is blocked', async () => {
-    vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new DOMException('Blocked', 'SecurityError'); });
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Quota', 'QuotaExceededError'); });
+    vi.stubGlobal('localStorage', {
+      getItem: () => { throw new DOMException('Blocked', 'SecurityError'); },
+      setItem: () => { throw new DOMException('Quota', 'QuotaExceededError'); },
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    });
     await mountLibrary();
-    expect(visibleTitles()).toHaveLength(4);
+    expect(visibleTitles()).toHaveLength(5);
     fireEvent.click(button('Save Super Face Pop'));
     expect(button('Saved 1')).toBeDefined();
     fireEvent.click(button('Saved 1'));
@@ -313,7 +319,7 @@ describe('library privacy and analytics integration', () => {
     expect(notice.querySelectorAll('script, iframe, img')).toHaveLength(0);
     expect(notice.querySelector<HTMLAnchorElement>('a.back')?.getAttribute('href')).toBe('/');
     const copy = notice.body.textContent || '';
-    expect(copy).toContain('Dropfall Arena, Super Face Pop, Big Racers and moFighter');
+    expect(copy).toContain('Dropfall Arena, Ember & Iron, Super Face Pop, Big Racers and Titan Protocol');
     expect(copy).toContain('allowing analytics in one does not opt you in elsewhere');
     expect(copy).toContain('Every product has a separate choice');
     expect(copy).toContain('Global Privacy Control or Do Not Track');
@@ -412,7 +418,7 @@ describe('library privacy and analytics integration', () => {
     expect(analytics.getConsent()).toBe('denied');
     expect(tagEvents(tagWindow)).toEqual([]); // Withdrawal also clears queued commands.
     fireEvent.click(button('Save Dropfall'));
-    fireEvent.click(button('View moFighter details'));
+    fireEvent.click(button('View Titan Protocol details'));
     fireEvent.click(button('Close game details'));
     fireEvent.click(document.querySelector('#feature-play')!);
     expect(tagEvents(tagWindow)).toEqual([]);

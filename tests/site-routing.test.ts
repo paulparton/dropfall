@@ -8,6 +8,7 @@ import { GameServer } from '../server/server.js';
 
 const LIBRARY_HTML = '<!doctype html><title>Dropfall Library</title>';
 const ARENA_HTML = '<!doctype html><title>Dropfall Arena</title>';
+const EMBER_AND_IRON_HTML = '<!doctype html><title>Ember & Iron</title>';
 const ARENA_MANIFEST = readFileSync(join(process.cwd(), 'public', 'manifest.webmanifest'), 'utf8');
 
 describe('library and arena HTTP routing', () => {
@@ -21,9 +22,11 @@ describe('library and arena HTTP routing', () => {
     fixtureRoot = mkdtempSync(join(tmpdir(), 'dropfall-site-routing-'));
     frontendDir = join(fixtureRoot, 'dist');
     mkdirSync(join(frontendDir, 'dropfall-arena'), { recursive: true });
+    mkdirSync(join(frontendDir, 'ember-and-iron'), { recursive: true });
     mkdirSync(join(frontendDir, 'assets'));
     writeFileSync(join(frontendDir, 'index.html'), LIBRARY_HTML);
     writeFileSync(join(frontendDir, 'dropfall-arena', 'index.html'), ARENA_HTML);
+    writeFileSync(join(frontendDir, 'ember-and-iron', 'index.html'), EMBER_AND_IRON_HTML);
     writeFileSync(join(frontendDir, 'assets', 'game-hash.js'), 'export const ready = true;');
     writeFileSync(join(frontendDir, 'studio-integrations.js'), 'export const ready = true;');
     writeFileSync(join(frontendDir, 'assets', 'physics.wasm'), Buffer.from([0, 97, 115, 109]));
@@ -52,7 +55,7 @@ describe('library and arena HTTP routing', () => {
     });
   }
 
-  it('serves separate library and arena entrypoints from the current build', async () => {
+  it('serves separate library and game entrypoints from the current build', async () => {
     for (const path of ['/', '/index.html']) {
       const response = await fetch(`${baseUrl}${path}`);
       expect(response.status).toBe(200);
@@ -64,12 +67,23 @@ describe('library and arena HTTP routing', () => {
       expect(response.status).toBe(200);
       expect(await response.text()).toBe(ARENA_HTML);
     }
+    for (const path of ['/ember-and-iron/', '/ember-and-iron/index.html']) {
+      const response = await fetch(`${baseUrl}${path}`);
+      expect(response.status).toBe(200);
+      expect(await response.text()).toBe(EMBER_AND_IRON_HTML);
+    }
   });
 
   it('canonicalizes the arena path without losing invitation or mode parameters', async () => {
     const response = await fetch(`${baseUrl}/dropfall-arena?mode=online&invite=abc%2B123`, { redirect: 'manual' });
     expect(response.status).toBe(308);
     expect(response.headers.get('location')).toBe('/dropfall-arena/?mode=online&invite=abc%2B123');
+  });
+
+  it('canonicalizes the Ember & Iron path without losing query parameters', async () => {
+    const response = await fetch(`${baseUrl}/ember-and-iron?profile=guest`, { redirect: 'manual' });
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe('/ember-and-iron/?profile=guest');
   });
 
   it('redirects only the dedicated game host root to its arena for GET and HEAD', async () => {

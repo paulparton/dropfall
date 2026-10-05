@@ -4,8 +4,8 @@ import { readStudioConsent, studioEvent, studioProduct } from '../public/studio-
 
 describe('shared studio integration', () => {
   it('allows only exact production game hosts', () => {
-    expect(studioProduct('mofighter', new URL('https://mofighter.dropfall-game.com/'))?.productId).toBe('mofighter');
-    expect(studioProduct('big-racers', new URL('https://mofighter.dropfall-game.com/'))).toBeNull();
+    expect(studioProduct('mofighter', new URL('https://titan-protocol.dropfall-game.com/'))?.productId).toBe('mofighter');
+    expect(studioProduct('big-racers', new URL('https://titan-protocol.dropfall-game.com/'))).toBeNull();
     expect(studioProduct('super-face-pop', new URL('http://super-face-pop.dropfall-game.com/'))).toBeNull();
   });
   it('expires consent and rejects malformed records', () => {

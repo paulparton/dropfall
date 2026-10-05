@@ -16,6 +16,7 @@ describe('AdSense site verification', () => {
       'subdomain=super-face-pop.dropfall-game.com',
       'subdomain=big-racers.dropfall-game.com',
       'subdomain=mofighter.dropfall-game.com',
+      'subdomain=titan-protocol.dropfall-game.com',
     ]);
   });
 

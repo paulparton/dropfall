@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { games, launchUrl } from '../src/library/catalog.js';
 
 describe('game library catalogue', () => {
-  it('populates the four requested games with usable launch destinations', () => {
+  it('populates the five requested games with usable launch destinations', () => {
     expect(games.map((game) => game.title)).toEqual([
-      'Super Face Pop', 'Dropfall', 'Big Racers', 'moFighter',
+      'Ember & Iron', 'Super Face Pop', 'Dropfall', 'Big Racers', 'Titan Protocol',
     ]);
-    expect(new Set(games.map((game) => game.id)).size).toBe(4);
+    expect(new Set(games.map((game) => game.id)).size).toBe(5);
 
     for (const game of games) {
       const destination = launchUrl(game);
@@ -37,7 +37,7 @@ describe('game library catalogue', () => {
     expect(fighter.platforms).toEqual(['desktop']);
     expect(fighter.controls).toMatch(/does not currently support touch/i);
     expect(games.filter((game) => game.platforms.includes('mobile')).map((game) => game.id))
-      .toEqual(['super-face-pop', 'dropfall', 'big-racers']);
+      .toEqual(['ember-and-iron', 'super-face-pop', 'dropfall', 'big-racers']);
   });
 });
 

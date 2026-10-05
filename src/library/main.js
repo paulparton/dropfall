@@ -18,7 +18,11 @@ try {
   if (Array.isArray(stored)) saved = new Set(stored.filter((id) => games.some((game) => game.id === id)));
 } catch { storageAvailable = false; }
 let toastTimeout;
-const featureGames = [games.find((game) => game.id === 'dropfall'), ...games.filter((game) => game.id !== 'dropfall')].filter(Boolean);
+const featureGames = [
+  games.find((game) => game.id === 'dropfall'),
+  ...games.filter((game) => game.id !== 'dropfall' && game.id !== 'ember-and-iron'),
+  games.find((game) => game.id === 'ember-and-iron'),
+].filter(Boolean);
 const featureIntervalMs = 7000;
 let featureIndex = 0;
 let featureTimer;
@@ -52,7 +56,7 @@ function gameCard(game) {
   const available = Boolean(launchUrl(game));
   return `<article class="game-card ${game.artwork}">
     <div class="card-art" style="--art-accent:${game.accent}">
-      <button class="art-details" data-details="${game.id}" type="button" aria-label="View ${escapeHtml(game.title)} details"><img src="${game.image}" alt="${escapeHtml(game.imageAlt)}" loading="lazy" width="640" height="480"/><span class="card-art-overlay"></span><span class="card-art-caption">${game.caption}</span><span class="card-art-name">${game.id === 'super-face-pop' ? 'SUPER<br>FACE POP' : game.id === 'big-racers' ? 'BIG<br>RACERS' : game.id === 'mofighter' ? 'moFighter<span>.</span>' : 'DROPFALL'}</span><span class="art-open" aria-hidden="true">↗</span></button>
+      <button class="art-details" data-details="${game.id}" type="button" aria-label="View ${escapeHtml(game.title)} details"><img src="${game.image}" alt="${escapeHtml(game.imageAlt)}" loading="lazy" width="640" height="480"/><span class="card-art-overlay"></span><span class="card-art-caption">${game.caption}</span><span class="card-art-name">${game.id === 'ember-and-iron' ? 'EMBER<br>&amp; IRON' : game.id === 'super-face-pop' ? 'SUPER<br>FACE POP' : game.id === 'big-racers' ? 'BIG<br>RACERS' : game.id === 'mofighter' ? 'TITAN<br>PROTOCOL<span>.</span>' : 'DROPFALL'}</span><span class="art-open" aria-hidden="true">↗</span></button>
       <span class="card-status ${available ? 'is-available' : ''}">${game.status === 'preview' ? '<i></i> Playable preview' : available ? '<i></i> Play in browser' : 'In development'}</span>
       <button type="button" class="save-button ${saved.has(game.id) ? 'is-saved' : ''}" data-save="${game.id}" aria-label="${saved.has(game.id) ? 'Unsave' : 'Save'} ${escapeHtml(game.title)}" aria-pressed="${saved.has(game.id)}">${bookmark}</button>
     </div>

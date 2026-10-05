@@ -2,6 +2,7 @@ import { readFileSync, realpathSync, statSync } from 'node:fs';
 import { extname, resolve, sep } from 'node:path';
 
 export const ARENA_PATH = '/dropfall-arena/';
+export const EMBER_AND_IRON_PATH = '/ember-and-iron/';
 const ARENA_HOST = /^dropfall\.dropfall-game\.com(?::([0-9]{1,5}))?$/i;
 
 const MIME_TYPES = {
@@ -48,6 +49,7 @@ export function parseRequestTarget(target = '/') {
 function resolveBuiltFile(frontendDir, pathname) {
     const relativePath = pathname === '/' ? 'index.html'
         : pathname === ARENA_PATH ? 'dropfall-arena/index.html'
+            : pathname === EMBER_AND_IRON_PATH ? 'ember-and-iron/index.html'
             : pathname.replace(/^\/+/, '');
 
     // Never expose build metadata, hidden files, or files reached via symlinks
@@ -79,8 +81,9 @@ export function serveSiteRequest(req, res, { frontendDir, pathname, search = '' 
         Number(arenaHostMatch[1]) > 0 && Number(arenaHostMatch[1]) <= 65535
     ));
     const isArenaHostRoot = isArenaHost && (pathname === '/' || pathname === '/index.html');
-    if (isArenaHostRoot || pathname === ARENA_PATH.slice(0, -1)) {
-        res.writeHead(308, { Location: `${ARENA_PATH}${search}` });
+    if (isArenaHostRoot || pathname === ARENA_PATH.slice(0, -1) || pathname === EMBER_AND_IRON_PATH.slice(0, -1)) {
+        const destination = pathname === EMBER_AND_IRON_PATH.slice(0, -1) ? EMBER_AND_IRON_PATH : ARENA_PATH;
+        res.writeHead(308, { Location: `${destination}${search}` });
         res.end();
         return;
     }

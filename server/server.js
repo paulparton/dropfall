@@ -12,6 +12,7 @@ import { parseLevelPayload } from '../shared/levelSchema.js';
 import { formatProtocolIssues, parseClientMessage } from '../shared/protocolSchemas.js';
 import { DROPFALL_PROTOCOL_VERSION } from '../shared/protocolVersion.js';
 import { ARENA_PATH, parseRequestTarget, serveSiteRequest } from './siteRouting.js';
+import { EmberProfileService } from './services/EmberProfileService.js';
 import {
     applyBaseSecurityHeaders,
     consumeFixedWindow,
@@ -40,6 +41,8 @@ const LAN_HOSTNAMES = [...new Set([MDNS_HOSTNAME, SYSTEM_MDNS_HOSTNAME.toLowerCa
 const PUBLIC_DIR = join(__dirname, 'public');
 const FRONTEND_DIR = join(__dirname, '..', 'dist');
 const LEVELS_DIR = join(__dirname, 'levels');
+const EMBER_PROFILE_DATA_DIR = process.env.DROPFALL_DATA_DIR || (existsSync('/data') ? '/data' : join(__dirname, 'data'));
+const EMBER_PROFILE_PATH = join(EMBER_PROFILE_DATA_DIR, 'ember-iron-profiles.json');
 const MAX_HTTP_BODY_BYTES = 256 * 1024;
 const MAX_WS_MESSAGE_BYTES = 16 * 1024;
 const MAX_WS_MESSAGES_PER_SECOND = 120;
@@ -77,6 +80,7 @@ export class GameServer {
         this.scoreboards = new ScoreboardService(
             process.env.DROPFALL_SCOREBOARD_PATH || join(__dirname, 'data', 'scoreboards.json'),
         );
+        this.emberProfiles = new EmberProfileService({ filePath: EMBER_PROFILE_PATH });
 
         this.server = createServer((req, res) => this.handleHttp(req, res));
         this.server.requestTimeout = 15_000;
@@ -255,6 +259,8 @@ export class GameServer {
             }));
             return;
         }
+
+        if (this.emberProfiles.handle(req, res, normalizedPath)) return;
 
         if (req.method === 'GET' && normalizedPath === '/api/stats') {
             res.writeHead(200, { 'Content-Type': 'application/json' });

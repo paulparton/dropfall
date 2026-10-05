@@ -4,10 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 const EXPECTED_PRODUCTS = {
   library: ['https://dropfall-game.com/'],
+  'ember-and-iron': ['https://dropfall-game.com/ember-and-iron/'],
   'super-face-pop': ['https://super-face-pop.dropfall-game.com/'],
   dropfall: ['https://dropfall-game.com/dropfall-arena/', 'https://dropfall.dropfall-game.com/'],
   'big-racers': ['https://big-racers.dropfall-game.com/'],
-  mofighter: ['https://mofighter.dropfall-game.com/'],
+  mofighter: ['https://titan-protocol.dropfall-game.com/'],
 };
 const REQUIRED_CHECKS = [
   'audiencePolicyApproved', 'privacyPublished', 'consentPublished',

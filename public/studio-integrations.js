@@ -4,7 +4,7 @@ const CONSENT_MAX_AGE_MS = 180 * 86400 * 1000;
 const PRODUCTS = Object.freeze({
   'super-face-pop': { host: 'super-face-pop.dropfall-game.com', title: 'Super Face Pop' },
   'big-racers': { host: 'big-racers.dropfall-game.com', title: 'Big Racers' },
-  mofighter: { host: 'mofighter.dropfall-game.com', title: 'moFighter' },
+  mofighter: { host: 'titan-protocol.dropfall-game.com', title: 'Titan Protocol' },
 });
 const MODES = new Set(['solo', 'local', 'online', 'practice', 'arcade', 'unknown']);
 
