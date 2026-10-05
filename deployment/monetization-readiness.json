@@ -66,6 +66,24 @@
       }
     },
     {
+      "id": "ember-and-iron",
+      "name": "Ember & Iron",
+      "urls": ["https://dropfall-game.com/ember-and-iron/"],
+      "domainsVerified": true,
+      "integrations": { "analytics": "disabled", "ads": "disabled", "payments": "disabled" },
+      "readiness": {
+        "audiencePolicyApproved": true,
+        "privacyPublished": true,
+        "consentPublished": false,
+        "consentEnforced": false,
+        "analyticsValidated": false,
+        "adPlacementValidated": false,
+        "adFreeSuppressionValidated": false,
+        "h5Approved": false,
+        "approvalReference": "Guest play and optional account-save notice are covered by the Dropfall privacy notice. Analytics, advertising and payments are disabled."
+      }
+    },
+    {
       "id": "super-face-pop",
       "name": "Super Face Pop",
       "urls": ["https://super-face-pop.dropfall-game.com/"],
@@ -123,8 +141,8 @@
     },
     {
       "id": "mofighter",
-      "name": "moFighter",
-      "urls": ["https://mofighter.dropfall-game.com/"],
+      "name": "Titan Protocol",
+      "urls": ["https://titan-protocol.dropfall-game.com/"],
       "domainsVerified": true,
       "integrations": { "analytics": "disabled", "ads": "disabled", "payments": "disabled" },
       "readiness": {
